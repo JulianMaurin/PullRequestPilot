@@ -6,21 +6,26 @@ A native macOS menu bar/window app for monitoring GitHub pull request review que
 
 ## Build & Run
 
+A `Makefile` wraps all build commands. `DEVELOPER_DIR` is set automatically.
+
 ```bash
-# Generate Xcode project (required after adding/removing/renaming ANY file, not just project.yml)
-xcodegen generate
+make build        # Regenerate xcodeproj + Release build
+make debug        # Debug build + run (sources .env for GITHUB_TOKEN)
+make run          # Release build + run
+make install      # Build + copy to /Applications/GitHub Dashboard.app
+make uninstall    # Remove from /Applications
+make test         # Run unit tests
+make clean        # Clean build artifacts
+```
 
-# Build (DEVELOPER_DIR is required on this machine)
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -scheme GitHubDashboard -destination 'platform=macOS' build -project GitHubDashboard.xcodeproj
+In debug builds, `TokenCache` reads `GITHUB_TOKEN` from the environment (`#if DEBUG`). Create a `.env` file at the project root and `make debug` will source it automatically.
 
-# Run tests
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test -scheme GitHubDashboard -destination 'platform=macOS' -project GitHubDashboard.xcodeproj
-
+```bash
 # Open in Xcode
 open GitHubDashboard.xcodeproj
 ```
 
-**Always verify builds from the command line** after changes — don't rely on Xcode's index alone. Pipe through `grep -E "error:|warning:"` (filtering `appintentsmetadataprocessor` and `Using the first`) to quickly check.
+**Always verify builds from the command line** (`make build`) after changes — don't rely on Xcode's index alone.
 
 **Source of truth for project configuration is `project.yml` (XcodeGen).** Never edit `*.xcodeproj` files directly — regenerate with `xcodegen generate`.
 

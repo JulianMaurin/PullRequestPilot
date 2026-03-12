@@ -39,3 +39,22 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.github-dashboard.tests
         GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  GitHubDashboard:
+    build:
+      targets:
+        GitHubDashboard: all
+        GitHubDashboardTests: [test]
+    run:
+      config: Debug
+      environmentVariables:
+        - variable: GITHUB_TOKEN
+          value: $(GITHUB_TOKEN)
+          isEnabled: true
+    test:
+      config: Debug
+      targets:
+        - GitHubDashboardTests
+    archive:
+      config: Release
