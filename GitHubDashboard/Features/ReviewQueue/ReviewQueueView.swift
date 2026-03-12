@@ -3,6 +3,7 @@ import SwiftUI
 struct ReviewQueueView: View {
     @Bindable var viewModel: DashboardViewModel
     var onOpenSettings: () -> Void
+    @State private var expandedStacks: Set<String> = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -132,8 +133,8 @@ struct ReviewQueueView: View {
             ForEach(grouped, id: \.org) { orgGroup in
                 ForEach(orgGroup.repos, id: \.repo) { repoGroup in
                     Section {
-                        ForEach(repoGroup.pullRequests) { pr in
-                            pullRequestItem(pr, isLast: pr.id == pullRequests.last?.id)
+                        ForEach(repoGroup.stacks) { stack in
+                            stackView(stack, isLast: stack.root.id == pullRequests.last?.id)
                         }
                     } header: {
                         HStack(spacing: 4) {
@@ -163,30 +164,81 @@ struct ReviewQueueView: View {
         .listStyle(.inset(alternatesRowBackgrounds: true))
     }
 
-    private func pullRequestItem(_ pr: PullRequest, isLast: Bool) -> some View {
-        PullRequestRow(pullRequest: pr)
-            .contentShape(Rectangle())
-            .onTapGesture(count: 2) {
-                viewModel.openInBrowser(pr)
-            }
-            .contextMenu {
-                Button("Open in Browser") {
-                    viewModel.openInBrowser(pr)
-                }
-                Button("Copy URL") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(pr.url.absoluteString, forType: .string)
-                }
-            }
-            .onAppear {
-                if isLast, viewModel.selectedViewState.canLoadMore {
-                    Task {
-                        if let id = viewModel.selectedViewID {
-                            await viewModel.loadMore(viewID: id)
-                        }
+    @ViewBuilder
+    private func stackView(_ stack: PRStack, isLast: Bool) -> some View {
+        let isExpanded = expandedStacks.contains(stack.id)
+
+        pullRequestItem(stack.root, isLast: isLast && stack.children.isEmpty, stackSize: stack.totalCount) {
+            if stack.totalCount > 1 {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if isExpanded {
+                        expandedStacks.remove(stack.id)
+                    } else {
+                        expandedStacks.insert(stack.id)
                     }
                 }
             }
+        }
+
+        if isExpanded {
+            ForEach(stack.children) { child in
+                pullRequestItem(child, isLast: isLast && child.id == stack.children.last?.id, stackSize: 0, isStacked: true) {}
+            }
+        }
+    }
+
+    private func pullRequestItem(
+        _ pr: PullRequest,
+        isLast: Bool,
+        stackSize: Int,
+        isStacked: Bool = false,
+        onToggleStack: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 0) {
+            if isStacked {
+                HStack(spacing: 4) {
+                    Rectangle()
+                        .fill(.quaternary)
+                        .frame(width: 2, height: 24)
+                    Image(systemName: "arrow.turn.down.right")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(width: 24)
+            }
+            PullRequestRow(pullRequest: pr, stackSize: stackSize, onToggleStack: onToggleStack)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            viewModel.openInBrowser(pr)
+        }
+        .contextMenu {
+            Button("Open in Browser") {
+                viewModel.openInBrowser(pr)
+            }
+            Button("Copy URL") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(pr.url.absoluteString, forType: .string)
+            }
+        }
+        .onAppear {
+            if isLast, viewModel.selectedViewState.canLoadMore {
+                Task {
+                    if let id = viewModel.selectedViewID {
+                        await viewModel.loadMore(viewID: id)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Stacking
+
+    private struct PRStack: Identifiable {
+        let root: PullRequest
+        let children: [PullRequest]
+        var id: String { root.id }
+        var totalCount: Int { 1 + children.count }
     }
 
     // MARK: - Grouping
@@ -198,7 +250,7 @@ struct ReviewQueueView: View {
 
     private struct RepoGroup {
         let repo: String
-        let pullRequests: [PullRequest]
+        let stacks: [PRStack]
     }
 
     private func groupedByOrgAndRepo(_ pullRequests: [PullRequest]) -> [OrgGroup] {
@@ -207,9 +259,34 @@ struct ReviewQueueView: View {
             let orgPRs = byOrg[org]!
             let byRepo = Dictionary(grouping: orgPRs) { $0.repository.name }
             let repoGroups = byRepo.keys.sorted().map { repo in
-                RepoGroup(repo: repo, pullRequests: byRepo[repo]!)
+                RepoGroup(repo: repo, stacks: buildStacks(byRepo[repo]!))
             }
             return OrgGroup(org: org, repos: repoGroups)
+        }
+    }
+
+    private func buildStacks(_ pullRequests: [PullRequest]) -> [PRStack] {
+        // Map head branch → PR for this repo
+        let headToPR = Dictionary(uniqueKeysWithValues: pullRequests.map { ($0.headRefName, $0) })
+
+        // A PR is a child if its base branch is another PR's head branch
+        let childIDs = Set(pullRequests.compactMap { pr -> String? in
+            guard headToPR[pr.baseRefName] != nil else { return nil }
+            return pr.id
+        })
+
+        // Root PRs are those not stacked on another PR in the set
+        let roots = pullRequests.filter { !childIDs.contains($0.id) }
+
+        return roots.map { root in
+            var children: [PullRequest] = []
+            var currentHead = root.headRefName
+            // Walk the chain: find PRs whose base is the current head
+            while let next = pullRequests.first(where: { $0.baseRefName == currentHead && $0.id != root.id }) {
+                children.append(next)
+                currentHead = next.headRefName
+            }
+            return PRStack(root: root, children: children)
         }
     }
 }

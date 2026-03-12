@@ -2,9 +2,12 @@ import SwiftUI
 
 struct PullRequestRow: View {
     let pullRequest: PullRequest
+    var stackSize: Int = 0
+    var onToggleStack: () -> Void = {}
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
+            stackBadge
             authorAvatar
             VStack(alignment: .leading, spacing: 4) {
                 titleRow
@@ -82,6 +85,32 @@ struct PullRequestRow: View {
                     .clipShape(Capsule())
             }
         }
+    }
+
+    private var isStacked: Bool { stackSize > 1 }
+
+    private var stackBadge: some View {
+        Button(action: onToggleStack) {
+            ZStack {
+                Image(systemName: "square.stack.3d.up")
+                    .font(.caption)
+                if isStacked {
+                    Text("\(stackSize)")
+                        .font(.system(size: 7, weight: .bold).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .frame(width: 12, height: 12)
+                        .background(Color.purple)
+                        .clipShape(Circle())
+                        .offset(x: 7, y: -7)
+                }
+            }
+            .frame(width: 20, height: 20)
+            .foregroundStyle(isStacked ? Color.purple : Color.gray.opacity(0.3))
+        }
+        .buttonStyle(.plain)
+        .disabled(!isStacked)
+        .help(isStacked ? "Stacked PRs — click to expand" : "Not stacked")
+        .padding(.top, 4)
     }
 
     private var metadata: some View {

@@ -91,7 +91,9 @@ struct DashboardViewModelTests {
             deletions: 5,
             isDraft: false,
             reviewDecision: .reviewRequired,
-            labels: []
+            labels: [],
+            baseRefName: "main",
+            headRefName: "feature-\(number)"
         )
     }
 }

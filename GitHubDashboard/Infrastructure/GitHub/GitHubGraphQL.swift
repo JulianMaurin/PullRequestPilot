@@ -19,6 +19,8 @@ enum GitHubGraphQL {
                 deletions
                 isDraft
                 reviewDecision
+                baseRefName
+                headRefName
                 repository {
                   nameWithOwner
                 }

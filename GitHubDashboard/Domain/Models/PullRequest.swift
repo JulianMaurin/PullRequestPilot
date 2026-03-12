@@ -14,6 +14,8 @@ struct PullRequest: Identifiable, Hashable {
     let isDraft: Bool
     let reviewDecision: ReviewDecision?
     let labels: [Label]
+    let baseRefName: String
+    let headRefName: String
 
     var linesChanged: Int { additions + deletions }
 

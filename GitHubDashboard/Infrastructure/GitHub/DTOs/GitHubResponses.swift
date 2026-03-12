@@ -38,6 +38,8 @@ struct PullRequestNode: Decodable {
     let deletions: Int
     let isDraft: Bool
     let reviewDecision: String?
+    let baseRefName: String
+    let headRefName: String
     let repository: RepositoryNode
     let author: AuthorNode?
     let labels: LabelsConnection
@@ -104,7 +106,9 @@ extension PullRequestNode {
             deletions: deletions,
             isDraft: isDraft,
             reviewDecision: reviewDecision.flatMap(ReviewDecision.init(rawValue:)),
-            labels: labels.nodes.map { Label(name: $0.name, color: $0.color) }
+            labels: labels.nodes.map { Label(name: $0.name, color: $0.color) },
+            baseRefName: baseRefName,
+            headRefName: headRefName
         )
     }
 }
