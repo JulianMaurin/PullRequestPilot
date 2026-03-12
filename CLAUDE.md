@@ -20,9 +20,13 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test -scheme
 open GitHubDashboard.xcodeproj
 ```
 
-**Always verify builds from the command line** after changes — don't rely on Xcode's index alone. Pipe through `grep -E "error:|warning:"` to quickly check.
+**Always verify builds from the command line** after changes — don't rely on Xcode's index alone. Pipe through `grep -E "error:|warning:"` (filtering `appintentsmetadataprocessor` and `Using the first`) to quickly check.
 
 **Source of truth for project configuration is `project.yml` (XcodeGen).** Never edit `*.xcodeproj` files directly — regenerate with `xcodegen generate`.
+
+**After creating or deleting any Swift file**, you MUST run `xcodegen generate` before building — otherwise the Xcode project won't include the new files and builds will fail with "cannot find type" errors.
+
+**Stale Xcode errors**: If Xcode shows errors that don't reproduce on the command line (especially from `@Observable` macro-generated sources), clear DerivedData: `rm -rf ~/Library/Developer/Xcode/DerivedData/GitHubDashboard-*`
 
 ## Architecture
 

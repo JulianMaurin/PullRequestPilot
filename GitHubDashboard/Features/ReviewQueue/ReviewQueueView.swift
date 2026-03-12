@@ -5,31 +5,15 @@ struct ReviewQueueView: View {
     var onOpenSettings: () -> Void
 
     var body: some View {
-        Group {
-            let state = viewModel.selectedViewState
-            if state.isLoading {
-                loadingView
-            } else if let error = state.error {
-                errorView(error)
-            } else if state.isEmpty {
-                emptyView
-            } else {
-                listView(state.pullRequests)
+        VStack(spacing: 0) {
+            if viewModel.views.count > 1 {
+                viewTabs
             }
+            Divider()
+            contentArea
         }
         .frame(minWidth: 500, minHeight: 300)
         .toolbar {
-            if viewModel.views.count > 1 {
-                ToolbarItem(placement: .principal) {
-                    Picker("View", selection: $viewModel.selectedViewID) {
-                        ForEach(viewModel.views) { view in
-                            Text(view.title).tag(Optional(view.id))
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 400)
-                }
-            }
             ToolbarItem(placement: .automatic) {
                 Button {
                     Task {
@@ -61,6 +45,44 @@ struct ReviewQueueView: View {
     }
 
     // MARK: - Subviews
+
+    private var viewTabs: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                ForEach(viewModel.views) { view in
+                    let isSelected = view.id == viewModel.selectedViewID
+                    Button {
+                        viewModel.selectedViewID = view.id
+                    } label: {
+                        Text(view.title)
+                            .font(.subheadline)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+                            .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        }
+    }
+
+    @ViewBuilder
+    private var contentArea: some View {
+        let state = viewModel.selectedViewState
+        if state.isLoading {
+            loadingView
+        } else if let error = state.error {
+            errorView(error)
+        } else if state.isEmpty {
+            emptyView
+        } else {
+            listView(state.pullRequests)
+        }
+    }
 
     private var loadingView: some View {
         VStack(spacing: 12) {
@@ -105,31 +127,25 @@ struct ReviewQueueView: View {
     }
 
     private func listView(_ pullRequests: [PullRequest]) -> some View {
-        List {
-            ForEach(pullRequests) { pr in
-                PullRequestRow(pullRequest: pr)
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 2) {
-                        viewModel.openInBrowser(pr)
-                    }
-                    .contextMenu {
-                        Button("Open in Browser") {
-                            viewModel.openInBrowser(pr)
+        let grouped = groupedByOrgAndRepo(pullRequests)
+        return List {
+            ForEach(grouped, id: \.org) { orgGroup in
+                ForEach(orgGroup.repos, id: \.repo) { repoGroup in
+                    Section {
+                        ForEach(repoGroup.pullRequests) { pr in
+                            pullRequestItem(pr, isLast: pr.id == pullRequests.last?.id)
                         }
-                        Button("Copy URL") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(pr.url.absoluteString, forType: .string)
+                    } header: {
+                        HStack(spacing: 4) {
+                            Text(orgGroup.org)
+                                .fontWeight(.semibold)
+                            Text("/")
+                                .foregroundStyle(.tertiary)
+                            Text(repoGroup.repo)
                         }
+                        .font(.caption)
                     }
-                    .onAppear {
-                        if pr.id == pullRequests.last?.id, viewModel.selectedViewState.canLoadMore {
-                            Task {
-                                if let id = viewModel.selectedViewID {
-                                    await viewModel.loadMore(viewID: id)
-                                }
-                            }
-                        }
-                    }
+                }
             }
             if viewModel.selectedViewState.isLoadingMore {
                 HStack {
@@ -145,5 +161,55 @@ struct ReviewQueueView: View {
             }
         }
         .listStyle(.inset(alternatesRowBackgrounds: true))
+    }
+
+    private func pullRequestItem(_ pr: PullRequest, isLast: Bool) -> some View {
+        PullRequestRow(pullRequest: pr)
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) {
+                viewModel.openInBrowser(pr)
+            }
+            .contextMenu {
+                Button("Open in Browser") {
+                    viewModel.openInBrowser(pr)
+                }
+                Button("Copy URL") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(pr.url.absoluteString, forType: .string)
+                }
+            }
+            .onAppear {
+                if isLast, viewModel.selectedViewState.canLoadMore {
+                    Task {
+                        if let id = viewModel.selectedViewID {
+                            await viewModel.loadMore(viewID: id)
+                        }
+                    }
+                }
+            }
+    }
+
+    // MARK: - Grouping
+
+    private struct OrgGroup {
+        let org: String
+        let repos: [RepoGroup]
+    }
+
+    private struct RepoGroup {
+        let repo: String
+        let pullRequests: [PullRequest]
+    }
+
+    private func groupedByOrgAndRepo(_ pullRequests: [PullRequest]) -> [OrgGroup] {
+        let byOrg = Dictionary(grouping: pullRequests) { $0.repository.owner }
+        return byOrg.keys.sorted().map { org in
+            let orgPRs = byOrg[org]!
+            let byRepo = Dictionary(grouping: orgPRs) { $0.repository.name }
+            let repoGroups = byRepo.keys.sorted().map { repo in
+                RepoGroup(repo: repo, pullRequests: byRepo[repo]!)
+            }
+            return OrgGroup(org: org, repos: repoGroups)
+        }
     }
 }

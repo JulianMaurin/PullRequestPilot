@@ -4,9 +4,12 @@ struct PullRequestRow: View {
     let pullRequest: PullRequest
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            statusIndicator
-            details
+        HStack(alignment: .top, spacing: 10) {
+            authorAvatar
+            VStack(alignment: .leading, spacing: 4) {
+                titleRow
+                detailRow
+            }
             Spacer()
             metadata
         }
@@ -15,43 +18,68 @@ struct PullRequestRow: View {
 
     // MARK: - Subviews
 
-    private var statusIndicator: some View {
-        Circle()
-            .fill(statusColor)
-            .frame(width: 10, height: 10)
-            .padding(.top, 5)
-            .help(statusLabel)
+    private var authorAvatar: some View {
+        ZStack(alignment: .bottomTrailing) {
+            AsyncImage(url: pullRequest.author.avatarURL) { image in
+                image.resizable()
+            } placeholder: {
+                Circle().fill(.quaternary)
+            }
+            .frame(width: 32, height: 32)
+            .clipShape(Circle())
+
+            Circle()
+                .fill(statusColor)
+                .frame(width: 10, height: 10)
+                .overlay(Circle().stroke(.background, lineWidth: 1.5))
+                .help(statusLabel)
+        }
+        .padding(.top, 2)
     }
 
-    private var details: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(pullRequest.repository.nameWithOwner)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text("#\(pullRequest.number)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if pullRequest.isDraft {
-                    Text("Draft")
-                        .font(.caption2)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(.quaternary)
-                        .clipShape(Capsule())
-                }
-            }
-
+    private var titleRow: some View {
+        HStack(spacing: 6) {
             Text(pullRequest.title)
                 .font(.body)
                 .lineLimit(2)
 
-            HStack(spacing: 8) {
-                Text(pullRequest.author.login)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if pullRequest.isDraft {
+                Text("Draft")
+                    .font(.caption2)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(.quaternary)
+                    .clipShape(Capsule())
+            }
+        }
+    }
 
-                labelTags
+    private var detailRow: some View {
+        HStack(spacing: 8) {
+            Text(pullRequest.author.login)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text("#\(pullRequest.number)")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+
+            statusBadge
+
+            labelTags
+        }
+    }
+
+    private var statusBadge: some View {
+        Group {
+            if !pullRequest.isDraft, let decision = pullRequest.reviewDecision {
+                Text(statusLabel)
+                    .font(.caption2)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(statusColor.opacity(0.15))
+                    .foregroundStyle(statusColor)
+                    .clipShape(Capsule())
             }
         }
     }
