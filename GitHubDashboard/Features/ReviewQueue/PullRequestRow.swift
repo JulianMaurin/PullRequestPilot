@@ -12,6 +12,7 @@ struct PullRequestRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 titleRow
                 detailRow
+                activityRow
             }
             Spacer()
             metadata
@@ -69,7 +70,36 @@ struct PullRequestRow: View {
 
             statusBadge
 
+            threadsBadge
+
             labelTags
+        }
+    }
+
+    @ViewBuilder
+    private var activityRow: some View {
+        if let activity = pullRequest.lastActivity {
+            HStack(spacing: 4) {
+                AsyncImage(url: activity.actor?.avatarURL) { image in
+                    image.resizable()
+                } placeholder: {
+                    Circle().fill(.quaternary)
+                }
+                .frame(width: 14, height: 14)
+                .clipShape(Circle())
+
+                Image(systemName: activity.kind.iconName)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+
+                Text(activity.label)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+
+                Text(activity.timestampText)
+                    .font(.caption2)
+                    .foregroundStyle(.quaternary)
+            }
         }
     }
 
@@ -84,6 +114,24 @@ struct PullRequestRow: View {
                     .foregroundStyle(statusColor)
                     .clipShape(Capsule())
             }
+        }
+    }
+
+    @ViewBuilder
+    private var threadsBadge: some View {
+        if pullRequest.totalThreads > 0 {
+            HStack(spacing: 3) {
+                Image(systemName: "text.bubble")
+                    .font(.caption2)
+                if pullRequest.unresolvedThreads > 0 {
+                    Text("\(pullRequest.unresolvedThreads)/\(pullRequest.totalThreads)")
+                        .font(.caption2)
+                } else {
+                    Text("\(pullRequest.totalThreads)")
+                        .font(.caption2)
+                }
+            }
+            .foregroundStyle(pullRequest.unresolvedThreads > 0 ? Color.orange : Color.gray)
         }
     }
 
@@ -155,20 +203,32 @@ struct PullRequestRow: View {
     // MARK: - Helpers
 
     private var statusColor: Color {
-        if pullRequest.isDraft { return .gray }
-        switch pullRequest.reviewDecision {
-        case .approved: return .green
-        case .changesRequested: return .red
-        case .reviewRequired, nil: return .orange
+        switch pullRequest.state {
+        case .merged: return .purple
+        case .closed: return .gray
+        case .open:
+            if pullRequest.isDraft { return .gray }
+            switch pullRequest.checkStatus {
+            case .pending, .expected: return .yellow
+            case .failure, .error: return .red
+            case .success: return .blue
+            case nil: return .secondary
+            }
         }
     }
 
     private var statusLabel: String {
-        if pullRequest.isDraft { return "Draft" }
-        switch pullRequest.reviewDecision {
-        case .approved: return "Approved"
-        case .changesRequested: return "Changes requested"
-        case .reviewRequired, nil: return "Review required"
+        switch pullRequest.state {
+        case .merged: return "Merged"
+        case .closed: return pullRequest.isDraft ? "Draft" : "Closed"
+        case .open:
+            if pullRequest.isDraft { return "Draft" }
+            switch pullRequest.checkStatus {
+            case .pending, .expected: return "Checks running"
+            case .failure, .error: return "Checks failing"
+            case .success: return "Checks passing"
+            case nil: return "No checks"
+            }
         }
     }
 }

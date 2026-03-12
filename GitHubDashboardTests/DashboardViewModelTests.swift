@@ -89,11 +89,16 @@ struct DashboardViewModelTests {
             updatedAt: Date(),
             additions: 10,
             deletions: 5,
+            state: .open,
             isDraft: false,
+            checkStatus: .success,
             reviewDecision: .reviewRequired,
+            totalThreads: 0,
+            unresolvedThreads: 0,
             labels: [],
             baseRefName: "main",
-            headRefName: "feature-\(number)"
+            headRefName: "feature-\(number)",
+            lastActivity: nil
         )
     }
 }
