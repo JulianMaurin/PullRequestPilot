@@ -15,7 +15,6 @@ struct ContentView: View {
                             ToolbarItem(placement: .automatic) {
                                 Button {
                                     showingSettings = false
-                                    dashboardViewModel.reloadViews()
                                 } label: {
                                     Image(systemName: "xmark")
                                 }
@@ -27,7 +26,7 @@ struct ContentView: View {
                 ReviewQueueView(viewModel: dashboardViewModel, onOpenSettings: {
                     showingSettings = true
                 })
-                .navigationTitle(dashboardViewModel.views.first(where: { $0.id == dashboardViewModel.selectedViewID })?.title ?? "Dashboard")
+                .navigationTitle("Dashboard")
             }
         }
     }

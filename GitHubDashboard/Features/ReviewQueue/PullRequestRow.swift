@@ -64,7 +64,7 @@ struct PullRequestRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            Text("#\(pullRequest.number)")
+            Text(verbatim: "#\(pullRequest.number)")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
 

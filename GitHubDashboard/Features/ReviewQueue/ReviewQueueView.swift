@@ -4,14 +4,25 @@ struct ReviewQueueView: View {
     @Bindable var viewModel: DashboardViewModel
     var onOpenSettings: () -> Void
     @State private var expandedStacks: Set<String> = []
+    @State private var collapsedOrgs: Set<String> = []
+    @State private var collapsedRepos: Set<String> = []
+    @State private var isAddingView = false
+    @State private var newViewTitle = ""
+    @State private var newViewQuery = ""
+    @State private var viewToDelete: DashboardView?
+    @State private var showDeleteConfirmation = false
+    @State private var editingQuery: String = ""
+    @FocusState private var isQueryFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
-            if viewModel.views.count > 1 {
-                viewTabs
-            }
+            viewTabs
+            queryBar
             Divider()
             contentArea
+        }
+        .onTapGesture {
+            isQueryFocused = false
         }
         .frame(minWidth: 500, minHeight: 300)
         .toolbar {
@@ -43,6 +54,34 @@ struct ReviewQueueView: View {
         .onDisappear {
             viewModel.stopAutoRefresh()
         }
+        .onAppear {
+            syncEditingQuery()
+        }
+        .task {
+            try? await Task.sleep(for: .milliseconds(100))
+            isQueryFocused = false
+        }
+        .onChange(of: viewModel.selectedViewID) {
+            syncEditingQuery()
+        }
+        .alert("Delete View", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { viewToDelete = nil }
+            Button("Delete", role: .destructive) {
+                if let id = viewToDelete?.id {
+                    viewModel.deleteView(id: id)
+                    viewToDelete = nil
+                }
+            }
+        } message: {
+            Text("Are you sure you want to delete \"\(viewToDelete?.title ?? "")\"?")
+        }
+    }
+
+    private func syncEditingQuery() {
+        if let id = viewModel.selectedViewID,
+           let dashView = viewModel.views.first(where: { $0.id == id }) {
+            editingQuery = dashView.query
+        }
     }
 
     // MARK: - Subviews
@@ -50,39 +89,156 @@ struct ReviewQueueView: View {
     private var viewTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
-                ForEach(viewModel.views) { view in
-                    let isSelected = view.id == viewModel.selectedViewID
-                    Button {
-                        viewModel.selectedViewID = view.id
-                    } label: {
-                        Text(view.title)
-                            .font(.subheadline)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
-                            .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                    }
-                    .buttonStyle(.plain)
+                ForEach(viewModel.views) { dashView in
+                    tabButton(for: dashView)
                 }
+                addButton
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
         }
     }
 
+    private func tabButton(for dashView: DashboardView) -> some View {
+        let isSelected = dashView.id == viewModel.selectedViewID
+        return Button {
+            viewModel.selectedViewID = dashView.id
+        } label: {
+            Text(dashView.title)
+                .font(.subheadline)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+                .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(role: .destructive) {
+                viewToDelete = dashView
+                showDeleteConfirmation = true
+            } label: {
+                SwiftUI.Label("Delete View", systemImage: "trash")
+            }
+        }
+    }
+
+    private var addButton: some View {
+        Button {
+            newViewTitle = ""
+            newViewQuery = ""
+            isAddingView = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.caption)
+                .padding(6)
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $isAddingView) {
+            addViewPopover
+        }
+    }
+
+    private var queryBar: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.caption)
+                .foregroundStyle(.quaternary)
+            TextField("GitHub search query", text: $editingQuery, onCommit: {
+                commitQueryEdit()
+            })
+            .textFieldStyle(.plain)
+            .font(.system(.caption, design: .monospaced))
+            .foregroundStyle(isQueryFocused ? .primary : .tertiary)
+            .focused($isQueryFocused)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+    }
+
+    private func commitQueryEdit() {
+        guard let id = viewModel.selectedViewID,
+              let dashView = viewModel.views.first(where: { $0.id == id }) else { return }
+        let trimmed = editingQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != dashView.query else { return }
+        viewModel.updateView(DashboardView(id: dashView.id, title: dashView.title, query: trimmed))
+        Task { await viewModel.refresh(viewID: id) }
+    }
+
+    private var addViewPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("New View")
+                .font(.headline)
+
+            TextField("Title", text: $newViewTitle)
+                .textFieldStyle(.roundedBorder)
+
+            TextField("GitHub search query", text: $newViewQuery)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(.caption, design: .monospaced))
+
+            HStack {
+                Spacer()
+                Button("Cancel") { isAddingView = false }
+                    .keyboardShortcut(.cancelAction)
+                Button("Add") {
+                    addNewView()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!isNewViewValid)
+            }
+        }
+        .padding()
+        .frame(width: 320)
+    }
+
+    private var isNewViewValid: Bool {
+        !newViewTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !newViewQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func addNewView() {
+        let title = newViewTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = newViewQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, !query.isEmpty else { return }
+        let newView = DashboardView(id: UUID(), title: title, query: query)
+        viewModel.addView(newView)
+        viewModel.selectedViewID = newView.id
+        editingQuery = query
+        isAddingView = false
+        Task { await viewModel.refresh(viewID: newView.id) }
+    }
+
     @ViewBuilder
     private var contentArea: some View {
-        let state = viewModel.selectedViewState
-        if state.isLoading {
-            loadingView
-        } else if let error = state.error {
-            errorView(error)
-        } else if state.isEmpty {
-            emptyView
+        if viewModel.views.isEmpty {
+            noViewsMessage
         } else {
-            listView(state.pullRequests)
+            let state = viewModel.selectedViewState
+            if state.isLoading {
+                loadingView
+            } else if let error = state.error {
+                errorView(error)
+            } else if state.isEmpty {
+                emptyView
+            } else {
+                listView(state.pullRequests)
+            }
         }
+    }
+
+    private var noViewsMessage: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "plus.rectangle.on.rectangle")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+            Text("No views yet")
+                .font(.headline)
+            Text("Tap + to create your first view.")
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var loadingView: some View {
@@ -131,22 +287,7 @@ struct ReviewQueueView: View {
         let grouped = groupedByOrgAndRepo(pullRequests)
         return List {
             ForEach(grouped, id: \.org) { orgGroup in
-                ForEach(orgGroup.repos, id: \.repo) { repoGroup in
-                    Section {
-                        ForEach(repoGroup.stacks) { stack in
-                            stackView(stack, isLast: stack.root.id == pullRequests.last?.id)
-                        }
-                    } header: {
-                        HStack(spacing: 4) {
-                            Text(orgGroup.org)
-                                .fontWeight(.semibold)
-                            Text("/")
-                                .foregroundStyle(.tertiary)
-                            Text(repoGroup.repo)
-                        }
-                        .font(.caption)
-                    }
-                }
+                orgSection(orgGroup, pullRequests: pullRequests)
             }
             if viewModel.selectedViewState.isLoadingMore {
                 HStack {
@@ -162,6 +303,120 @@ struct ReviewQueueView: View {
             }
         }
         .listStyle(.inset(alternatesRowBackgrounds: true))
+    }
+
+    @ViewBuilder
+    private func orgSection(_ orgGroup: OrgGroup, pullRequests: [PullRequest]) -> some View {
+        let isOrgCollapsed = collapsedOrgs.contains(orgGroup.org)
+        let prCount = orgGroup.repos.reduce(0) { $0 + $1.stacks.reduce(0) { $0 + $1.totalCount } }
+
+        Section {
+            if !isOrgCollapsed {
+                ForEach(orgGroup.repos, id: \.repo) { repoGroup in
+                    repoSection(repoGroup, org: orgGroup.org, pullRequests: pullRequests)
+                }
+            }
+        } header: {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if isOrgCollapsed {
+                        collapsedOrgs.remove(orgGroup.org)
+                    } else {
+                        collapsedOrgs.insert(orgGroup.org)
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isOrgCollapsed ? "chevron.right" : "chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 10)
+                    Text(orgGroup.org)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Text("\(prCount)")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .contextMenu {
+                if isOrgCollapsed {
+                    Button("Expand") {
+                        withAnimation { collapsedOrgs.remove(orgGroup.org) }
+                    }
+                } else {
+                    Button("Collapse Repos") {
+                        withAnimation {
+                            for repo in orgGroup.repos {
+                                collapsedRepos.insert("\(orgGroup.org)/\(repo.repo)")
+                            }
+                        }
+                    }
+                    Button("Expand Repos") {
+                        withAnimation {
+                            for repo in orgGroup.repos {
+                                collapsedRepos.remove("\(orgGroup.org)/\(repo.repo)")
+                            }
+                        }
+                    }
+                    Divider()
+                    Button("Collapse All Orgs") {
+                        withAnimation {
+                            let grouped = groupedByOrgAndRepo(viewModel.selectedViewState.pullRequests)
+                            for org in grouped { collapsedOrgs.insert(org.org) }
+                        }
+                    }
+                    Button("Expand All Orgs") {
+                        withAnimation {
+                            collapsedOrgs.removeAll()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func repoSection(_ repoGroup: RepoGroup, org: String, pullRequests: [PullRequest]) -> some View {
+        let repoKey = "\(org)/\(repoGroup.repo)"
+        let isRepoCollapsed = collapsedRepos.contains(repoKey)
+        let prCount = repoGroup.stacks.reduce(0) { $0 + $1.totalCount }
+
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if isRepoCollapsed {
+                    collapsedRepos.remove(repoKey)
+                } else {
+                    collapsedRepos.insert(repoKey)
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: isRepoCollapsed ? "chevron.right" : "chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 10)
+                Text(repoGroup.repo)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("\(prCount)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.leading, 8)
+
+        if !isRepoCollapsed {
+            ForEach(repoGroup.stacks) { stack in
+                stackView(stack, isLast: stack.root.id == pullRequests.last?.id)
+            }
+        }
     }
 
     @ViewBuilder
@@ -219,6 +474,10 @@ struct ReviewQueueView: View {
             Button("Copy URL") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(pr.url.absoluteString, forType: .string)
+            }
+            Button("Copy Branch") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(pr.headRefName, forType: .string)
             }
         }
         .onAppear {

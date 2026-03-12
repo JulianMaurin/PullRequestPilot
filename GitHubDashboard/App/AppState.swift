@@ -24,6 +24,6 @@ final class AppState {
         self.gitHubClient = gitHubClient
         self.viewsStore = viewsStore
         self.dashboardViewModel = DashboardViewModel(gitHubClient: gitHubClient, viewsStore: viewsStore)
-        self.settingsViewModel = SettingsViewModel(keychain: keychain, gitHubClient: gitHubClient, viewsStore: viewsStore, tokenCache: tokenCache)
+        self.settingsViewModel = SettingsViewModel(keychain: keychain, gitHubClient: gitHubClient, tokenCache: tokenCache)
     }
 }

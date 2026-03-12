@@ -1,5 +1,6 @@
 import Foundation
 import os
+import ServiceManagement
 import SwiftUI
 
 @MainActor
@@ -10,11 +11,8 @@ final class SettingsViewModel {
     private(set) var validationState: ValidationState = .idle
     private(set) var saveError: String?
 
-    var editableViews: [DashboardView] = []
-
     private let keychain: KeychainService
     private let gitHubClient: GitHubClientProtocol
-    private let viewsStore: ViewsStore
     private let tokenCache: TokenCache
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "GitHubDashboard", category: "Settings")
 
@@ -25,13 +23,11 @@ final class SettingsViewModel {
         case invalid(String)
     }
 
-    init(keychain: KeychainService, gitHubClient: GitHubClientProtocol, viewsStore: ViewsStore, tokenCache: TokenCache) {
+    init(keychain: KeychainService, gitHubClient: GitHubClientProtocol, tokenCache: TokenCache) {
         self.keychain = keychain
         self.gitHubClient = gitHubClient
-        self.viewsStore = viewsStore
         self.tokenCache = tokenCache
         self.token = tokenCache.token ?? ""
-        self.editableViews = viewsStore.load()
     }
 
     var hasToken: Bool {
@@ -87,31 +83,21 @@ final class SettingsViewModel {
         validationState = .idle
     }
 
-    // MARK: - Views
+    // MARK: - Launch at Login
 
-    func addView(title: String, query: String) {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedTitle.isEmpty, !trimmedQuery.isEmpty else { return }
-        editableViews.append(DashboardView(id: UUID(), title: trimmedTitle, query: trimmedQuery))
-    }
-
-    func deleteView(at offsets: IndexSet) {
-        editableViews.remove(atOffsets: offsets)
-        saveViews()
-    }
-
-    func deleteView(id: UUID) {
-        editableViews.removeAll { $0.id == id }
-        saveViews()
-    }
-
-    func saveViews() {
-        let valid = editableViews.filter {
-            !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-            !$0.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    var launchAtLogin: Bool {
+        get { SMAppService.mainApp.status == .enabled }
+        set {
+            do {
+                if newValue {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+            } catch {
+                logger.error("Failed to update launch at login: \(error)")
+            }
         }
-        viewsStore.save(valid)
     }
 
     // MARK: - Private
