@@ -345,7 +345,7 @@ struct ReviewQueueView: View {
             .contextMenu {
                 if isOrgCollapsed {
                     Button("Expand") {
-                        withAnimation { collapsedOrgs.remove(orgGroup.org) }
+                        withAnimation { _ = collapsedOrgs.remove(orgGroup.org) }
                     }
                 } else {
                     Button("Collapse Repos") {
@@ -358,7 +358,7 @@ struct ReviewQueueView: View {
                     Button("Expand Repos") {
                         withAnimation {
                             for repo in orgGroup.repos {
-                                collapsedRepos.remove("\(orgGroup.org)/\(repo.repo)")
+                                _ = collapsedRepos.remove("\(orgGroup.org)/\(repo.repo)")
                             }
                         }
                     }
