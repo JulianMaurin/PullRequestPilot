@@ -4,10 +4,15 @@ import SwiftUI
 
 struct ViewState {
     var pullRequests: [PullRequest] = []
+    var seenIDs: Set<String> = []
     var isLoading = false
+    var isLoadingMore = false
     var error: String?
+    var nextCursor: String?
+    var reachedLimit = false
 
     var isEmpty: Bool { pullRequests.isEmpty && !isLoading }
+    var canLoadMore: Bool { nextCursor != nil && !isLoadingMore && !reachedLimit }
 }
 
 @MainActor
@@ -43,17 +48,21 @@ final class DashboardViewModel {
     func refresh(viewID: UUID) async {
         guard let view = views.first(where: { $0.id == viewID }) else { return }
 
-        var state = viewStates[viewID] ?? ViewState()
-        state.isLoading = state.pullRequests.isEmpty
-        state.error = nil
-        viewStates[viewID] = state
+        viewStates[viewID] = ViewState(isLoading: true)
 
         logger.info("Fetching PRs for '\(view.title)'...")
 
         do {
-            let prs = try await gitHubClient.fetchPullRequests(query: view.query)
-            viewStates[viewID]?.pullRequests = prs
-            logger.info("Fetched \(prs.count) PR(s) for '\(view.title)'")
+            let page = try await gitHubClient.fetchPullRequests(query: view.query, cursor: nil)
+            let prs = page.pullRequests
+            var seenIDs = Set<String>()
+            let uniquePRs = prs.filter { seenIDs.insert($0.id).inserted }
+
+            viewStates[viewID]?.pullRequests = uniquePRs
+            viewStates[viewID]?.seenIDs = seenIDs
+            viewStates[viewID]?.nextCursor = page.nextCursor
+            viewStates[viewID]?.reachedLimit = uniquePRs.count >= Constants.App.maxPullRequests
+            logger.info("Fetched \(uniquePRs.count) PR(s) for '\(view.title)'")
         } catch is CancellationError {
             return
         } catch let error as URLError where error.code == .cancelled {
@@ -64,6 +73,34 @@ final class DashboardViewModel {
         }
 
         viewStates[viewID]?.isLoading = false
+    }
+
+    func loadMore(viewID: UUID) async {
+        guard let view = views.first(where: { $0.id == viewID }),
+              let state = viewStates[viewID],
+              state.canLoadMore else { return }
+
+        viewStates[viewID]?.isLoadingMore = true
+
+        do {
+            let page = try await gitHubClient.fetchPullRequests(query: view.query, cursor: state.nextCursor)
+            let newPRs = page.pullRequests.filter { viewStates[viewID]?.seenIDs.insert($0.id).inserted == true }
+
+            viewStates[viewID]?.pullRequests.append(contentsOf: newPRs)
+            viewStates[viewID]?.nextCursor = page.nextCursor
+            let totalCount = viewStates[viewID]?.pullRequests.count ?? 0
+            viewStates[viewID]?.reachedLimit = totalCount >= Constants.App.maxPullRequests
+            logger.info("Loaded \(newPRs.count) more PR(s) for '\(view.title)' (total: \(totalCount))")
+        } catch is CancellationError {
+            return
+        } catch let error as URLError where error.code == .cancelled {
+            return
+        } catch {
+            logger.error("Failed to load more PRs for '\(view.title)': \(error)")
+            viewStates[viewID]?.error = error.localizedDescription
+        }
+
+        viewStates[viewID]?.isLoadingMore = false
     }
 
     func refreshAll() async {
@@ -117,7 +154,6 @@ final class DashboardViewModel {
 
     func reloadViews() {
         views = viewsStore.load()
-        // Clean up stale states and init new ones
         let currentIDs = Set(views.map(\.id))
         for key in viewStates.keys where !currentIDs.contains(key) {
             viewStates.removeValue(forKey: key)

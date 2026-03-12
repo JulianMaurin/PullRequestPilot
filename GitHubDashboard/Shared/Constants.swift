@@ -7,5 +7,6 @@ enum Constants {
 
     enum App {
         static let refreshInterval: TimeInterval = 60
+        static let maxPullRequests = 100
     }
 }

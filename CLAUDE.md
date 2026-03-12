@@ -7,18 +7,20 @@ A native macOS menu bar/window app for monitoring GitHub pull request review que
 ## Build & Run
 
 ```bash
-# Generate Xcode project (required after changing project.yml)
+# Generate Xcode project (required after adding/removing/renaming ANY file, not just project.yml)
 xcodegen generate
 
-# Build
-xcodebuild -scheme GitHubDashboard -configuration Debug build
+# Build (DEVELOPER_DIR is required on this machine)
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -scheme GitHubDashboard -destination 'platform=macOS' build -project GitHubDashboard.xcodeproj
 
 # Run tests
-xcodebuild -scheme GitHubDashboardTests -configuration Debug test
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test -scheme GitHubDashboard -destination 'platform=macOS' -project GitHubDashboard.xcodeproj
 
 # Open in Xcode
 open GitHubDashboard.xcodeproj
 ```
+
+**Always verify builds from the command line** after changes — don't rely on Xcode's index alone. Pipe through `grep -E "error:|warning:"` to quickly check.
 
 **Source of truth for project configuration is `project.yml` (XcodeGen).** Never edit `*.xcodeproj` files directly — regenerate with `xcodegen generate`.
 
@@ -82,9 +84,15 @@ Shared/               — Cross-cutting constants
 ## Key Technical Decisions
 
 - **GraphQL over REST** for GitHub API — single endpoint, precise field selection, cursor pagination.
-- **Keychain** for token storage — never persist tokens in UserDefaults or files.
+- **Keychain** for token storage — never persist tokens in UserDefaults or files. Use `TokenCache` for in-memory caching — never read Keychain on every API call (causes repeated macOS permission prompts).
+- **Status bar app** — `AppDelegate` owns the `NSStatusItem`. Window hides on close (via `WindowAccessor` intercepting `windowShouldClose`) instead of being destroyed, so the status bar icon can re-show it. Never remove the `@NSApplicationDelegateAdaptor` line.
 - **No external dependencies** — everything uses Apple frameworks (URLSession, SwiftUI, Security). Keep it this way unless there's a compelling reason.
 - **XcodeGen** for project generation — avoids `.xcodeproj` merge conflicts.
+
+## Concurrency Pitfalls
+
+- **`URLError.cancelled`** must be caught and rethrown as `CancellationError` in the network layer — otherwise it surfaces as a user-visible error when tasks are cancelled during normal operation (e.g., auto-refresh restart).
+- **Auto-refresh**: `startAutoRefresh()` should be idempotent (no-op if already running) — calling `stopAutoRefresh()` first cancels in-flight network requests.
 
 ## File Guidelines
 

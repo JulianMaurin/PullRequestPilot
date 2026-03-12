@@ -105,21 +105,44 @@ struct ReviewQueueView: View {
     }
 
     private func listView(_ pullRequests: [PullRequest]) -> some View {
-        List(pullRequests) { pr in
-            PullRequestRow(pullRequest: pr)
-                .contentShape(Rectangle())
-                .onTapGesture(count: 2) {
-                    viewModel.openInBrowser(pr)
-                }
-                .contextMenu {
-                    Button("Open in Browser") {
+        List {
+            ForEach(pullRequests) { pr in
+                PullRequestRow(pullRequest: pr)
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) {
                         viewModel.openInBrowser(pr)
                     }
-                    Button("Copy URL") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(pr.url.absoluteString, forType: .string)
+                    .contextMenu {
+                        Button("Open in Browser") {
+                            viewModel.openInBrowser(pr)
+                        }
+                        Button("Copy URL") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(pr.url.absoluteString, forType: .string)
+                        }
                     }
+                    .onAppear {
+                        if pr.id == pullRequests.last?.id, viewModel.selectedViewState.canLoadMore {
+                            Task {
+                                if let id = viewModel.selectedViewID {
+                                    await viewModel.loadMore(viewID: id)
+                                }
+                            }
+                        }
+                    }
+            }
+            if viewModel.selectedViewState.isLoadingMore {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading more...")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                    Spacer()
                 }
+                .padding(.vertical, 8)
+            }
         }
         .listStyle(.inset(alternatesRowBackgrounds: true))
     }

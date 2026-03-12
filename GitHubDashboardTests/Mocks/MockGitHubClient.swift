@@ -8,11 +8,11 @@ final class MockGitHubClient: GitHubClientProtocol, @unchecked Sendable {
     var fetchPullRequestsCallCount = 0
     var receivedQueries: [String] = []
 
-    func fetchPullRequests(query: String) async throws -> [PullRequest] {
+    func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage {
         fetchPullRequestsCallCount += 1
         receivedQueries.append(query)
         if let error = errorToThrow { throw error }
-        return pullRequestsToReturn
+        return PullRequestPage(pullRequests: pullRequestsToReturn, nextCursor: nil)
     }
 
     func fetchViewerLogin() async throws -> String {

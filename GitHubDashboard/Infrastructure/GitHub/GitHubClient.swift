@@ -3,8 +3,14 @@ import os
 
 // MARK: - Protocol
 
+struct PullRequestPage: Sendable {
+    let pullRequests: [PullRequest]
+    let nextCursor: String?
+    var hasNextPage: Bool { nextCursor != nil }
+}
+
 protocol GitHubClientProtocol: Sendable {
-    func fetchPullRequests(query: String) async throws -> [PullRequest]
+    func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage
     func fetchViewerLogin() async throws -> String
 }
 
@@ -44,35 +50,20 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         self.session = session
     }
 
-    func fetchPullRequests(query searchQuery: String) async throws -> [PullRequest] {
-        var allPullRequests: [PullRequest] = []
-        var cursor: String? = nil
+    func fetchPullRequests(query searchQuery: String, cursor: String? = nil) async throws -> PullRequestPage {
+        let query = GitHubGraphQL.searchQuery(query: searchQuery, cursor: cursor)
+        let response: GraphQLResponse<SearchData> = try await execute(query: query)
 
-        repeat {
-            let query = GitHubGraphQL.searchQuery(query: searchQuery, cursor: cursor)
-            let response: GraphQLResponse<SearchData> = try await execute(query: query)
+        guard let data = response.data else {
+            let messages = response.errors?.map(\.message) ?? ["Unknown error"]
+            throw GitHubClientError.graphQLErrors(messages)
+        }
 
-            guard let data = response.data else {
-                let messages = response.errors?.map(\.message) ?? ["Unknown error"]
-                throw GitHubClientError.graphQLErrors(messages)
-            }
+        let prs = data.search.nodes.compactMap { $0.toDomain() }
+        logger.info("Page returned \(data.search.nodes.count) node(s), mapped \(prs.count) PR(s)")
 
-            let nodeCount = data.search.nodes.count
-            let prs = data.search.nodes.compactMap { $0.toDomain() }
-            let skipped = nodeCount - prs.count
-            logger.info("Page returned \(nodeCount) node(s), mapped \(prs.count) PR(s), skipped \(skipped)")
-
-            if skipped > 0 {
-                logger.warning("Some nodes failed domain mapping — likely missing fields in API response")
-            }
-
-            allPullRequests.append(contentsOf: prs)
-
-            cursor = data.search.pageInfo.hasNextPage ? data.search.pageInfo.endCursor : nil
-        } while cursor != nil
-
-        logger.info("Total: \(allPullRequests.count) review request(s)")
-        return allPullRequests.sorted { $0.updatedAt > $1.updatedAt }
+        let nextCursor = data.search.pageInfo.hasNextPage ? data.search.pageInfo.endCursor : nil
+        return PullRequestPage(pullRequests: prs, nextCursor: nextCursor)
     }
 
     func fetchViewerLogin() async throws -> String {

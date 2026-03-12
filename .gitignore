@@ -21,6 +21,9 @@ Packages/
 Package.pins
 Package.resolved
 
+# Secrets
+.env
+
 # Misc
 *.swp
 *~
