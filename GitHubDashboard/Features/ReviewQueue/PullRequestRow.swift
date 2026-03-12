@@ -72,7 +72,7 @@ struct PullRequestRow: View {
 
     private var statusBadge: some View {
         Group {
-            if !pullRequest.isDraft, let decision = pullRequest.reviewDecision {
+            if !pullRequest.isDraft, pullRequest.reviewDecision != nil {
                 Text(statusLabel)
                     .font(.caption2)
                     .padding(.horizontal, 5)
