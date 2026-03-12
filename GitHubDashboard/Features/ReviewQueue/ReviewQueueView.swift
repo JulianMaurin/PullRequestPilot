@@ -1,30 +1,55 @@
 import SwiftUI
 
 struct ReviewQueueView: View {
-    @Bindable var viewModel: ReviewQueueViewModel
+    @Bindable var viewModel: DashboardViewModel
+    var onOpenSettings: () -> Void
 
     var body: some View {
         Group {
-            if viewModel.isLoading {
+            let state = viewModel.selectedViewState
+            if state.isLoading {
                 loadingView
-            } else if let error = viewModel.error {
+            } else if let error = state.error {
                 errorView(error)
-            } else if viewModel.isEmpty {
+            } else if state.isEmpty {
                 emptyView
             } else {
-                listView
+                listView(state.pullRequests)
             }
         }
         .frame(minWidth: 500, minHeight: 300)
         .toolbar {
+            if viewModel.views.count > 1 {
+                ToolbarItem(placement: .principal) {
+                    Picker("View", selection: $viewModel.selectedViewID) {
+                        ForEach(viewModel.views) { view in
+                            Text(view.title).tag(Optional(view.id))
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 400)
+                }
+            }
             ToolbarItem(placement: .automatic) {
                 Button {
-                    Task { await viewModel.refresh() }
+                    Task {
+                        if let id = viewModel.selectedViewID {
+                            await viewModel.refresh(viewID: id)
+                        }
+                    }
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
                 .help("Refresh")
                 .keyboardShortcut("r", modifiers: .command)
+            }
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    onOpenSettings()
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .help("Settings")
             }
         }
         .task {
@@ -55,7 +80,11 @@ struct ReviewQueueView: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
             Button("Retry") {
-                Task { await viewModel.refresh() }
+                Task {
+                    if let id = viewModel.selectedViewID {
+                        await viewModel.refresh(viewID: id)
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -67,16 +96,16 @@ struct ReviewQueueView: View {
             Image(systemName: "checkmark.circle")
                 .font(.largeTitle)
                 .foregroundStyle(.green)
-            Text("No reviews waiting")
+            Text("No pull requests")
                 .font(.headline)
-            Text("You're all caught up.")
+            Text("Nothing matched this view's query.")
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var listView: some View {
-        List(viewModel.pullRequests) { pr in
+    private func listView(_ pullRequests: [PullRequest]) -> some View {
+        List(pullRequests) { pr in
             PullRequestRow(pullRequest: pr)
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) {

@@ -1,9 +1,10 @@
 import Foundation
+import os
 
 // MARK: - Protocol
 
 protocol GitHubClientProtocol: Sendable {
-    func fetchReviewRequests() async throws -> [PullRequest]
+    func fetchPullRequests(query: String) async throws -> [PullRequest]
     func fetchViewerLogin() async throws -> String
 }
 
@@ -34,6 +35,7 @@ enum GitHubClientError: LocalizedError {
 final class GitHubClient: GitHubClientProtocol, Sendable {
     private let tokenProvider: @Sendable () -> String?
     private let session: URLSession
+    private let logger = Logger(subsystem: "GitHubDashboard", category: "GitHubClient")
 
     private static let endpoint = URL(string: "https://api.github.com/graphql")!
 
@@ -42,12 +44,12 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         self.session = session
     }
 
-    func fetchReviewRequests() async throws -> [PullRequest] {
+    func fetchPullRequests(query searchQuery: String) async throws -> [PullRequest] {
         var allPullRequests: [PullRequest] = []
         var cursor: String? = nil
 
         repeat {
-            let query = GitHubGraphQL.reviewRequestedQuery(cursor: cursor)
+            let query = GitHubGraphQL.searchQuery(query: searchQuery, cursor: cursor)
             let response: GraphQLResponse<SearchData> = try await execute(query: query)
 
             guard let data = response.data else {
@@ -55,12 +57,21 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
                 throw GitHubClientError.graphQLErrors(messages)
             }
 
+            let nodeCount = data.search.nodes.count
             let prs = data.search.nodes.compactMap { $0.toDomain() }
+            let skipped = nodeCount - prs.count
+            logger.info("Page returned \(nodeCount) node(s), mapped \(prs.count) PR(s), skipped \(skipped)")
+
+            if skipped > 0 {
+                logger.warning("Some nodes failed domain mapping — likely missing fields in API response")
+            }
+
             allPullRequests.append(contentsOf: prs)
 
             cursor = data.search.pageInfo.hasNextPage ? data.search.pageInfo.endCursor : nil
         } while cursor != nil
 
+        logger.info("Total: \(allPullRequests.count) review request(s)")
         return allPullRequests.sorted { $0.updatedAt > $1.updatedAt }
     }
 
@@ -94,6 +105,8 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         let response: URLResponse
         do {
             (data, response) = try await session.data(for: request)
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            throw CancellationError()
         } catch {
             throw GitHubClientError.networkError(error)
         }

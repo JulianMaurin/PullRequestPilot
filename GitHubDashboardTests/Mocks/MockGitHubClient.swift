@@ -5,10 +5,12 @@ final class MockGitHubClient: GitHubClientProtocol, @unchecked Sendable {
     var pullRequestsToReturn: [PullRequest] = []
     var viewerLoginToReturn: String = "testuser"
     var errorToThrow: Error?
-    var fetchReviewRequestsCallCount = 0
+    var fetchPullRequestsCallCount = 0
+    var receivedQueries: [String] = []
 
-    func fetchReviewRequests() async throws -> [PullRequest] {
-        fetchReviewRequestsCallCount += 1
+    func fetchPullRequests(query: String) async throws -> [PullRequest] {
+        fetchPullRequestsCallCount += 1
+        receivedQueries.append(query)
         if let error = errorToThrow { throw error }
         return pullRequestsToReturn
     }

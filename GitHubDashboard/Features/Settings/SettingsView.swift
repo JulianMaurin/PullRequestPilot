@@ -49,9 +49,38 @@ struct SettingsView: View {
                     Text("Error")
                 }
             }
+
+            Section {
+                ForEach($viewModel.editableViews) { $view in
+                    VStack(alignment: .leading, spacing: 6) {
+                        TextField("Title", text: $view.title)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("Query (e.g. is:pr is:open author:@me)", text: $view.query)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.caption)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .onDelete { offsets in
+                    viewModel.deleteView(at: offsets)
+                }
+
+                Button("Add View") {
+                    viewModel.addView()
+                }
+            } header: {
+                Text("Dashboard Views")
+            } footer: {
+                Text("Each view runs its own GitHub search query. Uses the same syntax as github.com search.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .frame(width: 450)
+        .onChange(of: viewModel.editableViews) {
+            viewModel.saveViews()
+        }
     }
 
     @ViewBuilder

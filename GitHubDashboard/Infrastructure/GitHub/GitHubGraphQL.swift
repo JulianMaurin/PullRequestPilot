@@ -1,11 +1,12 @@
 import Foundation
 
 enum GitHubGraphQL {
-    static func reviewRequestedQuery(cursor: String? = nil) -> String {
+    static func searchQuery(query: String, cursor: String? = nil) -> String {
+        let escapedQuery = query.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
         let after = cursor.map { ", after: \"\($0)\"" } ?? ""
         return """
         {
-          search(query: "is:pr is:open review-requested:@me archived:false", type: ISSUE, first: 50\(after)) {
+          search(query: "\(escapedQuery)", type: ISSUE, first: 50\(after)) {
             nodes {
               ... on PullRequest {
                 id
