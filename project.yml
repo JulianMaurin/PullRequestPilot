@@ -1,0 +1,41 @@
+name: GitHubDashboard
+options:
+  bundleIdPrefix: com.github-dashboard
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+  minimumXcodeGenVersion: "2.38.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+
+targets:
+  GitHubDashboard:
+    type: application
+    platform: macOS
+    sources:
+      - GitHubDashboard
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.github-dashboard.app
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        INFOPLIST_KEY_CFBundleDisplayName: GitHub Dashboard
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_ENTITLEMENTS: GitHubDashboard/Resources/GitHubDashboard.entitlements
+        SWIFT_STRICT_CONCURRENCY: complete
+    entitlements:
+      path: GitHubDashboard/Resources/GitHubDashboard.entitlements
+
+  GitHubDashboardTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - GitHubDashboardTests
+    dependencies:
+      - target: GitHubDashboard
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.github-dashboard.tests
+        GENERATE_INFOPLIST_FILE: YES
