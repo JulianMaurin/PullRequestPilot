@@ -89,12 +89,20 @@ final class SettingsViewModel {
 
     // MARK: - Views
 
-    func addView() {
-        editableViews.append(DashboardView(id: UUID(), title: "", query: ""))
+    func addView(title: String, query: String) {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty, !trimmedQuery.isEmpty else { return }
+        editableViews.append(DashboardView(id: UUID(), title: trimmedTitle, query: trimmedQuery))
     }
 
     func deleteView(at offsets: IndexSet) {
         editableViews.remove(atOffsets: offsets)
+        saveViews()
+    }
+
+    func deleteView(id: UUID) {
+        editableViews.removeAll { $0.id == id }
         saveViews()
     }
 
