@@ -14,6 +14,7 @@ struct ViewState {
     var reachedLimit = false
 
     var isEmpty: Bool { pullRequests.isEmpty && !isLoading }
+    var hasData: Bool { !pullRequests.isEmpty }
     var canLoadMore: Bool { nextCursor != nil && !isLoadingMore && !reachedLimit }
 }
 
@@ -56,7 +57,11 @@ final class DashboardViewModel {
     func refresh(viewID: UUID) async {
         guard let view = views.first(where: { $0.id == viewID }) else { return }
 
-        viewStates[viewID] = ViewState(isLoading: true)
+        if viewStates[viewID] == nil {
+            viewStates[viewID] = ViewState()
+        }
+        viewStates[viewID]?.isLoading = true
+        viewStates[viewID]?.error = nil
 
         if view.hideReviewed {
             await fetchViewerLoginIfNeeded()
@@ -216,6 +221,22 @@ final class DashboardViewModel {
     }
 
 
+    // MARK: - Sign Out
+
+    func clearAllData() {
+        stopAutoRefresh()
+        views = []
+        viewStates = [:]
+        selectedViewID = nil
+        previousPRIDs = [:]
+        hasCompletedInitialLoad = []
+        viewerLogin = nil
+        notifiedViewIDs = []
+        viewsStore.save([])
+        WidgetData(views: [], lastUpdated: .now).save()
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
     // MARK: - CRUD
 
     func addView(_ view: DashboardView) {
@@ -331,26 +352,53 @@ final class DashboardViewModel {
         }
     }
 
+    private(set) var systemNotificationsAuthorized = false
+
     func isNotificationEnabled(for viewID: UUID) -> Bool {
         notifiedViewIDs.contains(viewID.uuidString)
     }
 
-    func toggleNotification(for viewID: UUID) {
+    func refreshNotificationAuthorization() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        systemNotificationsAuthorized = settings.authorizationStatus == .authorized
+        if !systemNotificationsAuthorized {
+            // Disable all view toggles when system permission is revoked
+            notifiedViewIDs = []
+        }
+    }
+
+    func toggleNotification(for viewID: UUID) async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+
+        switch settings.authorizationStatus {
+        case .notDetermined:
+            let granted = await requestNotificationPermission()
+            systemNotificationsAuthorized = granted
+            guard granted else { return }
+        case .denied:
+            systemNotificationsAuthorized = false
+            return
+        case .authorized, .provisional, .ephemeral:
+            systemNotificationsAuthorized = true
+        @unknown default:
+            break
+        }
+
         var ids = notifiedViewIDs
         if ids.contains(viewID.uuidString) {
             ids.remove(viewID.uuidString)
         } else {
             ids.insert(viewID.uuidString)
-            requestNotificationPermission()
         }
         notifiedViewIDs = ids
     }
 
-    private func requestNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { [weak self] granted, error in
-            if let error {
-                self?.logger.error("Notification permission error: \(error, privacy: .public)")
-            }
+    private func requestNotificationPermission() async -> Bool {
+        do {
+            return try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+        } catch {
+            logger.error("Notification permission error: \(error, privacy: .public)")
+            return false
         }
     }
 
@@ -371,13 +419,27 @@ final class DashboardViewModel {
 
         guard !addedIDs.isEmpty else { return }
 
+        // Skip delivering notifications during unit tests
+        guard NSClassFromString("XCTestCase") == nil else { return }
+
         guard let view = views.first(where: { $0.id == viewID }) else { return }
 
-        let count = addedIDs.count
+        let addedPRs = newPRs.filter { addedIDs.contains($0.id) }
         let content = UNMutableNotificationContent()
         content.title = view.title
-        content.body = "\(count) new PR\(count == 1 ? "" : "s")"
         content.sound = .default
+
+        if addedPRs.count == 1, let pr = addedPRs.first {
+            content.subtitle = pr.repository.nameWithOwner
+            content.body = "#\(pr.number) \(pr.title)"
+        } else {
+            let lines = addedPRs.prefix(4).map { "\($0.repository.nameWithOwner) #\($0.number) \($0.title)" }
+            let remaining = addedPRs.count - lines.count
+            let body = remaining > 0
+                ? lines.joined(separator: "\n") + "\n+\(remaining) more"
+                : lines.joined(separator: "\n")
+            content.body = body
+        }
 
         let request = UNNotificationRequest(
             identifier: "new-prs-\(viewID.uuidString)-\(Date.now.timeIntervalSince1970)",

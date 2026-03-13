@@ -36,9 +36,17 @@ struct ReviewQueueView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "arrow.clockwise")
+                    ZStack {
+                        Image(systemName: "arrow.clockwise")
+                            .opacity(viewModel.selectedViewState.isLoading && viewModel.selectedViewState.hasData ? 0 : 1)
+                        if viewModel.selectedViewState.isLoading && viewModel.selectedViewState.hasData {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                    }
                 }
-                .help("Refresh")
+                .disabled(viewModel.selectedViewState.isLoading)
+                .help(viewModel.selectedViewState.isLoading ? "Refreshing..." : "Refresh")
                 .keyboardShortcut("r", modifiers: .command)
             }
             ToolbarItem(placement: .automatic) {
@@ -49,12 +57,6 @@ struct ReviewQueueView: View {
                 }
                 .help("Settings")
             }
-        }
-        .task {
-            viewModel.startAutoRefresh()
-        }
-        .onDisappear {
-            viewModel.stopAutoRefresh()
         }
         .onAppear {
             syncEditingQuery()
@@ -244,9 +246,9 @@ struct ReviewQueueView: View {
             noViewsMessage
         } else {
             let state = viewModel.selectedViewState
-            if state.isLoading {
+            if state.isLoading && !state.hasData {
                 loadingView
-            } else if let error = state.error {
+            } else if let error = state.error, !state.hasData {
                 errorView(error)
             } else if state.isEmpty {
                 emptyView

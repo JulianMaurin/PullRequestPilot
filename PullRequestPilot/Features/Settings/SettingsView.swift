@@ -11,47 +11,73 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section {
-                SecureField("Personal Access Token", text: $viewModel.token)
-                    .textFieldStyle(.roundedBorder)
-
-                Text("Create a token at github.com/settings/tokens with the `repo` scope.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                HStack {
-                    Button("Save & Validate") {
-                        Task { await viewModel.save() }
-                    }
-                    .disabled(!viewModel.hasToken || viewModel.validationState == .validating)
-
-                    if viewModel.hasToken {
-                        Button("Clear", role: .destructive) {
+                if let login = viewModel.viewerLogin {
+                    LabeledContent {
+                        Button("Sign Out", role: .destructive) {
+                            dashboardViewModel.clearAllData()
                             viewModel.clearToken()
                         }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "person.crop.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.green)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(login)
+                                    .fontWeight(.medium)
+                                Text("Connected")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } else {
+                    SecureField("Personal Access Token", text: $viewModel.token)
+                        .textFieldStyle(.roundedBorder)
+
+                    HStack {
+                        Button("Save & Validate") {
+                            Task {
+                                await viewModel.save()
+                                if viewModel.validationState == .valid {
+                                    dashboardViewModel.startAutoRefresh()
+                                    await dashboardViewModel.refreshAll()
+                                }
+                            }
+                        }
+                        .disabled(!viewModel.hasToken || viewModel.validationState == .validating)
+
+                        Spacer()
+
+                        validationStatus
                     }
 
-                    Spacer()
-
-                    validationStatus
+                    if let error = viewModel.saveError {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.red)
+                            Text(error)
+                                .foregroundStyle(.red)
+                        }
+                        .font(.caption)
+                    }
                 }
             } header: {
                 Text("GitHub Token")
-            }
-
-            if let login = viewModel.viewerLogin {
-                Section {
-                    LabeledContent("Authenticated as", value: login)
-                } header: {
-                    Text("Account")
+            } footer: {
+                if viewModel.viewerLogin == nil {
+                    Text("Create a token at github.com/settings/tokens with the `repo` scope.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
-
-            if let error = viewModel.saveError {
-                Section {
-                    Text(error)
-                        .foregroundStyle(.red)
-                } header: {
-                    Text("Error")
+            .task {
+                if viewModel.hasSavedToken, viewModel.viewerLogin == nil {
+                    await viewModel.save()
+                    if viewModel.validationState == .valid {
+                        dashboardViewModel.startAutoRefresh()
+                        await dashboardViewModel.refreshAll()
+                    }
                 }
             }
 
@@ -78,42 +104,50 @@ struct SettingsView: View {
                     let conflicts = dashboardViewModel.presetConflicts()
                     if conflicts.isEmpty {
                         dashboardViewModel.createPresetViews(replacingConflicts: false)
+                        Task { await dashboardViewModel.refreshAll() }
                     } else {
                         presetConflictNames = conflicts
                         showPresetConflictAlert = true
                     }
                 }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(DashboardView.presetViews) { preset in
-                        HStack(spacing: 6) {
-                            Image(systemName: "circle.fill")
-                                .font(.system(size: 4))
-                                .foregroundStyle(.secondary)
-                            Text(preset.title)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
             } header: {
                 Text("Views")
             } footer: {
-                Text("Quickly set up common views for reviewing and tracking pull requests.")
+                let names = DashboardView.presetViews.map(\.title).joined(separator: ", ")
+                Text("Creates \(names) views to get you started quickly.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
+                if !dashboardViewModel.systemNotificationsAuthorized {
+                    LabeledContent {
+                        Button("Open Settings") {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                            Text("Notifications are disabled in System Settings.")
+                                .foregroundStyle(.primary)
+                        }
+                    }
+                }
                 if dashboardViewModel.views.isEmpty {
                     Text("No views configured yet.")
                         .foregroundStyle(.secondary)
                 } else {
+                    let disabled = !dashboardViewModel.systemNotificationsAuthorized
                     ForEach(dashboardViewModel.views) { view in
                         Toggle(view.title, isOn: Binding(
                             get: { dashboardViewModel.isNotificationEnabled(for: view.id) },
-                            set: { _ in dashboardViewModel.toggleNotification(for: view.id) }
+                            set: { _ in Task { await dashboardViewModel.toggleNotification(for: view.id) } }
                         ))
+                        .foregroundStyle(disabled ? .tertiary : .primary)
+                        .disabled(disabled)
                     }
                 }
             } header: {
@@ -122,6 +156,12 @@ struct SettingsView: View {
                 Text("Get notified when new pull requests appear in a view.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            .task {
+                await dashboardViewModel.refreshNotificationAuthorization()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                Task { await dashboardViewModel.refreshNotificationAuthorization() }
             }
 
             Section {
@@ -173,6 +213,12 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
             }
             Section {
+                LabeledContent("Version") {
+                    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–"
+                    let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "–"
+                    Text("\(version) (\(build))")
+                        .foregroundStyle(.secondary)
+                }
                 Link("Privacy Policy", destination: Constants.URLs.privacyPolicy)
                 Link("Support & Feedback", destination: Constants.URLs.support)
             } header: {
@@ -198,6 +244,7 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
             Button("Replace") {
                 dashboardViewModel.createPresetViews(replacingConflicts: true)
+                Task { await dashboardViewModel.refreshAll() }
             }
         } message: {
             let names = presetConflictNames.map { "\"\($0)\"" }.joined(separator: ", ")

@@ -45,5 +45,11 @@ struct ContentView: View {
                 .navigationTitle("Dashboard")
             }
         }
+        .onChange(of: settingsViewModel.hasSavedToken) { _, hasSaved in
+            if !hasSaved {
+                needsInitialSetup = true
+                showingSettings = false
+            }
+        }
     }
 }

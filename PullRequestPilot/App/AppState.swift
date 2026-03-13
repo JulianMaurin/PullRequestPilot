@@ -46,6 +46,10 @@ final class AppState {
         let initialDirectories = gitDirectoriesStore.load()
         gitDirectoriesStore.startAccessing(initialDirectories)
 
+        // Start auto-refresh independently of window visibility so notifications work
+        // even when the window is hidden (menu bar app).
+        dashboardViewModel.startAutoRefresh()
+
         // Initial scan + periodic refresh of local repo index
         let store = gitDirectoriesStore
         Task {

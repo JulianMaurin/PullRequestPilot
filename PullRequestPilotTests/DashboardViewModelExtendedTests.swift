@@ -175,7 +175,7 @@ struct DashboardViewModelExtendedTests {
     // MARK: - Notifications
 
     @Test("toggleNotification enables and disables")
-    func toggleNotification() {
+    func toggleNotification() async {
         let defaults = UserDefaults(suiteName: "ToggleNotification")!
         defaults.removePersistentDomain(forName: "ToggleNotification")
 
@@ -187,10 +187,10 @@ struct DashboardViewModelExtendedTests {
 
         #expect(!viewModel.isNotificationEnabled(for: viewID))
 
-        viewModel.toggleNotification(for: viewID)
+        await viewModel.toggleNotification(for: viewID)
         #expect(viewModel.isNotificationEnabled(for: viewID))
 
-        viewModel.toggleNotification(for: viewID)
+        await viewModel.toggleNotification(for: viewID)
         #expect(!viewModel.isNotificationEnabled(for: viewID))
     }
 
@@ -406,7 +406,7 @@ struct DashboardViewModelExtendedTests {
         let viewID = testView.id
 
         // Enable notifications for this view
-        viewModel.toggleNotification(for: viewID)
+        await viewModel.toggleNotification(for: viewID)
         #expect(viewModel.isNotificationEnabled(for: viewID))
 
         let pr = TestPullRequestFactory.make(id: "PR_1", title: "First PR")
@@ -761,11 +761,11 @@ struct DashboardViewModelExtendedTests {
     // MARK: - notifiedViewIDs persistence
 
     @Test("notifiedViewIDs persists across access")
-    func notifiedViewIDsPersistence() {
+    func notifiedViewIDsPersistence() async {
         let viewModel = makeViewModel(suiteName: "NotifiedPersist")
         let viewID = viewModel.views.first!.id
 
-        viewModel.toggleNotification(for: viewID)
+        await viewModel.toggleNotification(for: viewID)
         #expect(viewModel.isNotificationEnabled(for: viewID))
 
         // Read from UserDefaults directly
