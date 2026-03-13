@@ -205,9 +205,49 @@ final class LocalRepositoryService {
 
     // MARK: - Git Operations (pure file reads, no Process)
 
+    /// Resolves the actual `.git` directory for a repo or worktree.
+    /// In a normal repo, `.git` is a directory — we return it directly.
+    /// In a worktree, `.git` is a file containing `gitdir: /path/to/main/.git/worktrees/<name>`.
+    /// Returns `nil` if neither form exists.
+    nonisolated private static func resolveGitDir(for repoDir: URL) -> URL? {
+        let gitPath = repoDir.appendingPathComponent(".git")
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: gitPath.path, isDirectory: &isDir) else { return nil }
+
+        if isDir.boolValue {
+            return gitPath
+        }
+
+        // .git is a file — parse "gitdir: <path>"
+        guard let contents = try? String(contentsOf: gitPath, encoding: .utf8) else { return nil }
+        let trimmed = contents.trimmingCharacters(in: .whitespacesAndNewlines)
+        let gitdirPrefix = "gitdir: "
+        guard trimmed.hasPrefix(gitdirPrefix) else { return nil }
+        let rawPath = String(trimmed.dropFirst(gitdirPrefix.count))
+
+        // Path may be relative or absolute
+        if rawPath.hasPrefix("/") {
+            return URL(fileURLWithPath: rawPath)
+        }
+        return repoDir.appendingPathComponent(rawPath).standardized
+    }
+
+    /// For a worktree's git dir (e.g. `/repo/.git/worktrees/foo`), resolves the main repo's `.git` directory.
+    /// Returns the input unchanged if it doesn't look like a worktree subdirectory.
+    nonisolated private static func resolveMainGitDir(from gitDir: URL) -> URL {
+        // Worktree git dirs live at <main>/.git/worktrees/<name>
+        let parent = gitDir.deletingLastPathComponent()
+        if parent.lastPathComponent == "worktrees" {
+            return parent.deletingLastPathComponent()
+        }
+        return gitDir
+    }
+
     /// Parses `.git/config` to extract the remote "origin" URL, then derives `owner/repo`.
     nonisolated private static func extractNameWithOwner(repoDir: URL) -> String? {
-        let configURL = repoDir.appendingPathComponent(".git/config")
+        guard let gitDir = resolveGitDir(for: repoDir) else { return nil }
+        let mainGitDir = resolveMainGitDir(from: gitDir)
+        let configURL = mainGitDir.appendingPathComponent("config")
         guard let contents = try? String(contentsOf: configURL, encoding: .utf8) else { return nil }
 
         var inOriginRemote = false
@@ -253,10 +293,11 @@ final class LocalRepositoryService {
         return nil
     }
 
-    /// Reads `.git/HEAD` to get the current branch name.
+    /// Reads `HEAD` to get the current branch name.
     /// Returns `nil` for detached HEAD (raw SHA instead of symbolic ref).
     nonisolated private static func currentBranch(at repoDir: URL) -> String? {
-        let headURL = repoDir.appendingPathComponent(".git/HEAD")
+        guard let gitDir = resolveGitDir(for: repoDir) else { return nil }
+        let headURL = gitDir.appendingPathComponent("HEAD")
         guard let contents = try? String(contentsOf: headURL, encoding: .utf8) else { return nil }
         let trimmed = contents.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -265,10 +306,11 @@ final class LocalRepositoryService {
         return String(trimmed.dropFirst(prefix.count))
     }
 
-    /// Parses `.git/logs/HEAD` (the reflog) to extract recent commit SHAs.
+    /// Parses the reflog to extract recent commit SHAs.
     /// Each reflog line has format: `<old-sha> <new-sha> <author> <timestamp> <message>`
     nonisolated private static func recentCommitShas(at repoDir: URL, limit: Int = 100) -> Set<String> {
-        let reflogURL = repoDir.appendingPathComponent(".git/logs/HEAD")
+        guard let gitDir = resolveGitDir(for: repoDir) else { return [] }
+        let reflogURL = gitDir.appendingPathComponent("logs/HEAD")
         guard let contents = try? String(contentsOf: reflogURL, encoding: .utf8) else { return [] }
 
         var shas = Set<String>()
@@ -289,9 +331,11 @@ final class LocalRepositoryService {
         return shas
     }
 
-    /// Lists worktrees by reading `.git/worktrees/<name>/gitdir` and `HEAD`.
+    /// Lists worktrees by reading `worktrees/<name>/gitdir` and `HEAD` inside the git directory.
     nonisolated private static func listWorktrees(repoDir: URL) -> [WorktreeEntry] {
-        let worktreesDir = repoDir.appendingPathComponent(".git/worktrees")
+        guard let gitDir = resolveGitDir(for: repoDir) else { return [] }
+        let mainGitDir = resolveMainGitDir(from: gitDir)
+        let worktreesDir = mainGitDir.appendingPathComponent("worktrees")
         let fm = FileManager.default
 
         guard let entries = try? fm.contentsOfDirectory(
