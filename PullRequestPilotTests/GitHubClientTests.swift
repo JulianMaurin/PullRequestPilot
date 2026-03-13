@@ -235,7 +235,7 @@ struct GitHubClientTests {
         #expect(GitHubClientError.unauthorized.errorDescription?.contains("token") == true)
         #expect(GitHubClientError.graphQLErrors(["test"]).errorDescription?.contains("test") == true)
         #expect(GitHubClientError.networkError(URLError(.notConnectedToInternet)).errorDescription?.contains("Network") == true)
-        #expect(GitHubClientError.decodingError(URLError(.cannotParseResponse)).errorDescription?.contains("parse") == true)
+        #expect(GitHubClientError.decodingError(URLError(.cannotParseResponse)).errorDescription?.contains("query") == true)
     }
 
     // MARK: - Helpers

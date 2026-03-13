@@ -27,11 +27,11 @@ enum GitHubClientError: LocalizedError {
         case .unauthorized:
             "Invalid or missing GitHub token. Check your token in Settings."
         case .graphQLErrors(let messages):
-            "GitHub API error: \(messages.joined(separator: ", "))"
+            "GitHub API error: \(messages.joined(separator: "; "))"
         case .networkError(let error):
             "Network error: \(error.localizedDescription)"
-        case .decodingError(let error):
-            "Failed to parse response: \(error.localizedDescription)"
+        case .decodingError:
+            "Unexpected response from GitHub. Check that your query uses valid GitHub search qualifiers (e.g. \"is:pr is:open review-requested:@me\")."
         }
     }
 }
@@ -109,6 +109,12 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         do {
             return try JSONDecoder().decode(GraphQLResponse<T>.self, from: data)
         } catch {
+            // The full response failed to decode — try to extract GraphQL errors
+            if let errorOnly = try? JSONDecoder().decode(GraphQLErrorResponse.self, from: data),
+               let errors = errorOnly.errors, !errors.isEmpty
+            {
+                throw GitHubClientError.graphQLErrors(errors.map(\.message))
+            }
             throw GitHubClientError.decodingError(error)
         }
     }

@@ -11,6 +11,11 @@ struct GraphQLError: Decodable {
     let message: String
 }
 
+/// Lightweight type for extracting errors when the full response fails to decode.
+struct GraphQLErrorResponse: Decodable {
+    let errors: [GraphQLError]?
+}
+
 // MARK: - Search Response
 
 struct SearchData: Decodable {
