@@ -20,18 +20,26 @@ targets:
     platform: macOS
     sources:
       - PullRequestPilot
+      - Shared
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pullrequestpilot.app
-        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
-        INFOPLIST_KEY_CFBundleDisplayName: Pull Request Pilot
-        INFOPLIST_KEY_CFBundleShortVersionString: "1.0.0"
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         CODE_SIGN_ENTITLEMENTS: PullRequestPilot/Resources/PullRequestPilot.entitlements
         SWIFT_STRICT_CONCURRENCY: complete
+    info:
+      path: PullRequestPilot/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Pull Request Pilot
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.developer-tools
+        ITSAppUsesNonExemptEncryption: false
+        CFBundleURLTypes:
+          - CFBundleURLName: com.pullrequestpilot.app
+            CFBundleURLSchemes:
+              - pullrequestpilot
     entitlements:
       path: PullRequestPilot/Resources/PullRequestPilot.entitlements
       properties:
@@ -49,6 +57,7 @@ targets:
     platform: macOS
     sources:
       - PullRequestPilotWidget
+      - Shared
     info:
       path: PullRequestPilotWidget/Info.plist
       properties:

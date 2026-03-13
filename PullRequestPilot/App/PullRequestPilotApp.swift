@@ -20,9 +20,40 @@ struct PullRequestPilotApp: App {
                     settingsViewModel: appState.settingsViewModel
                 )
                 .background(WindowAccessor())
+                .onOpenURL { url in
+                    handleIncomingURL(url)
+                }
             }
         }
         .defaultSize(width: 700, height: 500)
+    }
+}
+
+// MARK: - URL Handling
+
+extension PullRequestPilotApp {
+    private func handleIncomingURL(_ url: URL) {
+        guard url.scheme == "pullrequestpilot" else { return }
+
+        switch url.host {
+        case "pr":
+            // pullrequestpilot://pr?url=<encoded-github-url>
+            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+               let prURLString = components.queryItems?.first(where: { $0.name == "url" })?.value,
+               let prURL = URL(string: prURLString)
+            {
+                NSWorkspace.shared.open(prURL)
+            }
+        case "view":
+            // pullrequestpilot://view/<viewID>
+            if let viewID = url.pathComponents.dropFirst().first,
+               let uuid = UUID(uuidString: viewID)
+            {
+                appState?.dashboardViewModel.selectedViewID = uuid
+            }
+        default:
+            break
+        }
     }
 }
 
