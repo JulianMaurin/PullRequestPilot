@@ -234,6 +234,17 @@ final class DashboardViewModel {
         Task { await refresh(viewID: viewID) }
     }
 
+    func moveView(from sourceID: UUID, to targetID: UUID) {
+        guard let sourceIndex = views.firstIndex(where: { $0.id == sourceID }),
+              let targetIndex = views.firstIndex(where: { $0.id == targetID }),
+              sourceIndex != targetIndex else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            views.move(fromOffsets: IndexSet(integer: sourceIndex),
+                       toOffset: targetIndex > sourceIndex ? targetIndex + 1 : targetIndex)
+        }
+        viewsStore.save(views)
+    }
+
     func deleteView(id: UUID) {
         views.removeAll { $0.id == id }
         viewStates.removeValue(forKey: id)

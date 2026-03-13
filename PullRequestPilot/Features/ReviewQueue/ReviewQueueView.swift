@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ReviewQueueView: View {
     @Bindable var viewModel: DashboardViewModel
@@ -12,6 +13,7 @@ struct ReviewQueueView: View {
     @State private var viewToDelete: DashboardView?
     @State private var showDeleteConfirmation = false
     @State private var editingQuery: String = ""
+    @State private var draggedViewID: UUID?
     @FocusState private var isQueryFocused: Bool
 
     var body: some View {
@@ -120,6 +122,16 @@ struct ReviewQueueView: View {
             .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
+        .opacity(draggedViewID == dashView.id ? 0.4 : 1.0)
+        .onDrag {
+            draggedViewID = dashView.id
+            return NSItemProvider(object: dashView.id.uuidString as NSString)
+        }
+        .onDrop(of: [.text], delegate: TabDropDelegate(
+            targetID: dashView.id,
+            draggedID: $draggedViewID,
+            viewModel: viewModel
+        ))
         .contextMenu {
             Button {
                 viewModel.toggleHideReviewed(for: dashView.id)
@@ -589,5 +601,27 @@ struct ReviewQueueView: View {
             }
             return PRStack(root: root, children: children)
         }
+    }
+}
+
+// MARK: - Tab Drag & Drop
+
+private struct TabDropDelegate: DropDelegate {
+    let targetID: UUID
+    @Binding var draggedID: UUID?
+    let viewModel: DashboardViewModel
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggedID = nil
+        return true
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard let sourceID = draggedID, sourceID != targetID else { return }
+        viewModel.moveView(from: sourceID, to: targetID)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
     }
 }
