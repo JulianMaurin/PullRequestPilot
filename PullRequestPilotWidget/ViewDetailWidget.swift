@@ -153,49 +153,59 @@ struct DetailMediumView: View {
     let viewData: WidgetViewData
     let lastUpdated: Date
 
+    private let maxPRs = 3
+
     var body: some View {
-        GeometryReader { geo in
-            VStack(alignment: .leading, spacing: 3) {
-                // Header
-                HStack(alignment: .center) {
-                    Text(viewData.title)
-                        .font(.system(size: 12, weight: .semibold))
-                        .lineLimit(1)
+        VStack(alignment: .leading, spacing: 2) {
+            // Header
+            HStack(alignment: .center, spacing: 8) {
+                Text(viewData.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                Spacer()
+
+                WidgetActionButtons(viewID: viewData.id)
+
+                ReviewSummaryPills(viewData: viewData)
+
+                Text("\(viewData.count)")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(.blue)
+            }
+
+            Divider()
+
+            if viewData.pullRequests.isEmpty {
+                Spacer()
+                HStack {
                     Spacer()
-
-                    ReviewSummaryPills(viewData: viewData)
-
-                    Text("\(viewData.count)")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundStyle(.blue)
+                    Text("No pull requests")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
                 }
-
-                Divider()
-
-                if viewData.pullRequests.isEmpty {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Text("No pull requests")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                    Spacer()
-                } else {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(viewData.pullRequests.prefix(4)) { pr in
-                            Link(destination: pr.url) {
-                                PRRowView(pr: pr)
-                            }
+                Spacer()
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(viewData.pullRequests.prefix(maxPRs)) { pr in
+                        Link(destination: pr.url) {
+                            PRRowView(pr: pr)
                         }
                     }
+                }
 
-                    Spacer(minLength: 0)
+                Spacer(minLength: 0)
+
+                HStack {
                     LastUpdatedFooter(date: lastUpdated)
+                    Spacer()
+                    if viewData.count > maxPRs {
+                        Text("+\(viewData.count - maxPRs) more")
+                            .font(.system(size: 8))
+                            .foregroundStyle(.tertiary)
+                    }
                 }
             }
-            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
         }
         .containerBackground(.fill.tertiary, for: .widget)
     }
@@ -207,64 +217,89 @@ struct DetailLargeView: View {
     let viewData: WidgetViewData
     let lastUpdated: Date
 
-    private let maxPRs = 7
+    private let maxPRs = 8
 
     var body: some View {
-        GeometryReader { geo in
-            VStack(alignment: .leading, spacing: 4) {
-                // Header
-                HStack(alignment: .center) {
-                    Text(viewData.title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .lineLimit(1)
+        VStack(alignment: .leading, spacing: 2) {
+            // Header
+            HStack(alignment: .center) {
+                Text(viewData.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1)
+                Spacer()
+
+                WidgetActionButtons(viewID: viewData.id)
+
+                ReviewSummaryPills(viewData: viewData)
+
+                Text("\(viewData.count)")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundStyle(.blue)
+            }
+
+            Divider()
+
+            if viewData.pullRequests.isEmpty {
+                Spacer()
+                HStack {
                     Spacer()
-
-                    ReviewSummaryPills(viewData: viewData)
-
-                    Text("\(viewData.count)")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundStyle(.blue)
+                    WidgetEmptyState(message: "No pull requests")
+                    Spacer()
+                }
+                Spacer()
+            } else {
+                VStack(alignment: .leading, spacing: 1) {
+                    ForEach(viewData.pullRequests.prefix(maxPRs)) { pr in
+                        Link(destination: pr.url) {
+                            PRRowView(pr: pr, showAuthor: true, showAge: true)
+                        }
+                        if pr.id != viewData.pullRequests.prefix(maxPRs).last?.id {
+                            Divider()
+                                .padding(.leading, 22)
+                        }
+                    }
                 }
 
-                Divider()
+                Spacer(minLength: 0)
 
-                if viewData.pullRequests.isEmpty {
+                HStack {
+                    LastUpdatedFooter(date: lastUpdated)
                     Spacer()
-                    HStack {
-                        Spacer()
-                        WidgetEmptyState(message: "No pull requests")
-                        Spacer()
-                    }
-                    Spacer()
-                } else {
-                    VStack(alignment: .leading, spacing: 1) {
-                        ForEach(viewData.pullRequests.prefix(maxPRs)) { pr in
-                            Link(destination: pr.url) {
-                                PRRowView(pr: pr, showAuthor: true, showAge: true)
-                            }
-                            if pr.id != viewData.pullRequests.prefix(maxPRs).last?.id {
-                                Divider()
-                                    .padding(.leading, 22)
-                            }
-                        }
-                    }
-
-                    Spacer(minLength: 0)
-
-                    HStack {
-                        LastUpdatedFooter(date: lastUpdated)
-                        Spacer()
-                        if viewData.count > maxPRs {
-                            Text("+\(viewData.count - maxPRs) more")
-                                .font(.system(size: 8))
-                                .foregroundStyle(.tertiary)
-                        }
+                    if viewData.count > maxPRs {
+                        Text("+\(viewData.count - maxPRs) more")
+                            .font(.system(size: 8))
+                            .foregroundStyle(.tertiary)
                     }
                 }
             }
-            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
         }
         .containerBackground(.fill.tertiary, for: .widget)
+    }
+}
+
+// MARK: - Action Buttons
+
+private struct WidgetActionButtons: View {
+    let viewID: String
+
+    private let iconFrame: CGFloat = 14
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button(intent: CopyPRListIntent(viewID: viewID)) {
+                Image(systemName: "list.clipboard")
+                    .font(.system(size: 10))
+                    .frame(width: iconFrame, height: iconFrame)
+            }
+            Button(intent: OpenAllPRsIntent(viewID: viewID)) {
+                Image(systemName: "safari")
+                    .font(.system(size: 10))
+                    .frame(width: iconFrame, height: iconFrame)
+            }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.blue)
+        .padding(.trailing, 4)
     }
 }
 

@@ -12,7 +12,7 @@ XCODEBUILD_BASE := xcodebuild -scheme $(SCHEME) -project $(PROJECT) \
 	-destination 'platform=macOS'
 XCODEBUILD := $(XCODEBUILD_BASE) -configuration $(CONFIG)
 
-.PHONY: all generate build install uninstall clean test run debug reset
+.PHONY: all generate build install uninstall clean test run debug reinstall nuke
 
 all: build
 
@@ -60,10 +60,20 @@ clean:
 	$(XCODEBUILD) clean
 	rm -rf $(BUILD_DIR)
 
-# Full reset — simulate a first install by removing the app, its data, and keychain token
+# Reinstall — clear widget caches and reinstall the app (preserves token and data)
+reinstall: uninstall
+	@echo "Killing widget and Xcode indexer processes..."
+	@killall NotificationCenter 2>/dev/null || true
+	@killall PullRequestPilotWidgetExtension 2>/dev/null || true
+	@killall com.apple.dt.SKAgent 2>/dev/null || true
+	@$(MAKE) install
+	@echo "Clearing DerivedData (removes stale debug widget extensions)..."
+	@rm -rf $(HOME)/Library/Developer/Xcode/DerivedData/PullRequestPilot-* 2>/dev/null || true
+
+# Nuke — wipe everything (app, data, token) for a clean first-launch experience
 BUNDLE_ID    := com.pullrequestpilot.app
 APP_GROUP_ID := FNR3B372S8.com.pullrequestpilot.shared
-reset: uninstall
+nuke: uninstall
 	@echo "Removing UserDefaults for $(BUNDLE_ID)..."
 	@defaults delete $(BUNDLE_ID) 2>/dev/null || true
 	@echo "Removing app group container..."
@@ -74,4 +84,6 @@ reset: uninstall
 	@security delete-generic-password -s $(BUNDLE_ID) 2>/dev/null || true
 	@echo "Removing DerivedData..."
 	@rm -rf $(HOME)/Library/Developer/Xcode/DerivedData/PullRequestPilot-*
-	@echo "Reset complete — next launch will behave like a fresh install."
+	@echo "Killing NotificationCenter to flush widget cache..."
+	@killall NotificationCenter 2>/dev/null || true
+	@echo "Nuke complete — next launch will behave like a fresh install."
