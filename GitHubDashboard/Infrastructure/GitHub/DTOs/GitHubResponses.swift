@@ -46,6 +46,7 @@ struct PullRequestNode: Decodable {
     let repository: RepositoryNode
     let author: AuthorNode?
     let reviewThreads: ReviewThreadsConnection?
+    let latestReviews: LatestReviewsConnection?
     let labels: LabelsConnection
 
     struct RepositoryNode: Decodable {
@@ -79,6 +80,15 @@ struct PullRequestNode: Decodable {
 
         struct ReviewThreadNode: Decodable {
             let isResolved: Bool
+        }
+    }
+
+    struct LatestReviewsConnection: Decodable {
+        let nodes: [LatestReviewNode]
+
+        struct LatestReviewNode: Decodable {
+            let author: AuthorNode?
+            let state: String
         }
     }
 
@@ -168,7 +178,12 @@ extension PullRequestNode {
             baseRefName: baseRefName,
             headRefName: headRefName,
             headCommitSha: headRefOid,
-            lastActivity: mapLastActivity(isoFormatter: isoFormatter, fallbackFormatter: fallbackFormatter)
+            lastActivity: mapLastActivity(isoFormatter: isoFormatter, fallbackFormatter: fallbackFormatter),
+            latestReviews: latestReviews?.nodes.compactMap { node in
+                guard let login = node.author?.login,
+                      let state = ReviewState(rawValue: node.state) else { return nil }
+                return UserReview(login: login, state: state)
+            } ?? []
         )
     }
 

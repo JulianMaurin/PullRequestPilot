@@ -2,6 +2,7 @@ import Foundation
 import os
 import SwiftUI
 import UserNotifications
+import WidgetKit
 
 struct ViewState {
     var pullRequests: [PullRequest] = []
@@ -29,6 +30,7 @@ final class DashboardViewModel {
     private var refreshTask: Task<Void, Never>?
     private var previousPRIDs: [UUID: Set<String>] = [:]
     private var hasCompletedInitialLoad: Set<UUID> = []
+    private var viewerLogin: String?
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "GitHubDashboard", category: "Dashboard")
 
     init(gitHubClient: GitHubClientProtocol, viewsStore: ViewsStore, localRepositoryService: LocalRepositoryService) {
@@ -55,6 +57,10 @@ final class DashboardViewModel {
 
         viewStates[viewID] = ViewState(isLoading: true)
 
+        if view.hideReviewed {
+            await fetchViewerLoginIfNeeded()
+        }
+
         logger.info("Fetching PRs for '\(view.title)'...")
 
         do {
@@ -62,9 +68,10 @@ final class DashboardViewModel {
             let prs = page.pullRequests
             var seenIDs = Set<String>()
             let uniquePRs = prs.filter { seenIDs.insert($0.id).inserted }
+            let filteredPRs = filterReviewedPRs(uniquePRs, for: view)
 
-            checkAndNotify(viewID: viewID, newPRs: uniquePRs)
-            viewStates[viewID]?.pullRequests = uniquePRs
+            checkAndNotify(viewID: viewID, newPRs: filteredPRs)
+            viewStates[viewID]?.pullRequests = filteredPRs
             viewStates[viewID]?.seenIDs = seenIDs
             viewStates[viewID]?.nextCursor = page.nextCursor
             viewStates[viewID]?.reachedLimit = uniquePRs.count >= Constants.App.maxPullRequests
@@ -91,8 +98,9 @@ final class DashboardViewModel {
         do {
             let page = try await gitHubClient.fetchPullRequests(query: view.query, cursor: state.nextCursor)
             let newPRs = page.pullRequests.filter { viewStates[viewID]?.seenIDs.insert($0.id).inserted == true }
+            let filteredNewPRs = filterReviewedPRs(newPRs, for: view)
 
-            viewStates[viewID]?.pullRequests.append(contentsOf: newPRs)
+            viewStates[viewID]?.pullRequests.append(contentsOf: filteredNewPRs)
             viewStates[viewID]?.nextCursor = page.nextCursor
             let totalCount = viewStates[viewID]?.pullRequests.count ?? 0
             viewStates[viewID]?.reachedLimit = totalCount >= Constants.App.maxPullRequests
@@ -110,11 +118,45 @@ final class DashboardViewModel {
     }
 
     func refreshAll() async {
+        await fetchViewerLoginIfNeeded()
         await withTaskGroup(of: Void.self) { group in
             for view in views {
                 group.addTask { await self.refresh(viewID: view.id) }
             }
         }
+        updateWidgetData()
+    }
+
+    private func fetchViewerLoginIfNeeded() async {
+        guard viewerLogin == nil else { return }
+        do {
+            viewerLogin = try await gitHubClient.fetchViewerLogin()
+        } catch {
+            logger.warning("Failed to fetch viewer login: \(error)")
+        }
+    }
+
+    private func filterReviewedPRs(_ prs: [PullRequest], for view: DashboardView) -> [PullRequest] {
+        guard view.hideReviewed, let login = viewerLogin else { return prs }
+        return prs.filter { pr in
+            guard let viewerReview = pr.latestReviews.first(where: { $0.login == login }) else {
+                return true
+            }
+            // Keep the PR if the viewer's review was dismissed (needs re-review)
+            return viewerReview.state == .dismissed
+        }
+    }
+
+    private func updateWidgetData() {
+        let widgetViews = views.map { view in
+            WidgetViewData(
+                id: view.id.uuidString,
+                title: view.title,
+                count: viewStates[view.id]?.pullRequests.count ?? 0
+            )
+        }
+        WidgetData(views: widgetViews, lastUpdated: .now).save()
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     func startAutoRefresh() {
@@ -167,6 +209,13 @@ final class DashboardViewModel {
         guard let index = views.firstIndex(where: { $0.id == view.id }) else { return }
         views[index] = view
         viewsStore.save(views)
+    }
+
+    func toggleHideReviewed(for viewID: UUID) {
+        guard let index = views.firstIndex(where: { $0.id == viewID }) else { return }
+        views[index].hideReviewed.toggle()
+        viewsStore.save(views)
+        Task { await refresh(viewID: viewID) }
     }
 
     func deleteView(id: UUID) {

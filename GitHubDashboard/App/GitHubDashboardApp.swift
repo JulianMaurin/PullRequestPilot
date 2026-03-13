@@ -3,15 +3,24 @@ import SwiftUI
 @main
 struct GitHubDashboardApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @State private var appState = AppState()
+    @State private var appState: AppState?
+
+    init() {
+        // Skip full app initialization when running unit tests
+        if NSClassFromString("XCTestCase") == nil {
+            _appState = State(initialValue: AppState())
+        }
+    }
 
     var body: some Scene {
         Window("GitHub Dashboard", id: "main") {
-            ContentView(
-                dashboardViewModel: appState.dashboardViewModel,
-                settingsViewModel: appState.settingsViewModel
-            )
-            .background(WindowAccessor())
+            if let appState {
+                ContentView(
+                    dashboardViewModel: appState.dashboardViewModel,
+                    settingsViewModel: appState.settingsViewModel
+                )
+                .background(WindowAccessor())
+            }
         }
         .defaultSize(width: 700, height: 500)
     }

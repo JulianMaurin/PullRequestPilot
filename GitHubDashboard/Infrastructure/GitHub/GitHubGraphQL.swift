@@ -45,6 +45,12 @@ enum GitHubGraphQL {
                     isResolved
                   }
                 }
+                latestReviews(first: 100) {
+                  nodes {
+                    author { login }
+                    state
+                  }
+                }
                 labels(first: 10) {
                   nodes {
                     name

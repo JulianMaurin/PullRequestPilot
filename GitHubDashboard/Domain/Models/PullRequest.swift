@@ -22,6 +22,7 @@ struct PullRequest: Identifiable, Hashable {
     let headRefName: String
     let headCommitSha: String?
     let lastActivity: LastActivity?
+    let latestReviews: [UserReview]
 
     var linesChanged: Int { additions + deletions }
 
@@ -67,6 +68,21 @@ enum ReviewDecision: String {
     case approved = "APPROVED"
     case changesRequested = "CHANGES_REQUESTED"
     case reviewRequired = "REVIEW_REQUIRED"
+}
+
+// MARK: - User Review
+
+struct UserReview: Hashable {
+    let login: String
+    let state: ReviewState
+}
+
+enum ReviewState: String {
+    case approved = "APPROVED"
+    case changesRequested = "CHANGES_REQUESTED"
+    case commented = "COMMENTED"
+    case dismissed = "DISMISSED"
+    case pending = "PENDING"
 }
 
 // MARK: - Last Activity

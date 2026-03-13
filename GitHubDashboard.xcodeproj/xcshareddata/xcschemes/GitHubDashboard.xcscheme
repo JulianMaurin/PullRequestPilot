@@ -35,6 +35,20 @@
                ReferencedContainer = "container:GitHubDashboard.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "68BC92B64E72527DA0D18083"
+               BuildableName = "GitHubDashboardWidgetExtension.appex"
+               BlueprintName = "GitHubDashboardWidgetExtension"
+               ReferencedContainer = "container:GitHubDashboard.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction

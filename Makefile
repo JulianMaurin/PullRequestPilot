@@ -53,7 +53,7 @@ run: build
 
 # Run tests
 test: generate
-	$(XCODEBUILD) test
+	$(XCODEBUILD_BASE) -configuration Debug test
 
 # Clean build artifacts
 clean:

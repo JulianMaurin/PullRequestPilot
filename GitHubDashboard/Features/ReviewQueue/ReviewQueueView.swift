@@ -104,16 +104,32 @@ struct ReviewQueueView: View {
         return Button {
             viewModel.selectedViewID = dashView.id
         } label: {
-            Text(dashView.title)
-                .font(.subheadline)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
-                .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+            HStack(spacing: 4) {
+                Text(dashView.title)
+                if dashView.hideReviewed {
+                    Image(systemName: "eye.slash")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .font(.subheadline)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+            .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
         .contextMenu {
+            Button {
+                viewModel.toggleHideReviewed(for: dashView.id)
+            } label: {
+                SwiftUI.Label(
+                    dashView.hideReviewed ? "Show Reviewed PRs" : "Hide Reviewed PRs",
+                    systemImage: dashView.hideReviewed ? "eye" : "eye.slash"
+                )
+            }
+            Divider()
             Button(role: .destructive) {
                 viewToDelete = dashView
                 showDeleteConfirmation = true

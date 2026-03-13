@@ -27,6 +27,29 @@ targets:
         SWIFT_STRICT_CONCURRENCY: complete
     entitlements:
       path: GitHubDashboard/Resources/GitHubDashboard.entitlements
+    dependencies:
+      - target: GitHubDashboardWidgetExtension
+        embed: true
+
+  GitHubDashboardWidgetExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - GitHubDashboardWidget
+    info:
+      path: GitHubDashboardWidget/Info.plist
+      properties:
+        CFBundleDisplayName: GitHub Dashboard Widget
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.github-dashboard.app.widget
+        CODE_SIGN_ENTITLEMENTS: GitHubDashboardWidget/GitHubDashboardWidget.entitlements
+        SWIFT_STRICT_CONCURRENCY: complete
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks"
+    entitlements:
+      path: GitHubDashboardWidget/GitHubDashboardWidget.entitlements
 
   GitHubDashboardTests:
     type: bundle.unit-test
@@ -45,6 +68,7 @@ schemes:
     build:
       targets:
         GitHubDashboard: all
+        GitHubDashboardWidgetExtension: all
         GitHubDashboardTests: [test]
     run:
       config: Debug

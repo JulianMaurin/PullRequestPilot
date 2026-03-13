@@ -76,9 +76,41 @@ struct DashboardViewModelTests {
         #expect(viewModel.views.count == initialCount)
     }
 
+    @Test("hideReviewed filters out PRs with active reviews but keeps dismissed")
+    func hideReviewedFiltering() async {
+        let approvedPR = makePullRequest(number: 1, title: "Approved", reviews: [
+            UserReview(login: "testuser", state: .approved)
+        ])
+        let dismissedPR = makePullRequest(number: 2, title: "Dismissed", reviews: [
+            UserReview(login: "testuser", state: .dismissed)
+        ])
+        let unreviewedPR = makePullRequest(number: 3, title: "Unreviewed", reviews: [])
+        let otherReviewPR = makePullRequest(number: 4, title: "Other reviewed", reviews: [
+            UserReview(login: "someone-else", state: .approved)
+        ])
+        mockClient.pullRequestsToReturn = [approvedPR, dismissedPR, unreviewedPR, otherReviewPR]
+
+        // Default views have hideReviewed: true, so just use defaults
+        let defaults = UserDefaults(suiteName: "HideReviewedTests")!
+        defaults.removePersistentDomain(forName: "HideReviewedTests")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        let viewID = viewModel.views.first!.id
+
+        #expect(viewModel.views.first!.hideReviewed == true)
+        await viewModel.refresh(viewID: viewID)
+
+        let state = viewModel.viewStates[viewID]!
+        let titles = state.pullRequests.map(\.title)
+        #expect(titles.contains("Dismissed"))
+        #expect(titles.contains("Unreviewed"))
+        #expect(titles.contains("Other reviewed"))
+        #expect(!titles.contains("Approved"))
+    }
+
     // MARK: - Helpers
 
-    private func makePullRequest(number: Int, title: String) -> PullRequest {
+    private func makePullRequest(number: Int, title: String, reviews: [UserReview] = []) -> PullRequest {
         PullRequest(
             id: "PR_\(number)",
             number: number,
@@ -100,7 +132,8 @@ struct DashboardViewModelTests {
             baseRefName: "main",
             headRefName: "feature-\(number)",
             headCommitSha: nil,
-            lastActivity: nil
+            lastActivity: nil,
+            latestReviews: reviews
         )
     }
 }
