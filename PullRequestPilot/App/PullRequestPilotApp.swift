@@ -23,6 +23,9 @@ struct PullRequestPilotApp: App {
                 .onOpenURL { url in
                     handleIncomingURL(url)
                 }
+                .onAppear {
+                    appDelegate.dashboardViewModel = appState.dashboardViewModel
+                }
             }
         }
         .defaultSize(width: 700, height: 500)
