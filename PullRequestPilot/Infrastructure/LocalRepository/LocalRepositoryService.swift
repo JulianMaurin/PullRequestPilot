@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import os
 
@@ -21,7 +22,8 @@ final class LocalRepositoryService {
     private(set) var isScanning = false
     private(set) var lastScanDate: Date?
     private(set) var indexedRepoCount: Int = 0
-    private var repoIndex: [RepoEntry] = []
+    // internal setter for test injection via @testable import
+    var repoIndex: [RepoEntry] = []
     private var refreshTask: Task<Void, Never>?
 
     private let logger = Logger(
@@ -31,7 +33,7 @@ final class LocalRepositoryService {
 
     // MARK: - Cache Model
 
-    private struct RepoEntry: Sendable {
+    struct RepoEntry: Sendable {
         let path: URL
         let nameWithOwner: String
         let currentBranch: String?
@@ -39,7 +41,7 @@ final class LocalRepositoryService {
         let worktrees: [WorktreeEntry]
     }
 
-    private struct WorktreeEntry: Sendable {
+    struct WorktreeEntry: Sendable {
         let path: URL
         let branch: String?
         let commitShas: Set<String>
@@ -125,14 +127,22 @@ final class LocalRepositoryService {
         launchApp("iTerm", path: path)
     }
 
+    private static let appBundleIDs: [String: String] = [
+        "Visual Studio Code": "com.microsoft.VSCode",
+        "iTerm": "com.googlecode.iterm2",
+    ]
+
     private func launchApp(_ appName: String, path: URL) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = ["-a", appName, path.path]
-        do {
-            try process.run()
-        } catch {
-            logger.error("Failed to open \(appName): \(error)")
+        guard let bundleID = Self.appBundleIDs[appName],
+              let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            logger.error("Application not found: \(appName)")
+            return
+        }
+        let config = NSWorkspace.OpenConfiguration()
+        NSWorkspace.shared.open([path], withApplicationAt: appURL, configuration: config) { [logger] _, error in
+            if let error {
+                logger.error("Failed to open \(appName): \(error)")
+            }
         }
     }
 
