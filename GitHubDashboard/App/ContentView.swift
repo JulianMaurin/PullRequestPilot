@@ -8,7 +8,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             if showingSettings || !settingsViewModel.hasToken {
-                SettingsView(viewModel: settingsViewModel)
+                SettingsView(viewModel: settingsViewModel, dashboardViewModel: dashboardViewModel)
                     .navigationTitle("Settings")
                     .toolbar {
                         if settingsViewModel.hasToken {

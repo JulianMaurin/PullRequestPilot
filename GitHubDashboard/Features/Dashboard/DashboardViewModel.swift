@@ -1,6 +1,7 @@
 import Foundation
 import os
 import SwiftUI
+import UserNotifications
 
 struct ViewState {
     var pullRequests: [PullRequest] = []
@@ -26,6 +27,8 @@ final class DashboardViewModel {
     private let viewsStore: ViewsStore
     private let localRepositoryService: LocalRepositoryService
     private var refreshTask: Task<Void, Never>?
+    private var previousPRIDs: [UUID: Set<String>] = [:]
+    private var hasCompletedInitialLoad: Set<UUID> = []
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "GitHubDashboard", category: "Dashboard")
 
     init(gitHubClient: GitHubClientProtocol, viewsStore: ViewsStore, localRepositoryService: LocalRepositoryService) {
@@ -60,6 +63,7 @@ final class DashboardViewModel {
             var seenIDs = Set<String>()
             let uniquePRs = prs.filter { seenIDs.insert($0.id).inserted }
 
+            checkAndNotify(viewID: viewID, newPRs: uniquePRs)
             viewStates[viewID]?.pullRequests = uniquePRs
             viewStates[viewID]?.seenIDs = seenIDs
             viewStates[viewID]?.nextCursor = page.nextCursor
@@ -190,6 +194,78 @@ final class DashboardViewModel {
 
     func openInBrowser(_ pr: PullRequest) {
         NSWorkspace.shared.open(pr.url)
+    }
+
+    // MARK: - Notifications
+
+    var notifiedViewIDs: Set<String> {
+        get {
+            Set(UserDefaults.standard.stringArray(forKey: Constants.UserDefaultsKeys.notifiedViewIDs) ?? [])
+        }
+        set {
+            UserDefaults.standard.set(Array(newValue), forKey: Constants.UserDefaultsKeys.notifiedViewIDs)
+        }
+    }
+
+    func isNotificationEnabled(for viewID: UUID) -> Bool {
+        notifiedViewIDs.contains(viewID.uuidString)
+    }
+
+    func toggleNotification(for viewID: UUID) {
+        var ids = notifiedViewIDs
+        if ids.contains(viewID.uuidString) {
+            ids.remove(viewID.uuidString)
+        } else {
+            ids.insert(viewID.uuidString)
+            requestNotificationPermission()
+        }
+        notifiedViewIDs = ids
+    }
+
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error {
+                self.logger.error("Notification permission error: \(error)")
+            }
+        }
+    }
+
+    private func checkAndNotify(viewID: UUID, newPRs: [PullRequest]) {
+        guard isNotificationEnabled(for: viewID) else { return }
+
+        let newIDs = Set(newPRs.map(\.id))
+
+        guard hasCompletedInitialLoad.contains(viewID) else {
+            previousPRIDs[viewID] = newIDs
+            hasCompletedInitialLoad.insert(viewID)
+            return
+        }
+
+        let previousIDs = previousPRIDs[viewID] ?? []
+        let addedIDs = newIDs.subtracting(previousIDs)
+        previousPRIDs[viewID] = newIDs
+
+        guard !addedIDs.isEmpty else { return }
+
+        guard let view = views.first(where: { $0.id == viewID }) else { return }
+
+        let count = addedIDs.count
+        let content = UNMutableNotificationContent()
+        content.title = view.title
+        content.body = "\(count) new PR\(count == 1 ? "" : "s")"
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "new-prs-\(viewID.uuidString)-\(Date.now.timeIntervalSince1970)",
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                self.logger.error("Failed to deliver notification: \(error)")
+            }
+        }
     }
 
     // MARK: - Open in Editor

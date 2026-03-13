@@ -14,6 +14,7 @@ enum Constants {
     enum UserDefaultsKeys {
         static let prRefreshInterval = "prRefreshInterval"
         static let repoScanInterval = "repoScanInterval"
+        static let notifiedViewIDs = "notifiedViewIDs"
     }
 
     enum Notifications {

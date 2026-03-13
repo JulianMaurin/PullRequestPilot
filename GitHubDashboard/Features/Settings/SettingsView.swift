@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var viewModel: SettingsViewModel
+    var dashboardViewModel: DashboardViewModel
 
     var body: some View {
         Form {
@@ -66,6 +67,26 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("General")
+            }
+
+            Section {
+                if dashboardViewModel.views.isEmpty {
+                    Text("No views configured yet.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(dashboardViewModel.views) { view in
+                        Toggle(view.title, isOn: Binding(
+                            get: { dashboardViewModel.isNotificationEnabled(for: view.id) },
+                            set: { _ in dashboardViewModel.toggleNotification(for: view.id) }
+                        ))
+                    }
+                }
+            } header: {
+                Text("Notifications")
+            } footer: {
+                Text("Get notified when new pull requests appear in a view.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section {
