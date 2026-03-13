@@ -122,25 +122,7 @@ final class LocalRepositoryService {
     }
 
     func openInITerm(path: URL) {
-        let script = """
-        tell application "iTerm2"
-            activate
-            tell current window
-                create tab with default profile
-                tell current session
-                    write text "cd \(path.path.replacingOccurrences(of: "\"", with: "\\\""))"
-                end tell
-            end tell
-        end tell
-        """
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", script]
-        do {
-            try process.run()
-        } catch {
-            logger.error("Failed to open iTerm: \(error)")
-        }
+        launchApp("iTerm", path: path)
     }
 
     private func launchApp(_ appName: String, path: URL) {
