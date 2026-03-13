@@ -1,7 +1,7 @@
-SCHEME       := GitHubDashboard
-PROJECT      := GitHubDashboard.xcodeproj
-APP_NAME     := GitHub Dashboard.app
-BUNDLE_NAME  := GitHubDashboard.app
+SCHEME       := PullRequestPilot
+PROJECT      := PullRequestPilot.xcodeproj
+APP_NAME     := Pull Request Pilot.app
+BUNDLE_NAME  := PullRequestPilot.app
 INSTALL_DIR  := /Applications
 BUILD_DIR    := .build
 CONFIG       := Release
@@ -42,7 +42,7 @@ debug: generate
 	$(XCODEBUILD_BASE) -configuration Debug build SYMROOT=$(BUILD_DIR)
 	@if [ -f .env ]; then \
 		set -a && . ./.env && set +a && \
-		"$(BUILD_DIR)/Debug/$(BUNDLE_NAME)/Contents/MacOS/GitHubDashboard"; \
+		"$(BUILD_DIR)/Debug/$(BUNDLE_NAME)/Contents/MacOS/PullRequestPilot"; \
 	else \
 		open "$(BUILD_DIR)/Debug/$(BUNDLE_NAME)"; \
 	fi

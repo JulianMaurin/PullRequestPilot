@@ -1,6 +1,6 @@
-name: GitHubDashboard
+name: PullRequestPilot
 options:
-  bundleIdPrefix: com.github-dashboard
+  bundleIdPrefix: com.pullrequestpilot
   deploymentTarget:
     macOS: "14.0"
   xcodeVersion: "16.0"
@@ -10,66 +10,68 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: FNR3B372S8
 
 targets:
-  GitHubDashboard:
+  PullRequestPilot:
     type: application
     platform: macOS
     sources:
-      - GitHubDashboard
+      - PullRequestPilot
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.github-dashboard.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.pullrequestpilot.app
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
-        INFOPLIST_KEY_CFBundleDisplayName: GitHub Dashboard
+        INFOPLIST_KEY_CFBundleDisplayName: Pull Request Pilot
         GENERATE_INFOPLIST_FILE: YES
-        CODE_SIGN_ENTITLEMENTS: GitHubDashboard/Resources/GitHubDashboard.entitlements
+        CODE_SIGN_ENTITLEMENTS: PullRequestPilot/Resources/PullRequestPilot.entitlements
         SWIFT_STRICT_CONCURRENCY: complete
     entitlements:
-      path: GitHubDashboard/Resources/GitHubDashboard.entitlements
+      path: PullRequestPilot/Resources/PullRequestPilot.entitlements
     dependencies:
-      - target: GitHubDashboardWidgetExtension
+      - target: PullRequestPilotWidgetExtension
         embed: true
 
-  GitHubDashboardWidgetExtension:
+  PullRequestPilotWidgetExtension:
     type: app-extension
     platform: macOS
     sources:
-      - GitHubDashboardWidget
+      - PullRequestPilotWidget
     info:
-      path: GitHubDashboardWidget/Info.plist
+      path: PullRequestPilotWidget/Info.plist
       properties:
-        CFBundleDisplayName: GitHub Dashboard Widget
+        CFBundleDisplayName: Pull Request Pilot Widget
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.github-dashboard.app.widget
-        CODE_SIGN_ENTITLEMENTS: GitHubDashboardWidget/GitHubDashboardWidget.entitlements
+        PRODUCT_BUNDLE_IDENTIFIER: com.pullrequestpilot.app.widget
+        CODE_SIGN_ENTITLEMENTS: PullRequestPilotWidget/PullRequestPilotWidget.entitlements
         SWIFT_STRICT_CONCURRENCY: complete
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks"
     entitlements:
-      path: GitHubDashboardWidget/GitHubDashboardWidget.entitlements
+      path: PullRequestPilotWidget/PullRequestPilotWidget.entitlements
 
-  GitHubDashboardTests:
+  PullRequestPilotTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - GitHubDashboardTests
+      - PullRequestPilotTests
     dependencies:
-      - target: GitHubDashboard
+      - target: PullRequestPilot
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.github-dashboard.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.pullrequestpilot.tests
         GENERATE_INFOPLIST_FILE: YES
 
 schemes:
-  GitHubDashboard:
+  PullRequestPilot:
     build:
       targets:
-        GitHubDashboard: all
-        GitHubDashboardWidgetExtension: all
-        GitHubDashboardTests: [test]
+        PullRequestPilot: all
+        PullRequestPilotWidgetExtension: all
+        PullRequestPilotTests: [test]
     run:
       config: Debug
       environmentVariables:
@@ -79,6 +81,6 @@ schemes:
     test:
       config: Debug
       targets:
-        - GitHubDashboardTests
+        - PullRequestPilotTests
     archive:
       config: Release

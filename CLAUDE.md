@@ -1,4 +1,4 @@
-# CLAUDE.md — GitHub Dashboard
+# CLAUDE.md — Pull Request Pilot
 
 ## Project Overview
 
@@ -12,7 +12,7 @@ A `Makefile` wraps all build commands. `DEVELOPER_DIR` is set automatically.
 make build        # Regenerate xcodeproj + Release build
 make debug        # Debug build + run (sources .env for GITHUB_TOKEN)
 make run          # Release build + run
-make install      # Build + copy to /Applications/GitHub Dashboard.app
+make install      # Build + copy to /Applications/Pull Request Pilot.app
 make uninstall    # Remove from /Applications
 make test         # Run unit tests
 make clean        # Clean build artifacts
@@ -22,7 +22,7 @@ In debug builds, `TokenCache` reads `GITHUB_TOKEN` from the environment (`#if DE
 
 ```bash
 # Open in Xcode
-open GitHubDashboard.xcodeproj
+open PullRequestPilot.xcodeproj
 ```
 
 **Always verify builds from the command line** (`make build`) after changes — don't rely on Xcode's index alone.
@@ -31,7 +31,7 @@ open GitHubDashboard.xcodeproj
 
 **After creating or deleting any Swift file**, you MUST run `xcodegen generate` before building — otherwise the Xcode project won't include the new files and builds will fail with "cannot find type" errors.
 
-**Stale Xcode errors**: If Xcode shows errors that don't reproduce on the command line (especially from `@Observable` macro-generated sources), clear DerivedData: `rm -rf ~/Library/Developer/Xcode/DerivedData/GitHubDashboard-*`
+**Stale Xcode errors**: If Xcode shows errors that don't reproduce on the command line (especially from `@Observable` macro-generated sources), clear DerivedData: `rm -rf ~/Library/Developer/Xcode/DerivedData/PullRequestPilot-*`
 
 ## Architecture
 
@@ -85,8 +85,8 @@ Shared/               — Cross-cutting constants
 
 - **Swift Testing** framework (`@Suite`, `@Test`) — not XCTest for new tests.
 - Protocol-based mocking: mock implementations of protocols (e.g., `MockGitHubClient`).
-- Test files mirror source structure in `GitHubDashboardTests/`.
-- Mock files go in `GitHubDashboardTests/Mocks/`.
+- Test files mirror source structure in `PullRequestPilotTests/`.
+- Mock files go in `PullRequestPilotTests/Mocks/`.
 - Use isolated `UserDefaults(suiteName:)` in tests — never touch real user defaults.
 - Test both success and error paths. Test edge cases (empty state, invalid input).
 

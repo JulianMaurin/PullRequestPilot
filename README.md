@@ -1,4 +1,4 @@
-# GitHub Dashboard
+# Pull Request Pilot
 
 A native macOS menu bar app for monitoring GitHub pull request review queues. Built with SwiftUI, targeting macOS 14+ (Sonoma), Swift 6 with strict concurrency. Zero external dependencies.
 
@@ -31,8 +31,8 @@ Matching strategies (in priority order): exact branch name, worktree branch name
 ## Setup
 
 ```bash
-git clone https://github.com/your-username/github-dashboard.git
-cd github-dashboard
+git clone https://github.com/your-username/pull-request-pilot.git
+cd pull-request-pilot
 make build
 ```
 
