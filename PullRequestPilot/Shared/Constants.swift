@@ -19,8 +19,18 @@ enum Constants {
     }
 
     enum URLs {
-        static let privacyPolicy = URL(string: "https://julianmaurin.github.io/PullRequestPilot/privacy")!
-        static let support = URL(string: "https://github.com/JulianMaurin/PullRequestPilot/issues")!
+        static let privacyPolicy: URL = {
+            guard let url = URL(string: "https://julianmaurin.github.io/PullRequestPilot/privacy") else {
+                preconditionFailure("Invalid hardcoded privacy policy URL")
+            }
+            return url
+        }()
+        static let support: URL = {
+            guard let url = URL(string: "https://github.com/JulianMaurin/PullRequestPilot/issues") else {
+                preconditionFailure("Invalid hardcoded support URL")
+            }
+            return url
+        }()
     }
 
     enum Notifications {
