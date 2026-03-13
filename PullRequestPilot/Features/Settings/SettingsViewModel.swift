@@ -26,6 +26,10 @@ final class SettingsViewModel {
         case invalid(String)
     }
 
+    /// Whether a token has been persisted to the Keychain (not just typed in the field).
+    /// Used by ContentView to decide whether to show settings or the dashboard.
+    private(set) var hasSavedToken: Bool = false
+
     init(keychain: KeychainService, gitHubClient: GitHubClientProtocol, tokenCache: TokenCache, gitDirectoriesStore: GitDirectoriesStore, localRepositoryService: LocalRepositoryService) {
         self.keychain = keychain
         self.gitHubClient = gitHubClient
@@ -33,6 +37,7 @@ final class SettingsViewModel {
         self.gitDirectoriesStore = gitDirectoriesStore
         self.localRepositoryService = localRepositoryService
         self.token = tokenCache.token ?? ""
+        self.hasSavedToken = tokenCache.token != nil
         self.gitDirectories = gitDirectoriesStore.load()
 
         let prInterval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
@@ -44,7 +49,6 @@ final class SettingsViewModel {
     var isScanning: Bool { localRepositoryService.isScanning }
     var lastScanDate: Date? { localRepositoryService.lastScanDate }
     var indexedRepoCount: Int { localRepositoryService.indexedRepoCount }
-    var gitAvailable: Bool { localRepositoryService.gitAvailable }
 
     var hasToken: Bool {
         !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -62,6 +66,7 @@ final class SettingsViewModel {
         do {
             try keychain.save(key: Constants.Keychain.githubToken, value: trimmedToken)
             tokenCache.set(trimmedToken)
+            hasSavedToken = true
             logger.info("Token saved to Keychain successfully")
         } catch {
             logger.error("Failed to save token to Keychain: \(error)")
@@ -97,6 +102,7 @@ final class SettingsViewModel {
         token = ""
         viewerLogin = nil
         validationState = .idle
+        hasSavedToken = false
     }
 
     // MARK: - Launch at Login

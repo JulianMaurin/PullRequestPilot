@@ -12,7 +12,7 @@ XCODEBUILD_BASE := xcodebuild -scheme $(SCHEME) -project $(PROJECT) \
 	-destination 'platform=macOS'
 XCODEBUILD := $(XCODEBUILD_BASE) -configuration $(CONFIG)
 
-.PHONY: all generate build install uninstall clean test run debug
+.PHONY: all generate build install uninstall clean test run debug reset
 
 all: build
 
@@ -59,3 +59,19 @@ test: generate
 clean:
 	$(XCODEBUILD) clean
 	rm -rf $(BUILD_DIR)
+
+# Full reset — simulate a first install by removing the app, its data, and keychain token
+BUNDLE_ID    := com.pullrequestpilot.app
+APP_GROUP_ID := FNR3B372S8.com.pullrequestpilot.shared
+reset: uninstall
+	@echo "Removing UserDefaults for $(BUNDLE_ID)..."
+	@defaults delete $(BUNDLE_ID) 2>/dev/null || true
+	@echo "Removing app group container..."
+	@rm -rf "$(HOME)/Library/Group Containers/$(APP_GROUP_ID)"
+	@echo "Removing app containers..."
+	@rm -rf "$(HOME)/Library/Containers/$(BUNDLE_ID)" 2>/dev/null || true
+	@echo "Removing Keychain token..."
+	@security delete-generic-password -s $(BUNDLE_ID) 2>/dev/null || true
+	@echo "Removing DerivedData..."
+	@rm -rf $(HOME)/Library/Developer/Xcode/DerivedData/PullRequestPilot-*
+	@echo "Reset complete — next launch will behave like a fresh install."

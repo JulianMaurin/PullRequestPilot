@@ -111,6 +111,68 @@ Shared/               — Cross-cutting constants
 - DTOs (API response models) stay in Infrastructure — domain models must not know about wire formats.
 - Keep views stateless — all logic and state belong in ViewModels.
 
+## App Store Compliance
+
+This app is distributed via the Mac App Store. **Every line of code must be sandbox-safe, review-safe, and production-ready.**
+
+### Sandbox Rules (MANDATORY)
+
+- **App Sandbox is ON** (`com.apple.security.app-sandbox: true`). All code must work within sandbox constraints.
+- **No shell commands** — never use `Process()`, `NSTask`, `/bin/sh`, `/usr/bin/env`, or any subprocess spawning. This is a hard App Store rejection.
+- **No dynamic library loading** — no `dlopen`, `NSBundle.load()`, or runtime code loading.
+- **No file access outside sandbox** — only access files via user-selected (`NSOpenPanel`) or app group containers. Never hardcode paths like `~/`, `/tmp`, `/usr/local`, etc.
+- **No private/undocumented APIs** — only use public Apple frameworks. No `@objc` selectors on private APIs, no `performSelector` tricks, no `IOKit` unless the entitlement is granted.
+- **No `setenv`/`getenv` for configuration in production** — environment variables are only for `#if DEBUG` blocks.
+- **Entitled operations only** — if a capability isn't declared in the entitlements file, the code must not attempt it. Current entitlements: network client, user-selected file read-only, app groups.
+
+### App Review Rules
+
+- **No placeholder UI or incomplete features** — every feature must be fully functional. Hide unfinished work behind `#if DEBUG` or don't merge it.
+- **Privacy compliance** — if adding any new data collection, add matching `NSPrivacyCollectedDataTypes` in the privacy manifest. The app currently collects no user data beyond the GitHub token.
+- **Privacy manifest required** — any new framework or SDK that Apple lists as requiring a privacy manifest must include one. Check Apple's list before adopting any dependency.
+- **No misleading metadata** — bundle display name, category, and descriptions must accurately reflect app functionality.
+- **Crash-free** — App Review tests basic flows. Any crash during review is an automatic rejection. Test all flows with real and invalid tokens, network failures, and empty states.
+- **Graceful degradation** — the app must remain usable (show meaningful UI) when: network is unavailable, token is invalid/expired, GitHub API returns errors, rate limits are hit.
+- **No deprecated API usage** — do not use APIs deprecated in macOS 14+. Use the modern replacement immediately.
+- **Login/auth must work on first try** — App Review will test the token flow. Provide clear instructions and error messages for authentication.
+
+### Entitlements & Capabilities
+
+- **Never add entitlements without justification** — each entitlement requires explanation during App Review. Only request what the app actively uses.
+- **Network entitlement** (`com.apple.security.network.client`) — required for GitHub API. Do not add `network.server`.
+- **Keychain sharing** — uses app groups for widget data sharing. The keychain service name must match the bundle ID.
+- **No new entitlements without discussion** — if a feature requires a new entitlement, discuss the App Review implications first.
+
+### Code Signing & Versioning
+
+- **Automatic signing** with team `FNR3B372S8`. Never switch to manual signing in `project.yml`.
+- **Bump `CURRENT_PROJECT_VERSION`** (build number) for every new archive/upload. App Store Connect rejects duplicate build numbers.
+- **`MARKETING_VERSION`** follows semver. Bump appropriately for releases.
+- **Hardened runtime is ON** — never disable it. Code must work without JIT, unsigned memory, or DYLD environment variables.
+
+### Widget Extension Rules
+
+- **Widget must work independently** — it reads from the shared app group container. Never assume the main app is running.
+- **Widget bundle ID must be prefixed** with the main app's bundle ID (`com.pullrequestpilot.app.widget`).
+- **Widget entitlements must be a subset** of or equal to the main app's entitlements.
+- **Widgets must not perform heavy computation** — keep timeline providers lightweight.
+
+### Data & Persistence
+
+- **UserDefaults for non-sensitive preferences only** — use the app group suite (`group.com.pullrequestpilot.shared`) for data shared with the widget.
+- **Keychain for secrets** — tokens, credentials, and API keys must use the Keychain. Never log, print, or persist tokens in UserDefaults, files, or crash reports.
+- **Never log sensitive data** — no token values, no full API responses containing user data. Use `os_log` with appropriate privacy levels (`%{private}@`) for any user-identifiable information.
+
+### Build Verification Checklist
+
+Before any PR that touches production code:
+1. `make build` succeeds with zero warnings.
+2. `make test` passes all tests.
+3. App launches and completes core flows (auth, PR list, refresh, settings) in sandbox.
+4. Widget renders correctly with both populated and empty data.
+5. No new entitlements added without justification.
+6. No `Process()`, shell commands, or file access outside sandbox.
+
 ## Quality Standards
 
 - All new code must compile with zero warnings under strict concurrency.
@@ -118,3 +180,4 @@ Shared/               — Cross-cutting constants
 - All errors must be user-visible with actionable messages.
 - No `// TODO`, `// FIXME`, or `// HACK` in committed code — fix it or file an issue.
 - No dead code, unused imports, or commented-out code.
+- No force-unwraps (`!`), `try!`, or `fatalError()` in production code paths — these are instant crashes and App Store rejections.

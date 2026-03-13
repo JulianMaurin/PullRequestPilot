@@ -3,6 +3,8 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var viewModel: SettingsViewModel
     var dashboardViewModel: DashboardViewModel
+    var isInitialSetup: Bool = false
+    var onDismiss: (() -> Void)?
 
     var body: some View {
         Form {
@@ -137,6 +139,18 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
+            if isInitialSetup && viewModel.validationState == .valid {
+                Section {
+                    Button {
+                        onDismiss?()
+                    } label: {
+                        Text("Get Started")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .controlSize(.large)
+                    .buttonStyle(.borderedProminent)
+                }
+            }
         }
         .formStyle(.grouped)
         .frame(minWidth: 450, minHeight: 250)
@@ -144,10 +158,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var scanStatus: some View {
-        if !viewModel.gitAvailable {
-            Text("git was not found on this Mac. Install git to enable local repo scanning.")
-                .foregroundStyle(.orange)
-        } else if viewModel.isScanning {
+        if viewModel.isScanning {
             Text("Scanning...")
         } else if let lastScan = viewModel.lastScanDate {
             let count = viewModel.indexedRepoCount

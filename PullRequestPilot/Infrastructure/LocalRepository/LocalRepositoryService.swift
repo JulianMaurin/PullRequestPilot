@@ -22,7 +22,6 @@ final class LocalRepositoryService {
     private(set) var isScanning = false
     private(set) var lastScanDate: Date?
     private(set) var indexedRepoCount: Int = 0
-    private(set) var gitAvailable: Bool = true
     // internal setter for test injection via @testable import
     var repoIndex: [RepoEntry] = []
     private var refreshTask: Task<Void, Never>?
@@ -52,20 +51,6 @@ final class LocalRepositoryService {
 
     func scan(directories: [URL]) async {
         isScanning = true
-
-        let gitExists = await Task.detached {
-            Self.isGitInstalled()
-        }.value
-        gitAvailable = gitExists
-
-        guard gitExists else {
-            repoIndex = []
-            indexedRepoCount = 0
-            lastScanDate = Date()
-            isScanning = false
-            logger.warning("git not found at /usr/bin/git — install Xcode Command Line Tools to enable local repo scanning")
-            return
-        }
 
         let entries = await Task.detached { [logger] in
             Self.buildIndex(directories: directories, logger: logger)
@@ -101,24 +86,18 @@ final class LocalRepositoryService {
         let prSha = pr.headCommitSha
 
         let matchingRepos = repoIndex.filter { $0.nameWithOwner == nameWithOwner }
-        var fallback: LocalRepoMatch?
 
         for repo in matchingRepos {
-            // Strategy 1: Exact branch match in main working tree
             if repo.currentBranch == headRef {
                 return LocalRepoMatch(path: repo.path, matchKind: .exactBranch)
             }
 
-            // Strategy 2: Check worktrees for exact branch match
             for worktree in repo.worktrees {
                 if worktree.branch == headRef {
                     return LocalRepoMatch(path: worktree.path, matchKind: .worktreeBranch)
                 }
             }
 
-            // Strategy 3: Match by commit SHA in recent history
-            // Handles stack tools where the PR branch name differs from local branch.
-            // Each branch/worktree caches its recent commit SHAs so this is a set lookup.
             if let sha = prSha {
                 if repo.commitShas.contains(sha) {
                     return LocalRepoMatch(path: repo.path, matchKind: .commitMatch)
@@ -129,7 +108,6 @@ final class LocalRepositoryService {
                     }
                 }
             }
-
         }
 
         return nil
@@ -225,15 +203,40 @@ final class LocalRepositoryService {
         return FileManager.default.fileExists(atPath: gitPath.path)
     }
 
-    // MARK: - Git Operations
+    // MARK: - Git Operations (pure file reads, no Process)
 
+    /// Parses `.git/config` to extract the remote "origin" URL, then derives `owner/repo`.
     nonisolated private static func extractNameWithOwner(repoDir: URL) -> String? {
-        guard let output = runGit(["remote", "get-url", "origin"], at: repoDir) else { return nil }
-        let url = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        let configURL = repoDir.appendingPathComponent(".git/config")
+        guard let contents = try? String(contentsOf: configURL, encoding: .utf8) else { return nil }
 
+        var inOriginRemote = false
+        for line in contents.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            if trimmed.hasPrefix("[remote \"origin\"]") {
+                inOriginRemote = true
+                continue
+            }
+
+            if trimmed.hasPrefix("[") {
+                inOriginRemote = false
+                continue
+            }
+
+            if inOriginRemote && trimmed.hasPrefix("url = ") {
+                let url = String(trimmed.dropFirst("url = ".count))
+                return parseNameWithOwner(from: url)
+            }
+        }
+
+        return nil
+    }
+
+    nonisolated private static func parseNameWithOwner(from url: String) -> String? {
         // SSH: git@github.com:owner/repo.git
         if url.contains("github.com:") {
-            let afterColon = url.components(separatedBy: "github.com:").last ?? ""
+            guard let afterColon = url.components(separatedBy: "github.com:").last else { return nil }
             return afterColon
                 .replacingOccurrences(of: ".git", with: "")
                 .lowercased()
@@ -241,7 +244,7 @@ final class LocalRepositoryService {
 
         // HTTPS: https://github.com/owner/repo.git
         if url.contains("github.com/") {
-            let afterDomain = url.components(separatedBy: "github.com/").last ?? ""
+            guard let afterDomain = url.components(separatedBy: "github.com/").last else { return nil }
             return afterDomain
                 .replacingOccurrences(of: ".git", with: "")
                 .lowercased()
@@ -250,98 +253,84 @@ final class LocalRepositoryService {
         return nil
     }
 
+    /// Reads `.git/HEAD` to get the current branch name.
+    /// Returns `nil` for detached HEAD (raw SHA instead of symbolic ref).
     nonisolated private static func currentBranch(at repoDir: URL) -> String? {
-        runGit(["rev-parse", "--abbrev-ref", "HEAD"], at: repoDir)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let headURL = repoDir.appendingPathComponent(".git/HEAD")
+        guard let contents = try? String(contentsOf: headURL, encoding: .utf8) else { return nil }
+        let trimmed = contents.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let prefix = "ref: refs/heads/"
+        guard trimmed.hasPrefix(prefix) else { return nil }
+        return String(trimmed.dropFirst(prefix.count))
     }
 
+    /// Parses `.git/logs/HEAD` (the reflog) to extract recent commit SHAs.
+    /// Each reflog line has format: `<old-sha> <new-sha> <author> <timestamp> <message>`
     nonisolated private static func recentCommitShas(at repoDir: URL, limit: Int = 100) -> Set<String> {
-        guard let output = runGit(["log", "--format=%H", "-n", "\(limit)"], at: repoDir) else {
-            return []
+        let reflogURL = repoDir.appendingPathComponent(".git/logs/HEAD")
+        guard let contents = try? String(contentsOf: reflogURL, encoding: .utf8) else { return [] }
+
+        var shas = Set<String>()
+        let lines = contents.components(separatedBy: "\n")
+
+        // Walk from the end (most recent) to collect up to `limit` unique SHAs
+        for line in lines.reversed() {
+            guard shas.count < limit else { break }
+            let parts = line.split(separator: " ", maxSplits: 2)
+            guard parts.count >= 2 else { continue }
+            // new-sha is the second field — the state after the operation
+            let sha = String(parts[1])
+            if sha.count == 40, sha.allSatisfy(\.isHexDigit) {
+                shas.insert(sha)
+            }
         }
-        return Set(
-            output.components(separatedBy: "\n")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-        )
+
+        return shas
     }
 
+    /// Lists worktrees by reading `.git/worktrees/<name>/gitdir` and `HEAD`.
     nonisolated private static func listWorktrees(repoDir: URL) -> [WorktreeEntry] {
-        guard let output = runGit(["worktree", "list", "--porcelain"], at: repoDir) else {
+        let worktreesDir = repoDir.appendingPathComponent(".git/worktrees")
+        let fm = FileManager.default
+
+        guard let entries = try? fm.contentsOfDirectory(
+            at: worktreesDir,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
             return []
         }
 
-        var worktreePaths: [(path: URL, branch: String?)] = []
-        var currentPath: URL?
-        var currentBranch: String?
+        var result: [WorktreeEntry] = []
 
-        for line in output.components(separatedBy: "\n") {
-            if line.hasPrefix("worktree ") {
-                if let path = currentPath {
-                    worktreePaths.append((path: path, branch: currentBranch))
+        for entry in entries {
+            // The gitdir file contains the path to the worktree's working directory
+            let gitdirURL = entry.appendingPathComponent("gitdir")
+            guard let gitdirContents = try? String(contentsOf: gitdirURL, encoding: .utf8) else { continue }
+            let worktreePath = URL(fileURLWithPath: gitdirContents.trimmingCharacters(in: .whitespacesAndNewlines))
+                .deletingLastPathComponent()
+
+            // Read HEAD for the branch
+            let headURL = entry.appendingPathComponent("HEAD")
+            var branch: String?
+            if let headContents = try? String(contentsOf: headURL, encoding: .utf8) {
+                let trimmed = headContents.trimmingCharacters(in: .whitespacesAndNewlines)
+                let refPrefix = "ref: refs/heads/"
+                if trimmed.hasPrefix(refPrefix) {
+                    branch = String(trimmed.dropFirst(refPrefix.count))
                 }
-                let pathStr = String(line.dropFirst("worktree ".count))
-                currentPath = URL(fileURLWithPath: pathStr)
-                currentBranch = nil
-            } else if line.hasPrefix("branch ") {
-                let ref = String(line.dropFirst("branch ".count))
-                currentBranch = ref.replacingOccurrences(of: "refs/heads/", with: "")
             }
+
+            let shas = recentCommitShas(at: worktreePath)
+
+            result.append(WorktreeEntry(
+                path: worktreePath,
+                branch: branch,
+                commitShas: shas
+            ))
         }
 
-        if let path = currentPath {
-            worktreePaths.append((path: path, branch: currentBranch))
-        }
-
-        // Exclude the main worktree, then collect recent commits for each
-        return worktreePaths
-            .filter { $0.path != repoDir }
-            .map { entry in
-                WorktreeEntry(
-                    path: entry.path,
-                    branch: entry.branch,
-                    commitShas: recentCommitShas(at: entry.path)
-                )
-            }
-    }
-
-    // MARK: - Shell
-
-    nonisolated private static func isGitInstalled() -> Bool {
-        let url = URL(fileURLWithPath: "/usr/bin/git")
-        guard FileManager.default.isExecutableFile(atPath: url.path) else { return false }
-        let process = Process()
-        process.executableURL = url
-        process.arguments = ["--version"]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        do {
-            try process.run()
-            process.waitUntilExit()
-            return process.terminationStatus == 0
-        } catch {
-            return false
-        }
-    }
-
-    nonisolated private static func runGit(_ args: [String], at directory: URL) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = args
-        process.currentDirectoryURL = directory
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else { return nil }
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            return String(data: data, encoding: .utf8)
-        } catch {
-            return nil
-        }
+        return result
     }
 }
