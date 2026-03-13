@@ -149,10 +149,26 @@ final class DashboardViewModel {
 
     private func updateWidgetData() {
         let widgetViews = views.map { view in
-            WidgetViewData(
+            let prs = viewStates[view.id]?.pullRequests ?? []
+            let widgetPRs = prs.prefix(10).map { pr in
+                WidgetPullRequest(
+                    id: pr.id,
+                    number: pr.number,
+                    title: pr.title,
+                    url: pr.url,
+                    repositoryName: pr.repository.nameWithOwner,
+                    authorLogin: pr.author.login,
+                    createdAt: pr.createdAt,
+                    reviewDecision: pr.reviewDecision?.rawValue,
+                    checkStatus: pr.checkStatus?.rawValue,
+                    isDraft: pr.isDraft
+                )
+            }
+            return WidgetViewData(
                 id: view.id.uuidString,
                 title: view.title,
-                count: viewStates[view.id]?.pullRequests.count ?? 0
+                count: prs.count,
+                pullRequests: Array(widgetPRs)
             )
         }
         WidgetData(views: widgetViews, lastUpdated: .now).save()
@@ -223,6 +239,46 @@ final class DashboardViewModel {
         viewStates.removeValue(forKey: id)
         viewsStore.save(views)
         if selectedViewID == id {
+            selectedViewID = views.first?.id
+        }
+    }
+
+    /// Returns the titles of preset views that conflict with existing views.
+    func presetConflicts() -> [String] {
+        let existingTitles = Set(views.map(\.title))
+        return DashboardView.presetViews
+            .map(\.title)
+            .filter { existingTitles.contains($0) }
+    }
+
+    /// Creates preset views. If `replacingConflicts` is true, existing views whose title
+    /// matches a preset are replaced. Otherwise conflicting presets are skipped.
+    func createPresetViews(replacingConflicts: Bool) {
+        for preset in DashboardView.presetViews {
+            if let existingIndex = views.firstIndex(where: { $0.title == preset.title }) {
+                if replacingConflicts {
+                    let oldID = views[existingIndex].id
+                    let replacement = DashboardView(
+                        id: oldID,
+                        title: preset.title,
+                        query: preset.query,
+                        hideReviewed: preset.hideReviewed
+                    )
+                    views[existingIndex] = replacement
+                }
+            } else {
+                let newView = DashboardView(
+                    id: UUID(),
+                    title: preset.title,
+                    query: preset.query,
+                    hideReviewed: preset.hideReviewed
+                )
+                views.append(newView)
+                viewStates[newView.id] = ViewState()
+            }
+        }
+        viewsStore.save(views)
+        if selectedViewID == nil {
             selectedViewID = views.first?.id
         }
     }

@@ -10,12 +10,11 @@ struct ViewsStoreTests {
         return ViewsStore(defaults: defaults)
     }
 
-    @Test("load returns default views when no data exists")
+    @Test("load returns empty array when no data exists")
     func loadReturnsDefaults() {
         let store = makeStore(suiteName: "ViewsStoreEmpty")
         let views = store.load()
-        #expect(views.count == 1)
-        #expect(views.first?.title == "Review Requests")
+        #expect(views.isEmpty)
     }
 
     @Test("save and load round-trips views")
@@ -34,14 +33,13 @@ struct ViewsStoreTests {
         #expect(loaded[1].hideReviewed == true)
     }
 
-    @Test("load returns defaults when saved array is empty")
+    @Test("load returns empty array when saved array is empty")
     func loadReturnsDefaultsForEmptyArray() {
         let store = makeStore(suiteName: "ViewsStoreEmptyArray")
         store.save([])
 
         let loaded = store.load()
-        #expect(loaded.count == 1)
-        #expect(loaded.first?.title == "Review Requests")
+        #expect(loaded.isEmpty)
     }
 
     @Test("save overwrites previous data")

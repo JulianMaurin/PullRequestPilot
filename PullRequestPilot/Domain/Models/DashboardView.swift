@@ -21,12 +21,32 @@ struct DashboardView: Identifiable, Codable, Hashable {
         hideReviewed = try container.decodeIfPresent(Bool.self, forKey: .hideReviewed) ?? false
     }
 
-    static let defaultViews: [DashboardView] = [
+    static let defaultViews: [DashboardView] = []
+
+    static let presetViews: [DashboardView] = [
         DashboardView(
             id: UUID(),
-            title: "Review Requests",
-            query: "is:pr is:open review-requested:@me archived:false",
+            title: "Waiting for my review",
+            query: "is:open is:pr review-requested:@me draft:false base:main",
             hideReviewed: true
-        )
+        ),
+        DashboardView(
+            id: UUID(),
+            title: "Waiting for a review",
+            query: "is:open is:pr author:@me draft:false",
+            hideReviewed: false
+        ),
+        DashboardView(
+            id: UUID(),
+            title: "Work in progress",
+            query: "is:open is:pr author:@me draft:true",
+            hideReviewed: false
+        ),
+        DashboardView(
+            id: UUID(),
+            title: "Merged",
+            query: "is:merged is:pr author:@me",
+            hideReviewed: false
+        ),
     ]
 }

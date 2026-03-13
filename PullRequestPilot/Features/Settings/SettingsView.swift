@@ -5,6 +5,8 @@ struct SettingsView: View {
     var dashboardViewModel: DashboardViewModel
     var isInitialSetup: Bool = false
     var onDismiss: (() -> Void)?
+    @State private var showPresetConflictAlert = false
+    @State private var presetConflictNames: [String] = []
 
     var body: some View {
         Form {
@@ -69,6 +71,37 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("General")
+            }
+
+            Section {
+                Button("Create Preset Views") {
+                    let conflicts = dashboardViewModel.presetConflicts()
+                    if conflicts.isEmpty {
+                        dashboardViewModel.createPresetViews(replacingConflicts: false)
+                    } else {
+                        presetConflictNames = conflicts
+                        showPresetConflictAlert = true
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(DashboardView.presetViews) { preset in
+                        HStack(spacing: 6) {
+                            Image(systemName: "circle.fill")
+                                .font(.system(size: 4))
+                                .foregroundStyle(.secondary)
+                            Text(preset.title)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            } header: {
+                Text("Views")
+            } footer: {
+                Text("Quickly set up common views for reviewing and tracking pull requests.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section {
@@ -154,6 +187,15 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(minWidth: 450, minHeight: 250)
+        .alert("Replace Existing Views?", isPresented: $showPresetConflictAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Replace") {
+                dashboardViewModel.createPresetViews(replacingConflicts: true)
+            }
+        } message: {
+            let names = presetConflictNames.map { "\"\($0)\"" }.joined(separator: ", ")
+            Text("The following views already exist and will be replaced: \(names).")
+        }
     }
 
     @ViewBuilder

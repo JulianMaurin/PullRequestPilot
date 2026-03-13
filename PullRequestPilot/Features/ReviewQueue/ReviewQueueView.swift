@@ -178,7 +178,7 @@ struct ReviewQueueView: View {
               let dashView = viewModel.views.first(where: { $0.id == id }) else { return }
         let trimmed = editingQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != dashView.query else { return }
-        viewModel.updateView(DashboardView(id: dashView.id, title: dashView.title, query: trimmed))
+        viewModel.updateView(DashboardView(id: dashView.id, title: dashView.title, query: trimmed, hideReviewed: dashView.hideReviewed))
         Task { await viewModel.refresh(viewID: id) }
     }
 
@@ -251,8 +251,10 @@ struct ReviewQueueView: View {
                 .foregroundStyle(.secondary)
             Text("No views yet")
                 .font(.headline)
-            Text("Tap + to create your first view.")
+            Text("Tap + to create a view, or use **Create Preset Views** in Settings to get started quickly.")
+                .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
+                .padding(.horizontal)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
