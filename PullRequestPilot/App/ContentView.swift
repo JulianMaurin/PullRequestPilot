@@ -42,7 +42,7 @@ struct ContentView: View {
                 ReviewQueueView(viewModel: dashboardViewModel, onOpenSettings: {
                     showingSettings = true
                 })
-                .navigationTitle("Dashboard")
+                .navigationTitle("")
             }
         }
         .onChange(of: settingsViewModel.hasSavedToken) { _, hasSaved in
