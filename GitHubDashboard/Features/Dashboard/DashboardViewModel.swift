@@ -118,14 +118,34 @@ final class DashboardViewModel {
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refreshAll()
-                try? await Task.sleep(for: .seconds(Constants.App.refreshInterval))
+                let interval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
+                let seconds = interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
+                try? await Task.sleep(for: .seconds(seconds))
             }
         }
+        observeRefreshIntervalChanges()
     }
 
     func stopAutoRefresh() {
         refreshTask?.cancel()
         refreshTask = nil
+    }
+
+    private func restartAutoRefresh() {
+        stopAutoRefresh()
+        startAutoRefresh()
+    }
+
+    private func observeRefreshIntervalChanges() {
+        NotificationCenter.default.addObserver(
+            forName: Constants.Notifications.prRefreshIntervalChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.restartAutoRefresh()
+            }
+        }
     }
 
     // MARK: - CRUD

@@ -52,6 +52,18 @@ struct SettingsView: View {
 
             Section {
                 Toggle("Launch at Login", isOn: $viewModel.launchAtLogin)
+
+                Picker("Pull request refresh", selection: $viewModel.prRefreshInterval) {
+                    ForEach(SettingsViewModel.refreshIntervalOptions, id: \.value) { option in
+                        Text(option.label).tag(option.value)
+                    }
+                }
+
+                Picker("Repository scan", selection: $viewModel.repoScanInterval) {
+                    ForEach(SettingsViewModel.refreshIntervalOptions, id: \.value) { option in
+                        Text(option.label).tag(option.value)
+                    }
+                }
             } header: {
                 Text("General")
             }

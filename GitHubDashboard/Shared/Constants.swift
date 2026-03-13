@@ -6,7 +6,17 @@ enum Constants {
     }
 
     enum App {
-        static let refreshInterval: TimeInterval = 60
+        static let defaultPRRefreshInterval: TimeInterval = 60
+        static let defaultRepoScanInterval: TimeInterval = 120
         static let maxPullRequests = 100
+    }
+
+    enum UserDefaultsKeys {
+        static let prRefreshInterval = "prRefreshInterval"
+        static let repoScanInterval = "repoScanInterval"
+    }
+
+    enum Notifications {
+        static let prRefreshIntervalChanged = Notification.Name("prRefreshIntervalChanged")
     }
 }

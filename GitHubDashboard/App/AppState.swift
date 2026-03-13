@@ -47,9 +47,10 @@ final class AppState {
         Task {
             await localRepositoryService.scan(directories: store.load())
         }
+        let scanInterval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.repoScanInterval)
         localRepositoryService.startPeriodicRefresh(
             directories: { store.load() },
-            interval: 120
+            interval: scanInterval > 0 ? scanInterval : Constants.App.defaultRepoScanInterval
         )
     }
 }

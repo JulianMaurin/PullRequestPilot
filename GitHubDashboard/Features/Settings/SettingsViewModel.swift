@@ -34,6 +34,11 @@ final class SettingsViewModel {
         self.localRepositoryService = localRepositoryService
         self.token = tokenCache.token ?? ""
         self.gitDirectories = gitDirectoriesStore.load()
+
+        let prInterval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
+        self.prRefreshInterval = prInterval > 0 ? prInterval : Constants.App.defaultPRRefreshInterval
+        let repoInterval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.repoScanInterval)
+        self.repoScanInterval = repoInterval > 0 ? repoInterval : Constants.App.defaultRepoScanInterval
     }
 
     var isScanning: Bool { localRepositoryService.isScanning }
@@ -108,6 +113,41 @@ final class SettingsViewModel {
                 logger.error("Failed to update launch at login: \(error)")
             }
         }
+    }
+
+    // MARK: - Refresh Intervals
+
+    var prRefreshInterval: TimeInterval {
+        didSet {
+            UserDefaults.standard.set(prRefreshInterval, forKey: Constants.UserDefaultsKeys.prRefreshInterval)
+            NotificationCenter.default.post(name: Constants.Notifications.prRefreshIntervalChanged, object: nil)
+        }
+    }
+
+    var repoScanInterval: TimeInterval {
+        didSet {
+            UserDefaults.standard.set(repoScanInterval, forKey: Constants.UserDefaultsKeys.repoScanInterval)
+            restartRepoScan()
+        }
+    }
+
+    static let refreshIntervalOptions: [(label: String, value: TimeInterval)] = [
+        ("30 seconds", 30),
+        ("1 minute", 60),
+        ("2 minutes", 120),
+        ("5 minutes", 300),
+        ("10 minutes", 600),
+        ("30 minutes", 1800),
+    ]
+
+    private func restartRepoScan() {
+        let dirs = gitDirectories
+        localRepositoryService.stopPeriodicRefresh()
+        let store = gitDirectoriesStore
+        localRepositoryService.startPeriodicRefresh(
+            directories: { store.load() },
+            interval: repoScanInterval
+        )
     }
 
     // MARK: - Git Directories
