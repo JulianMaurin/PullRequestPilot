@@ -23,11 +23,18 @@
         p.tagline { color: #86868b; margin-top: 0; }
         nav { margin: 2em 0; }
         nav a { margin-right: 1.5em; }
+        .hero { display: flex; align-items: center; gap: 16px; margin-top: 1em; }
+        .hero img { width: 80px; height: 80px; border-radius: 18px; }
     </style>
 </head>
 <body>
-    <h1>Pull Request Pilot</h1>
-    <p class="tagline">A macOS app for monitoring GitHub pull request review queues.</p>
+    <div class="hero">
+        <img src="icon.png" alt="Pull Request Pilot icon" width="80" height="80">
+        <div>
+            <h1>Pull Request Pilot</h1>
+            <p class="tagline">A macOS app for monitoring GitHub pull request review queues.</p>
+        </div>
+    </div>
     <nav>
         <a href="privacy">Privacy Policy</a>
         <a href="support">Support</a>
