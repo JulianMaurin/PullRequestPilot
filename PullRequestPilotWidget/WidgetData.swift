@@ -10,10 +10,13 @@ struct WidgetData: Codable, Sendable {
     let views: [WidgetViewData]
     let lastUpdated: Date
 
+    private static let appGroupIdentifier = "FNR3B372S8.com.pullrequestpilot.shared"
+
     private static var sharedFileURL: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = appSupport.appendingPathComponent("PullRequestPilot", isDirectory: true)
-        return dir.appendingPathComponent("widget-data.json")
+        let container = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupIdentifier
+        )!
+        return container.appendingPathComponent("widget-data.json")
     }
 
     static func load() -> WidgetData? {

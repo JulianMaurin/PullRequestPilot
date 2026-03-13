@@ -42,14 +42,22 @@ final class AppState {
             localRepositoryService: localRepositoryService
         )
 
+        // Start security-scoped access for bookmarked directories
+        let initialDirectories = gitDirectoriesStore.load()
+        gitDirectoriesStore.startAccessing(initialDirectories)
+
         // Initial scan + periodic refresh of local repo index
         let store = gitDirectoriesStore
         Task {
-            await localRepositoryService.scan(directories: store.load())
+            await localRepositoryService.scan(directories: initialDirectories)
         }
         let scanInterval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.repoScanInterval)
         localRepositoryService.startPeriodicRefresh(
-            directories: { store.load() },
+            directories: {
+                let dirs = store.load()
+                store.startAccessing(dirs)
+                return dirs
+            },
             interval: scanInterval > 0 ? scanInterval : Constants.App.defaultRepoScanInterval
         )
     }

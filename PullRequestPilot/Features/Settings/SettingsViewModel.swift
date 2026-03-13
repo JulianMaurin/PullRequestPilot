@@ -162,19 +162,25 @@ final class SettingsViewModel {
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         if !gitDirectories.contains(url) {
+            guard gitDirectoriesStore.saveFromPanel(url) != nil else {
+                logger.error("Failed to create security-scoped bookmark for \(url.path)")
+                return
+            }
             gitDirectories.append(url)
-            gitDirectoriesStore.save(gitDirectories)
             triggerRescan()
         }
     }
 
     func removeGitDirectory(at offsets: IndexSet) {
+        let removing = offsets.map { gitDirectories[$0] }
+        gitDirectoriesStore.stopAccessing(removing)
         gitDirectories.remove(atOffsets: offsets)
         gitDirectoriesStore.save(gitDirectories)
         triggerRescan()
     }
 
     func removeGitDirectory(_ url: URL) {
+        gitDirectoriesStore.stopAccessing([url])
         gitDirectories.removeAll { $0 == url }
         gitDirectoriesStore.save(gitDirectories)
         triggerRescan()

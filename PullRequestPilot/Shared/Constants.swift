@@ -9,6 +9,7 @@ enum Constants {
         static let defaultPRRefreshInterval: TimeInterval = 60
         static let defaultRepoScanInterval: TimeInterval = 120
         static let maxPullRequests = 100
+        static let appGroupIdentifier = "FNR3B372S8.com.pullrequestpilot.shared"
     }
 
     enum UserDefaultsKeys {
