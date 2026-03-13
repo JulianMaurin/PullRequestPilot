@@ -19,9 +19,17 @@ struct SettingsView: View {
                         }
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: "person.crop.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.green)
+                            AsyncImage(url: viewModel.viewerAvatarURL) { image in
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                            } placeholder: {
+                                Image(systemName: "person.crop.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(.green)
+                            }
+                            .frame(width: 28, height: 28)
+                            .clipShape(Circle())
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(login)
                                     .fontWeight(.medium)

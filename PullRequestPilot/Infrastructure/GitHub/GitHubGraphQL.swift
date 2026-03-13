@@ -106,6 +106,7 @@ enum GitHubGraphQL {
     {
       viewer {
         login
+        avatarUrl
       }
     }
     """

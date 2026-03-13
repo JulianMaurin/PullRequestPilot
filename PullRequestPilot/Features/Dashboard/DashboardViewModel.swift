@@ -136,7 +136,8 @@ final class DashboardViewModel {
     private func fetchViewerLoginIfNeeded() async {
         guard viewerLogin == nil else { return }
         do {
-            viewerLogin = try await gitHubClient.fetchViewerLogin()
+            let viewer = try await gitHubClient.fetchViewer()
+            viewerLogin = viewer.login
         } catch {
             logger.warning("Failed to fetch viewer login: \(error, privacy: .public)")
         }

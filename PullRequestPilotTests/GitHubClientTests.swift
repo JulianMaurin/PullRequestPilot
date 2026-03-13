@@ -119,23 +119,24 @@ struct GitHubClientTests {
         #expect(page.nextCursor == "cursor_abc")
     }
 
-    // MARK: - fetchViewerLogin
+    // MARK: - fetchViewer
 
-    @Test("fetchViewerLogin returns login on success")
-    func fetchViewerLoginSuccess() async throws {
+    @Test("fetchViewer returns login and avatar on success")
+    func fetchViewerSuccess() async throws {
         let client = makeClient()
-        let responseJSON = #"{"data": {"viewer": {"login": "octocat"}}}"#
+        let responseJSON = #"{"data": {"viewer": {"login": "octocat", "avatarUrl": "https://avatars.githubusercontent.com/u/1?v=4"}}}"#
         MockURLProtocol.requestHandler = { request in
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, responseJSON.data(using: .utf8)!)
         }
 
-        let login = try await client.fetchViewerLogin()
-        #expect(login == "octocat")
+        let viewer = try await client.fetchViewer()
+        #expect(viewer.login == "octocat")
+        #expect(viewer.avatarURL?.absoluteString == "https://avatars.githubusercontent.com/u/1?v=4")
     }
 
-    @Test("fetchViewerLogin throws on GraphQL errors")
-    func fetchViewerLoginGraphQLError() async {
+    @Test("fetchViewer throws on GraphQL errors")
+    func fetchViewerGraphQLError() async {
         let client = makeClient()
         let responseJSON = #"{"data": null, "errors": [{"message": "Bad credentials"}]}"#
         MockURLProtocol.requestHandler = { request in
@@ -144,7 +145,7 @@ struct GitHubClientTests {
         }
 
         await #expect(throws: GitHubClientError.self) {
-            _ = try await client.fetchViewerLogin()
+            _ = try await client.fetchViewer()
         }
     }
 
@@ -208,7 +209,7 @@ struct GitHubClientTests {
             return (response, responseJSON.data(using: .utf8)!)
         }
 
-        _ = try await client.fetchViewerLogin()
+        _ = try await client.fetchViewer()
         #expect(capturedRequest?.value(forHTTPHeaderField: "Authorization") == "Bearer my-secret-token")
         #expect(capturedRequest?.value(forHTTPHeaderField: "Content-Type") == "application/json")
         #expect(capturedRequest?.httpMethod == "POST")

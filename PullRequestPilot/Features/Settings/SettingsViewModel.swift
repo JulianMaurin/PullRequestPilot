@@ -8,6 +8,7 @@ import SwiftUI
 final class SettingsViewModel {
     var token: String = ""
     private(set) var viewerLogin: String?
+    private(set) var viewerAvatarURL: URL?
     private(set) var validationState: ValidationState = .idle
     private(set) var saveError: String?
     var gitDirectories: [URL] = []
@@ -78,10 +79,11 @@ final class SettingsViewModel {
         logger.info("Validating token against GitHub API...")
 
         do {
-            let login = try await gitHubClient.fetchViewerLogin()
-            viewerLogin = login
+            let viewer = try await gitHubClient.fetchViewer()
+            viewerLogin = viewer.login
+            viewerAvatarURL = viewer.avatarURL
             validationState = .valid
-            logger.info("Token validated — authenticated as \(login, privacy: .private)")
+            logger.info("Token validated — authenticated as \(viewer.login, privacy: .private)")
         } catch let error as GitHubClientError {
             logger.error("Token validation failed: \(error.localizedDescription, privacy: .public)")
             validationState = .invalid(userMessage(for: error))
@@ -101,6 +103,7 @@ final class SettingsViewModel {
         }
         token = ""
         viewerLogin = nil
+        viewerAvatarURL = nil
         validationState = .idle
         hasSavedToken = false
     }

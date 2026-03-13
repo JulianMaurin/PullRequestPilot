@@ -11,7 +11,7 @@ struct PullRequestPage: Sendable {
 
 protocol GitHubClientProtocol: Sendable {
     func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage
-    func fetchViewerLogin() async throws -> String
+    func fetchViewer() async throws -> (login: String, avatarURL: URL?)
 }
 
 // MARK: - Errors
@@ -72,7 +72,7 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         return PullRequestPage(pullRequests: prs, nextCursor: nextCursor)
     }
 
-    func fetchViewerLogin() async throws -> String {
+    func fetchViewer() async throws -> (login: String, avatarURL: URL?) {
         let response: GraphQLResponse<ViewerData> = try await execute(query: GitHubGraphQL.viewerQuery)
 
         guard let data = response.data else {
@@ -80,7 +80,8 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             throw GitHubClientError.graphQLErrors(messages)
         }
 
-        return data.viewer.login
+        let avatarURL = data.viewer.avatarUrl.flatMap { URL(string: $0) }
+        return (login: data.viewer.login, avatarURL: avatarURL)
     }
 
     // MARK: - Private

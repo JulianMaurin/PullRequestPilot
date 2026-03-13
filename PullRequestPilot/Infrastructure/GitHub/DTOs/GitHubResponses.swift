@@ -140,6 +140,7 @@ struct ViewerData: Decodable {
 
 struct ViewerNode: Decodable {
     let login: String
+    let avatarUrl: String?
 }
 
 // MARK: - DTO → Domain Mapping

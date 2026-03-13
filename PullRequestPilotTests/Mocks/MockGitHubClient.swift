@@ -5,6 +5,7 @@ final class MockGitHubClient: GitHubClientProtocol, @unchecked Sendable {
     var pullRequestsToReturn: [PullRequest] = []
     var nextCursorToReturn: String?
     var viewerLoginToReturn: String = "testuser"
+    var viewerAvatarURLToReturn: URL?
     var errorToThrow: Error?
     var fetchPullRequestsCallCount = 0
     var receivedQueries: [String] = []
@@ -18,8 +19,8 @@ final class MockGitHubClient: GitHubClientProtocol, @unchecked Sendable {
         return PullRequestPage(pullRequests: pullRequestsToReturn, nextCursor: nextCursorToReturn)
     }
 
-    func fetchViewerLogin() async throws -> String {
+    func fetchViewer() async throws -> (login: String, avatarURL: URL?) {
         if let error = errorToThrow { throw error }
-        return viewerLoginToReturn
+        return (login: viewerLoginToReturn, avatarURL: viewerAvatarURLToReturn)
     }
 }
