@@ -26,25 +26,25 @@ struct DashboardView: Identifiable, Codable, Hashable {
     static let presetViews: [DashboardView] = [
         DashboardView(
             id: UUID(),
-            title: "Waiting for my review",
+            title: "Needs my review",
             query: "is:open is:pr review-requested:@me draft:false base:main",
             hideReviewed: true
         ),
         DashboardView(
             id: UUID(),
-            title: "Waiting for a review",
+            title: "My PRs",
             query: "is:open is:pr author:@me draft:false",
             hideReviewed: false
         ),
         DashboardView(
             id: UUID(),
-            title: "Work in progress",
+            title: "My drafts",
             query: "is:open is:pr author:@me draft:true",
             hideReviewed: false
         ),
         DashboardView(
             id: UUID(),
-            title: "Merged",
+            title: "Recently merged",
             query: "is:merged is:pr author:@me",
             hideReviewed: false
         ),
