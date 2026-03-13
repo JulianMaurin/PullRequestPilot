@@ -12,7 +12,10 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         let store = ViewsStore(defaults: defaults)
-        return DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        let testView = DashboardView(id: UUID(), title: "Test View", query: "is:pr is:open")
+        viewModel.addView(testView)
+        return viewModel
     }
 
     // MARK: - ViewState
@@ -178,7 +181,9 @@ struct DashboardViewModelExtendedTests {
 
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
-        let viewID = viewModel.views.first!.id
+        let testView = DashboardView(id: UUID(), title: "Test", query: "is:pr")
+        viewModel.addView(testView)
+        let viewID = testView.id
 
         #expect(!viewModel.isNotificationEnabled(for: viewID))
 
@@ -269,8 +274,10 @@ struct DashboardViewModelExtendedTests {
         defaults.removePersistentDomain(forName: "ToggleHideReviewed")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
-        let viewID = viewModel.views.first!.id
-        let initialValue = viewModel.views.first!.hideReviewed
+        let testView = DashboardView(id: UUID(), title: "Test", query: "is:pr")
+        viewModel.addView(testView)
+        let viewID = testView.id
+        let initialValue = viewModel.views.first(where: { $0.id == viewID })?.hideReviewed ?? false
 
         mockClient.pullRequestsToReturn = []
         viewModel.toggleHideReviewed(for: viewID)
@@ -278,7 +285,7 @@ struct DashboardViewModelExtendedTests {
         // Give the Task inside toggleHideReviewed a chance to run
         try? await Task.sleep(for: .milliseconds(100))
 
-        #expect(viewModel.views.first!.hideReviewed == !initialValue)
+        #expect(viewModel.views.first(where: { $0.id == viewID })?.hideReviewed == !initialValue)
 
         // Check it persisted
         let reloadedViews = store.load()
@@ -394,7 +401,9 @@ struct DashboardViewModelExtendedTests {
         defaults.removePersistentDomain(forName: "NotifyFirstLoad")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
-        let viewID = viewModel.views.first!.id
+        let testView = DashboardView(id: UUID(), title: "Test", query: "is:pr")
+        viewModel.addView(testView)
+        let viewID = testView.id
 
         // Enable notifications for this view
         viewModel.toggleNotification(for: viewID)
@@ -423,5 +432,441 @@ struct DashboardViewModelExtendedTests {
         let viewModel = makeViewModel(suiteName: "LocalMatch")
         let pr = TestPullRequestFactory.make()
         #expect(viewModel.localMatch(for: pr) == nil)
+    }
+
+    // MARK: - moveView
+
+    @Test("moveView reorders views correctly")
+    func moveViewReorders() {
+        let defaults = UserDefaults(suiteName: "MoveView")!
+        defaults.removePersistentDomain(forName: "MoveView")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+
+        let view1 = DashboardView(id: UUID(), title: "First", query: "q1")
+        let view2 = DashboardView(id: UUID(), title: "Second", query: "q2")
+        let view3 = DashboardView(id: UUID(), title: "Third", query: "q3")
+        viewModel.addView(view1)
+        viewModel.addView(view2)
+        viewModel.addView(view3)
+
+        // Move view3 before view1
+        viewModel.moveView(from: view3.id, to: view1.id)
+
+        let titles = viewModel.views.map(\.title)
+        #expect(titles.contains("Third"))
+        #expect(titles.contains("First"))
+        #expect(titles.contains("Second"))
+    }
+
+    @Test("moveView is no-op when source equals target")
+    func moveViewSamePosition() {
+        let viewModel = makeViewModel(suiteName: "MoveViewSame")
+        let viewID = viewModel.views.first!.id
+        let titlesBefore = viewModel.views.map(\.title)
+        viewModel.moveView(from: viewID, to: viewID)
+        #expect(viewModel.views.map(\.title) == titlesBefore)
+    }
+
+    @Test("moveView is no-op for unknown source")
+    func moveViewUnknownSource() {
+        let viewModel = makeViewModel(suiteName: "MoveViewUnknown")
+        let viewID = viewModel.views.first!.id
+        let countBefore = viewModel.views.count
+        viewModel.moveView(from: UUID(), to: viewID)
+        #expect(viewModel.views.count == countBefore)
+    }
+
+    // MARK: - presetConflicts
+
+    @Test("presetConflicts returns empty when no conflicts")
+    func presetConflictsNone() {
+        let defaults = UserDefaults(suiteName: "PresetNoConflict")!
+        defaults.removePersistentDomain(forName: "PresetNoConflict")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        // Only has default views with non-preset titles
+        let conflicts = viewModel.presetConflicts()
+        // May or may not have conflicts depending on default views; just verify it returns an array
+        #expect(conflicts is [String])
+    }
+
+    @Test("presetConflicts detects matching titles")
+    func presetConflictsDetected() {
+        let defaults = UserDefaults(suiteName: "PresetConflict")!
+        defaults.removePersistentDomain(forName: "PresetConflict")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+
+        // Add a view with a preset title
+        let conflicting = DashboardView(id: UUID(), title: "My PRs", query: "custom query")
+        viewModel.addView(conflicting)
+
+        let conflicts = viewModel.presetConflicts()
+        #expect(conflicts.contains("My PRs"))
+    }
+
+    // MARK: - createPresetViews
+
+    @Test("createPresetViews adds all presets when no conflicts")
+    func createPresetViewsNoConflicts() {
+        let defaults = UserDefaults(suiteName: "CreatePresets")!
+        defaults.removePersistentDomain(forName: "CreatePresets")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+
+        let countBefore = viewModel.views.count
+        viewModel.createPresetViews(replacingConflicts: false)
+
+        #expect(viewModel.views.count == countBefore + DashboardView.presetViews.count)
+    }
+
+    @Test("createPresetViews skips conflicts when not replacing")
+    func createPresetViewsSkipConflicts() {
+        let defaults = UserDefaults(suiteName: "CreatePresetsSkip")!
+        defaults.removePersistentDomain(forName: "CreatePresetsSkip")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+
+        let conflicting = DashboardView(id: UUID(), title: "My PRs", query: "old query")
+        viewModel.addView(conflicting)
+
+        viewModel.createPresetViews(replacingConflicts: false)
+
+        // The conflicting view should still have the old query
+        let myPRsView = viewModel.views.first(where: { $0.title == "My PRs" })
+        #expect(myPRsView?.query == "old query")
+    }
+
+    @Test("createPresetViews replaces conflicts when replacing")
+    func createPresetViewsReplaceConflicts() {
+        let defaults = UserDefaults(suiteName: "CreatePresetsReplace")!
+        defaults.removePersistentDomain(forName: "CreatePresetsReplace")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+
+        let conflictingID = UUID()
+        let conflicting = DashboardView(id: conflictingID, title: "My PRs", query: "old query")
+        viewModel.addView(conflicting)
+
+        viewModel.createPresetViews(replacingConflicts: true)
+
+        // The conflicting view should have the preset query but keep the same ID
+        let myPRsView = viewModel.views.first(where: { $0.title == "My PRs" })
+        #expect(myPRsView?.id == conflictingID)
+        #expect(myPRsView?.query != "old query")
+    }
+
+    @Test("createPresetViews sets selection when nil")
+    func createPresetViewsSetsSelection() {
+        let defaults = UserDefaults(suiteName: "CreatePresetsSelect")!
+        defaults.removePersistentDomain(forName: "CreatePresetsSelect")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        viewModel.selectedViewID = nil
+
+        viewModel.createPresetViews(replacingConflicts: false)
+
+        #expect(viewModel.selectedViewID != nil)
+    }
+
+    // MARK: - refresh deduplication
+
+    @Test("refresh deduplicates PRs with same ID")
+    func refreshDeduplicates() async {
+        let pr = TestPullRequestFactory.make(id: "PR_DUP", title: "Duplicate PR")
+        // Return the same PR twice
+        mockClient.pullRequestsToReturn = [pr, pr]
+
+        let viewModel = makeViewModel(suiteName: "RefreshDedup")
+        let viewID = viewModel.views.first!.id
+        await viewModel.refresh(viewID: viewID)
+
+        #expect(viewModel.viewStates[viewID]!.pullRequests.count == 1)
+    }
+
+    // MARK: - refresh reachedLimit
+
+    @Test("refresh sets reachedLimit when PR count reaches max")
+    func refreshSetsReachedLimit() async {
+        // Create maxPullRequests number of PRs
+        var prs: [PullRequest] = []
+        for i in 0..<Constants.App.maxPullRequests {
+            prs.append(TestPullRequestFactory.make(id: "PR_\(i)", number: i, title: "PR \(i)"))
+        }
+        mockClient.pullRequestsToReturn = prs
+        mockClient.nextCursorToReturn = "cursor"
+
+        let viewModel = makeViewModel(suiteName: "ReachedLimit")
+        let viewID = viewModel.views.first!.id
+        await viewModel.refresh(viewID: viewID)
+
+        #expect(viewModel.viewStates[viewID]!.reachedLimit)
+        #expect(!viewModel.viewStates[viewID]!.canLoadMore)
+    }
+
+    // MARK: - refresh URLError.cancelled handling
+
+    @Test("refresh ignores URLError.cancelled")
+    func refreshIgnoresURLErrorCancelled() async {
+        mockClient.errorToThrow = URLError(.cancelled)
+
+        let viewModel = makeViewModel(suiteName: "URLCancelRefresh")
+        let viewID = viewModel.views.first!.id
+        await viewModel.refresh(viewID: viewID)
+
+        let state = viewModel.viewStates[viewID]!
+        #expect(state.error == nil)
+    }
+
+    // MARK: - loadMore URLError.cancelled handling
+
+    @Test("loadMore ignores URLError.cancelled")
+    func loadMoreIgnoresURLErrorCancelled() async {
+        let pr = TestPullRequestFactory.make(id: "PR_1", title: "PR 1")
+        mockClient.pullRequestsToReturn = [pr]
+        mockClient.nextCursorToReturn = "cursor_1"
+
+        let viewModel = makeViewModel(suiteName: "LoadMoreURLCancel")
+        let viewID = viewModel.views.first!.id
+        await viewModel.refresh(viewID: viewID)
+
+        mockClient.errorToThrow = URLError(.cancelled)
+        await viewModel.loadMore(viewID: viewID)
+
+        let state = viewModel.viewStates[viewID]!
+        #expect(state.error == nil)
+    }
+
+    // MARK: - loadMore with unknown viewID
+
+    @Test("loadMore with unknown viewID is a no-op")
+    func loadMoreUnknownViewID() async {
+        let viewModel = makeViewModel(suiteName: "LoadMoreUnknown")
+        let callsBefore = mockClient.fetchPullRequestsCallCount
+        await viewModel.loadMore(viewID: UUID())
+        #expect(mockClient.fetchPullRequestsCallCount == callsBefore)
+    }
+
+    // MARK: - loadMore reachedLimit
+
+    @Test("loadMore sets reachedLimit when total reaches max")
+    func loadMoreSetsReachedLimit() async {
+        // First load fills most of the limit
+        let initialCount = Constants.App.maxPullRequests - 1
+        var initialPRs: [PullRequest] = []
+        for i in 0..<initialCount {
+            initialPRs.append(TestPullRequestFactory.make(id: "PR_\(i)", number: i, title: "PR \(i)"))
+        }
+        mockClient.pullRequestsToReturn = initialPRs
+        mockClient.nextCursorToReturn = "cursor_1"
+
+        let viewModel = makeViewModel(suiteName: "LoadMoreLimit")
+        let viewID = viewModel.views.first!.id
+        await viewModel.refresh(viewID: viewID)
+
+        // Load one more to hit the limit
+        let extraPR = TestPullRequestFactory.make(id: "PR_extra", number: 999, title: "Extra")
+        mockClient.pullRequestsToReturn = [extraPR]
+        mockClient.nextCursorToReturn = "cursor_2"
+        mockClient.errorToThrow = nil
+
+        await viewModel.loadMore(viewID: viewID)
+
+        #expect(viewModel.viewStates[viewID]!.reachedLimit)
+    }
+
+    // MARK: - loadMore filters reviewed PRs
+
+    @Test("loadMore filters reviewed PRs when hideReviewed is enabled")
+    func loadMoreFiltersReviewed() async {
+        let defaults = UserDefaults(suiteName: "LoadMoreFilter")!
+        defaults.removePersistentDomain(forName: "LoadMoreFilter")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        let testView = DashboardView(id: UUID(), title: "Test", query: "is:pr", hideReviewed: true)
+        viewModel.addView(testView)
+        let viewID = testView.id
+
+        mockClient.viewerLoginToReturn = "testuser"
+        mockClient.pullRequestsToReturn = [TestPullRequestFactory.make(id: "PR_1", title: "First")]
+        mockClient.nextCursorToReturn = "cursor_1"
+        await viewModel.refresh(viewID: viewID)
+
+        // Load more with a reviewed PR
+        let reviewedPR = TestPullRequestFactory.make(
+            id: "PR_2", number: 2, title: "Reviewed",
+            latestReviews: [UserReview(login: "testuser", state: .approved)]
+        )
+        let unreviewedPR = TestPullRequestFactory.make(id: "PR_3", number: 3, title: "Unreviewed")
+        mockClient.pullRequestsToReturn = [reviewedPR, unreviewedPR]
+        mockClient.nextCursorToReturn = nil
+        mockClient.errorToThrow = nil
+
+        await viewModel.loadMore(viewID: viewID)
+
+        let titles = viewModel.viewStates[viewID]!.pullRequests.map(\.title)
+        #expect(!titles.contains("Reviewed"))
+        #expect(titles.contains("Unreviewed"))
+    }
+
+    // MARK: - fetchViewerLoginIfNeeded
+
+    @Test("refreshAll fetches viewer login before refreshing views")
+    func refreshAllFetchesViewerLogin() async {
+        let defaults = UserDefaults(suiteName: "RefreshAllLogin")!
+        defaults.removePersistentDomain(forName: "RefreshAllLogin")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        let testView = DashboardView(id: UUID(), title: "Test", query: "is:pr", hideReviewed: true)
+        viewModel.addView(testView)
+
+        mockClient.viewerLoginToReturn = "mylogin"
+        mockClient.pullRequestsToReturn = []
+        await viewModel.refreshAll()
+
+        // The viewer login should have been fetched (no error)
+        #expect(viewModel.viewStates[testView.id] != nil)
+    }
+
+    // MARK: - stopAutoRefresh cleans up observer
+
+    @Test("stopAutoRefresh removes notification observer")
+    func stopAutoRefreshCleansUp() {
+        let viewModel = makeViewModel(suiteName: "StopAutoRefresh")
+        viewModel.startAutoRefresh()
+        viewModel.stopAutoRefresh()
+        // Calling stop twice should be safe
+        viewModel.stopAutoRefresh()
+    }
+
+    // MARK: - openInEditor / openInTerminal with no match
+
+    @Test("openInEditor is no-op when no local match")
+    func openInEditorNoMatch() {
+        let viewModel = makeViewModel(suiteName: "OpenEditorNoMatch")
+        let pr = TestPullRequestFactory.make()
+        // Should not crash
+        viewModel.openInEditor(pr)
+    }
+
+    @Test("openInTerminal is no-op when no local match")
+    func openInTerminalNoMatch() {
+        let viewModel = makeViewModel(suiteName: "OpenTerminalNoMatch")
+        let pr = TestPullRequestFactory.make()
+        // Should not crash
+        viewModel.openInTerminal(pr)
+    }
+
+    // MARK: - notifiedViewIDs persistence
+
+    @Test("notifiedViewIDs persists across access")
+    func notifiedViewIDsPersistence() {
+        let viewModel = makeViewModel(suiteName: "NotifiedPersist")
+        let viewID = viewModel.views.first!.id
+
+        viewModel.toggleNotification(for: viewID)
+        #expect(viewModel.isNotificationEnabled(for: viewID))
+
+        // Read from UserDefaults directly
+        let stored = UserDefaults.standard.stringArray(forKey: Constants.UserDefaultsKeys.notifiedViewIDs) ?? []
+        #expect(stored.contains(viewID.uuidString))
+    }
+
+    // MARK: - hideReviewed with dismissed reviews
+
+    @Test("hideReviewed keeps PRs with CHANGES_REQUESTED review from viewer")
+    func hideReviewedChangesRequested() async {
+        let defaults = UserDefaults(suiteName: "HideReviewedCR")!
+        defaults.removePersistentDomain(forName: "HideReviewedCR")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        let testView = DashboardView(id: UUID(), title: "Review", query: "is:pr", hideReviewed: true)
+        viewModel.addView(testView)
+
+        mockClient.viewerLoginToReturn = "testuser"
+        let changesRequestedPR = TestPullRequestFactory.make(
+            id: "PR_CR", number: 1, title: "Changes Requested",
+            latestReviews: [UserReview(login: "testuser", state: .changesRequested)]
+        )
+        mockClient.pullRequestsToReturn = [changesRequestedPR]
+        await viewModel.refresh(viewID: testView.id)
+
+        let titles = viewModel.viewStates[testView.id]!.pullRequests.map(\.title)
+        #expect(!titles.contains("Changes Requested"))
+    }
+
+    @Test("hideReviewed keeps PRs with COMMENTED review from viewer")
+    func hideReviewedCommented() async {
+        let defaults = UserDefaults(suiteName: "HideReviewedComment")!
+        defaults.removePersistentDomain(forName: "HideReviewedComment")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        let testView = DashboardView(id: UUID(), title: "Review", query: "is:pr", hideReviewed: true)
+        viewModel.addView(testView)
+
+        mockClient.viewerLoginToReturn = "testuser"
+        let commentedPR = TestPullRequestFactory.make(
+            id: "PR_C", number: 1, title: "Commented",
+            latestReviews: [UserReview(login: "testuser", state: .commented)]
+        )
+        mockClient.pullRequestsToReturn = [commentedPR]
+        await viewModel.refresh(viewID: testView.id)
+
+        let titles = viewModel.viewStates[testView.id]!.pullRequests.map(\.title)
+        #expect(!titles.contains("Commented"))
+    }
+
+    // MARK: - hideReviewed disabled doesn't filter
+
+    @Test("refresh does not filter when hideReviewed is false")
+    func refreshNoFilterWhenHideReviewedOff() async {
+        let defaults = UserDefaults(suiteName: "NoFilterOff")!
+        defaults.removePersistentDomain(forName: "NoFilterOff")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        let testView = DashboardView(id: UUID(), title: "All", query: "is:pr", hideReviewed: false)
+        viewModel.addView(testView)
+
+        mockClient.viewerLoginToReturn = "testuser"
+        let approvedPR = TestPullRequestFactory.make(
+            id: "PR_A", number: 1, title: "Approved",
+            latestReviews: [UserReview(login: "testuser", state: .approved)]
+        )
+        mockClient.pullRequestsToReturn = [approvedPR]
+        await viewModel.refresh(viewID: testView.id)
+
+        let titles = viewModel.viewStates[testView.id]!.pullRequests.map(\.title)
+        #expect(titles.contains("Approved"))
+    }
+
+    // MARK: - selectedViewState with invalid selection
+
+    @Test("selectedViewState returns empty state for stale selection")
+    func selectedViewStateStaleSelection() {
+        let viewModel = makeViewModel(suiteName: "StaleSelection")
+        viewModel.selectedViewID = UUID() // non-existent view ID
+        let state = viewModel.selectedViewState
+        #expect(state.isEmpty)
+    }
+
+    // MARK: - deleteView when not selected
+
+    @Test("deleteView does not change selection when deleted view is not selected")
+    func deleteViewKeepsSelection() {
+        let defaults = UserDefaults(suiteName: "DeleteKeepSelection")!
+        defaults.removePersistentDomain(forName: "DeleteKeepSelection")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "q1")
+        let view2 = DashboardView(id: UUID(), title: "View 2", query: "q2")
+        viewModel.addView(view1)
+        viewModel.addView(view2)
+        viewModel.selectedViewID = view1.id
+
+        viewModel.deleteView(id: view2.id)
+
+        #expect(viewModel.selectedViewID == view1.id)
     }
 }

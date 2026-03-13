@@ -44,13 +44,10 @@ struct DashboardViewTests {
         #expect(decoded.title == "Old View")
     }
 
-    @Test("defaultViews contains one view with hideReviewed enabled")
+    @Test("defaultViews is empty (users create views via presets or manually)")
     func defaultViewsStructure() {
         let defaults = DashboardView.defaultViews
-        #expect(defaults.count == 1)
-        #expect(defaults.first!.title == "Review Requests")
-        #expect(defaults.first!.hideReviewed == true)
-        #expect(defaults.first!.query.contains("review-requested:@me"))
+        #expect(defaults.isEmpty)
     }
 
     @Test("DashboardView conforms to Hashable")

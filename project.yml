@@ -109,6 +109,7 @@ schemes:
           isEnabled: true
     test:
       config: Debug
+      gatherCoverageData: true
       targets:
         - PullRequestPilotTests
     archive:

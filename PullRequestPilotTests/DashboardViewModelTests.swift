@@ -6,12 +6,16 @@ import Foundation
 @Suite("DashboardViewModel")
 struct DashboardViewModelTests {
     let mockClient = MockGitHubClient()
-    let viewsStore = ViewsStore(defaults: UserDefaults(suiteName: "DashboardViewModelTests")!)
     let localRepoService = LocalRepositoryService()
 
-    init() {
-        // Reset defaults for test isolation
-        UserDefaults(suiteName: "DashboardViewModelTests")!.removePersistentDomain(forName: "DashboardViewModelTests")
+    private func makeViewModel(suiteName: String = "DashboardViewModelTests") -> DashboardViewModel {
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        let testView = DashboardView(id: UUID(), title: "Test View", query: "is:pr is:open")
+        viewModel.addView(testView)
+        return viewModel
     }
 
     @Test("loads pull requests for a view on refresh")
@@ -19,7 +23,7 @@ struct DashboardViewModelTests {
         let pr = makePullRequest(number: 1, title: "Fix bug")
         mockClient.pullRequestsToReturn = [pr]
 
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: viewsStore, localRepositoryService: localRepoService)
+        let viewModel = makeViewModel(suiteName: "LoadsPRs")
         let viewID = viewModel.views.first!.id
         await viewModel.refresh(viewID: viewID)
 
@@ -34,7 +38,7 @@ struct DashboardViewModelTests {
     func handlesError() async {
         mockClient.errorToThrow = GitHubClientError.unauthorized
 
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: viewsStore, localRepositoryService: localRepoService)
+        let viewModel = makeViewModel(suiteName: "HandlesError")
         let viewID = viewModel.views.first!.id
         await viewModel.refresh(viewID: viewID)
 
@@ -47,7 +51,7 @@ struct DashboardViewModelTests {
     func isEmpty() async {
         mockClient.pullRequestsToReturn = []
 
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: viewsStore, localRepositoryService: localRepoService)
+        let viewModel = makeViewModel(suiteName: "IsEmpty")
         let viewID = viewModel.views.first!.id
         await viewModel.refresh(viewID: viewID)
 
@@ -56,7 +60,7 @@ struct DashboardViewModelTests {
 
     @Test("passes the view query to the client")
     func passesQueryToClient() async {
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: viewsStore, localRepositoryService: localRepoService)
+        let viewModel = makeViewModel(suiteName: "PassesQuery")
         let view = viewModel.views.first!
         await viewModel.refresh(viewID: view.id)
 
@@ -65,7 +69,7 @@ struct DashboardViewModelTests {
 
     @Test("add and delete views")
     func addAndDeleteViews() {
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: viewsStore, localRepositoryService: localRepoService)
+        let viewModel = makeViewModel(suiteName: "AddDeleteViews")
         let initialCount = viewModel.views.count
 
         let newView = DashboardView(id: UUID(), title: "My PRs", query: "is:pr author:@me")
@@ -90,14 +94,15 @@ struct DashboardViewModelTests {
         ])
         mockClient.pullRequestsToReturn = [approvedPR, dismissedPR, unreviewedPR, otherReviewPR]
 
-        // Default views have hideReviewed: true, so just use defaults
         let defaults = UserDefaults(suiteName: "HideReviewedTests")!
         defaults.removePersistentDomain(forName: "HideReviewedTests")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
-        let viewID = viewModel.views.first!.id
+        let testView = DashboardView(id: UUID(), title: "Review", query: "is:pr", hideReviewed: true)
+        viewModel.addView(testView)
+        let viewID = testView.id
 
-        #expect(viewModel.views.first!.hideReviewed == true)
+        #expect(viewModel.views.first(where: { $0.id == viewID })?.hideReviewed == true)
         await viewModel.refresh(viewID: viewID)
 
         let state = viewModel.viewStates[viewID]!

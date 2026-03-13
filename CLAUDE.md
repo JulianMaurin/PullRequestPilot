@@ -33,6 +33,8 @@ open PullRequestPilot.xcodeproj
 
 **Stale Xcode errors**: If Xcode shows errors that don't reproduce on the command line (especially from `@Observable` macro-generated sources), clear DerivedData: `rm -rf ~/Library/Developer/Xcode/DerivedData/PullRequestPilot-*`
 
+**Stale test binaries**: `make test` builds and runs tests from DerivedData, not `.build/`. If you see crash dialogs ("Pull Request Pilot quit unexpectedly") during tests that don't match current source, clear DerivedData before re-running: `rm -rf ~/Library/Developer/Xcode/DerivedData/PullRequestPilot-*`
+
 ## Architecture
 
 **MVVM + Clean Architecture** with three layers:
@@ -88,6 +90,7 @@ Shared/               — Cross-cutting constants
 - Test files mirror source structure in `PullRequestPilotTests/`.
 - Mock files go in `PullRequestPilotTests/Mocks/`.
 - Use isolated `UserDefaults(suiteName:)` in tests — never touch real user defaults.
+- **Empty stores in tests**: `ViewsStore` with fresh `UserDefaults` returns `[]` (`defaultViews` is empty). Tests must call `viewModel.addView(...)` before accessing `views.first` — never force-unwrap on data that depends on test setup.
 - Test both success and error paths. Test edge cases (empty state, invalid input).
 
 ## Key Technical Decisions
