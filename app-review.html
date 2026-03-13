@@ -30,28 +30,19 @@
 <body>
     <h1>App Review Notes</h1>
 
-    <h2>GitHub API Usage</h2>
+    <h2>GitHub API Compliance</h2>
     <p>This app uses the GitHub GraphQL API on behalf of the authenticated user, using their personal access token. This complies with <a href="https://docs.github.com/en/site-policy/github-terms/github-terms-of-service#h-api-terms">GitHub's Terms of Service (Section H — API Terms)</a>, which permits API access for user-initiated actions. The app does not scrape, cache data beyond the current session, or exceed rate limits. No GitHub data is shared with third parties.</p>
 
-    <h2>Authentication</h2>
-    <p>The user provides their own GitHub personal access token (created at <a href="https://github.com/settings/tokens">github.com/settings/tokens</a> with the <code>repo</code> scope). The token is stored in the macOS Keychain and used only to call <code>api.github.com</code>.</p>
-    <p>To test: paste any valid GitHub personal access token into Settings, then click "Save &amp; Validate".</p>
+    <h2>How to Test</h2>
+    <p>The app requires a GitHub personal access token to function. To test:</p>
+    <ol>
+        <li>Create a token at <a href="https://github.com/settings/tokens">github.com/settings/tokens</a> with the <code>repo</code> scope.</li>
+        <li>Open the app. On first launch, the Settings screen appears automatically.</li>
+        <li>Paste the token and click "Save &amp; Validate".</li>
+        <li>Once validated, click "Get Started" to reach the dashboard.</li>
+    </ol>
 
-    <h2>Data Handling</h2>
-    <ul>
-        <li>The GitHub token is stored exclusively in the macOS Keychain.</li>
-        <li>Pull request metadata (titles, authors, review states) is fetched and displayed locally, never persisted beyond the current session.</li>
-        <li>No analytics, telemetry, or third-party SDKs are included.</li>
-        <li>The only network communication is with <code>api.github.com</code>.</li>
-    </ul>
-
-    <h2>Core Functionality</h2>
-    <ul>
-        <li>Monitor GitHub pull request review queues with configurable views and filters.</li>
-        <li>Desktop notifications when new pull requests appear in a view.</li>
-        <li>Widget extension showing PR summaries and details on the desktop.</li>
-        <li>Local repository matching to open PRs in the user's editor.</li>
-    </ul>
+    <p>See also: <a href="privacy">Privacy Policy</a> for data handling details.</p>
 
     <p><a href="/">← Back to Pull Request Pilot</a></p>
 </body>
