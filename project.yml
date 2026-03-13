@@ -12,6 +12,7 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: FNR3B372S8
+    ENABLE_HARDENED_RUNTIME: YES
 
 targets:
   PullRequestPilot:
@@ -29,6 +30,9 @@ targets:
         SWIFT_STRICT_CONCURRENCY: complete
     entitlements:
       path: PullRequestPilot/Resources/PullRequestPilot.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
     dependencies:
       - target: PullRequestPilotWidgetExtension
         embed: true
@@ -52,6 +56,9 @@ targets:
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks"
     entitlements:
       path: PullRequestPilotWidget/PullRequestPilotWidget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
 
   PullRequestPilotTests:
     type: bundle.unit-test
