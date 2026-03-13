@@ -568,11 +568,12 @@ struct ReviewQueueView: View {
 
     private func groupedByOrgAndRepo(_ pullRequests: [PullRequest]) -> [OrgGroup] {
         let byOrg = Dictionary(grouping: pullRequests) { $0.repository.owner }
-        return byOrg.keys.sorted().map { org in
-            let orgPRs = byOrg[org]!
+        return byOrg.keys.sorted().compactMap { org in
+            guard let orgPRs = byOrg[org] else { return nil }
             let byRepo = Dictionary(grouping: orgPRs) { $0.repository.name }
-            let repoGroups = byRepo.keys.sorted().map { repo in
-                RepoGroup(repo: repo, stacks: buildStacks(byRepo[repo]!))
+            let repoGroups = byRepo.keys.sorted().compactMap { repo -> RepoGroup? in
+                guard let repoPRs = byRepo[repo] else { return nil }
+                return RepoGroup(repo: repo, stacks: buildStacks(repoPRs))
             }
             return OrgGroup(org: org, repos: repoGroups)
         }

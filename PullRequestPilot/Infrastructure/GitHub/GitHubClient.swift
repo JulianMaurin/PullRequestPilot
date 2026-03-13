@@ -60,7 +60,7 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         }
 
         let prs = data.search.nodes.compactMap { $0.toDomain() }
-        logger.info("Page returned \(data.search.nodes.count) node(s), mapped \(prs.count) PR(s)")
+        logger.info("Page returned \(data.search.nodes.count, privacy: .public) node(s), mapped \(prs.count, privacy: .public) PR(s)")
 
         let nextCursor = data.search.pageInfo.hasNextPage ? data.search.pageInfo.endCursor : nil
         return PullRequestPage(pullRequests: prs, nextCursor: nextCursor)

@@ -59,7 +59,7 @@ final class LocalRepositoryService {
         indexedRepoCount = entries.count
         lastScanDate = Date()
         isScanning = false
-        logger.info("Scan complete: indexed \(entries.count) repo(s)")
+        logger.info("Scan complete: indexed \(entries.count, privacy: .public) repo(s)")
     }
 
     func startPeriodicRefresh(directories: @escaping @Sendable () -> [URL], interval: TimeInterval = 120) {
@@ -129,13 +129,13 @@ final class LocalRepositoryService {
     private func launchApp(_ appName: String, path: URL) {
         guard let bundleID = Self.appBundleIDs[appName],
               let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
-            logger.error("Application not found: \(appName)")
+            logger.error("Application not found: \(appName, privacy: .public)")
             return
         }
         let config = NSWorkspace.OpenConfiguration()
         NSWorkspace.shared.open([path], withApplicationAt: appURL, configuration: config) { [logger] _, error in
             if let error {
-                logger.error("Failed to open \(appName): \(error)")
+                logger.error("Failed to open \(appName, privacy: .public): \(error, privacy: .public)")
             }
         }
     }
@@ -163,7 +163,7 @@ final class LocalRepositoryService {
                     worktrees: worktrees
                 ))
 
-                logger.debug("Indexed repo: \(nwo) at \(repoDir.path) (branch: \(branch ?? "detached"), worktrees: \(worktrees.count))")
+                logger.debug("Indexed repo: \(nwo, privacy: .private) at \(repoDir.path, privacy: .private) (branch: \(branch ?? "detached", privacy: .private), worktrees: \(worktrees.count, privacy: .public))")
             }
         }
 

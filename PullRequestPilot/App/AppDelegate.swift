@@ -4,7 +4,7 @@ import UserNotifications
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
-    private var statusItem: NSStatusItem!
+    private var statusItem: NSStatusItem?
     private var clickCount = 0
     private var clickTimer: Timer?
 
@@ -15,7 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().delegate = self
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        if let button = statusItem.button {
+        if let button = statusItem?.button {
             if let appIcon = NSImage(named: "AppIcon") {
                 appIcon.size = NSSize(width: 18, height: 18)
                 button.image = appIcon
@@ -92,9 +92,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
-        statusItem.menu = menu
-        statusItem.button?.performClick(nil)
-        statusItem.menu = nil
+        statusItem?.menu = menu
+        statusItem?.button?.performClick(nil)
+        statusItem?.menu = nil
     }
 
     @objc private func viewMenuItemClicked(_ sender: NSMenuItem) {
@@ -106,7 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     // MARK: - Window
 
     private func showWindow() {
-        NSApplication.shared.activate(ignoringOtherApps: true)
+        NSApplication.shared.activate()
         if let window = NSApplication.shared.windows.first(where: { $0.canBecomeKey }) {
             window.makeKeyAndOrderFront(nil)
         }

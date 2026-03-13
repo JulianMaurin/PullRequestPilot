@@ -28,6 +28,7 @@ final class DashboardViewModel {
     private let viewsStore: ViewsStore
     private let localRepositoryService: LocalRepositoryService
     private var refreshTask: Task<Void, Never>?
+    private var refreshIntervalObserver: (any NSObjectProtocol)?
     private var previousPRIDs: [UUID: Set<String>] = [:]
     private var hasCompletedInitialLoad: Set<UUID> = []
     private var viewerLogin: String?
@@ -61,7 +62,7 @@ final class DashboardViewModel {
             await fetchViewerLoginIfNeeded()
         }
 
-        logger.info("Fetching PRs for '\(view.title)'...")
+        logger.info("Fetching PRs for '\(view.title, privacy: .public)'...")
 
         do {
             let page = try await gitHubClient.fetchPullRequests(query: view.query, cursor: nil)
@@ -75,13 +76,13 @@ final class DashboardViewModel {
             viewStates[viewID]?.seenIDs = seenIDs
             viewStates[viewID]?.nextCursor = page.nextCursor
             viewStates[viewID]?.reachedLimit = uniquePRs.count >= Constants.App.maxPullRequests
-            logger.info("Fetched \(uniquePRs.count) PR(s) for '\(view.title)'")
+            logger.info("Fetched \(uniquePRs.count, privacy: .public) PR(s) for '\(view.title, privacy: .public)'")
         } catch is CancellationError {
             return
         } catch let error as URLError where error.code == .cancelled {
             return
         } catch {
-            logger.error("Failed to fetch PRs for '\(view.title)': \(error)")
+            logger.error("Failed to fetch PRs for '\(view.title, privacy: .public)': \(error, privacy: .public)")
             viewStates[viewID]?.error = error.localizedDescription
         }
 
@@ -104,13 +105,13 @@ final class DashboardViewModel {
             viewStates[viewID]?.nextCursor = page.nextCursor
             let totalCount = viewStates[viewID]?.pullRequests.count ?? 0
             viewStates[viewID]?.reachedLimit = totalCount >= Constants.App.maxPullRequests
-            logger.info("Loaded \(newPRs.count) more PR(s) for '\(view.title)' (total: \(totalCount))")
+            logger.info("Loaded \(newPRs.count, privacy: .public) more PR(s) for '\(view.title, privacy: .public)' (total: \(totalCount, privacy: .public))")
         } catch is CancellationError {
             return
         } catch let error as URLError where error.code == .cancelled {
             return
         } catch {
-            logger.error("Failed to load more PRs for '\(view.title)': \(error)")
+            logger.error("Failed to load more PRs for '\(view.title, privacy: .public)': \(error, privacy: .public)")
             viewStates[viewID]?.error = error.localizedDescription
         }
 
@@ -132,7 +133,7 @@ final class DashboardViewModel {
         do {
             viewerLogin = try await gitHubClient.fetchViewerLogin()
         } catch {
-            logger.warning("Failed to fetch viewer login: \(error)")
+            logger.warning("Failed to fetch viewer login: \(error, privacy: .public)")
         }
     }
 
@@ -191,6 +192,10 @@ final class DashboardViewModel {
     func stopAutoRefresh() {
         refreshTask?.cancel()
         refreshTask = nil
+        if let observer = refreshIntervalObserver {
+            NotificationCenter.default.removeObserver(observer)
+            refreshIntervalObserver = nil
+        }
     }
 
     private func restartAutoRefresh() {
@@ -199,7 +204,7 @@ final class DashboardViewModel {
     }
 
     private func observeRefreshIntervalChanges() {
-        NotificationCenter.default.addObserver(
+        refreshIntervalObserver = NotificationCenter.default.addObserver(
             forName: Constants.Notifications.prRefreshIntervalChanged,
             object: nil,
             queue: .main
@@ -209,6 +214,7 @@ final class DashboardViewModel {
             }
         }
     }
+
 
     // MARK: - CRUD
 
@@ -303,7 +309,9 @@ final class DashboardViewModel {
         for view in views where viewStates[view.id] == nil {
             viewStates[view.id] = ViewState()
         }
-        if selectedViewID == nil || !currentIDs.contains(selectedViewID!) {
+        if let selected = selectedViewID, currentIDs.contains(selected) {
+            // keep current selection
+        } else {
             selectedViewID = views.first?.id
         }
     }
@@ -339,9 +347,9 @@ final class DashboardViewModel {
     }
 
     private func requestNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { [weak self] granted, error in
             if let error {
-                self.logger.error("Notification permission error: \(error)")
+                self?.logger.error("Notification permission error: \(error)")
             }
         }
     }
@@ -377,9 +385,9 @@ final class DashboardViewModel {
             trigger: nil
         )
 
-        UNUserNotificationCenter.current().add(request) { error in
+        UNUserNotificationCenter.current().add(request) { [weak self] error in
             if let error {
-                self.logger.error("Failed to deliver notification: \(error)")
+                self?.logger.error("Failed to deliver notification: \(error)")
             }
         }
     }

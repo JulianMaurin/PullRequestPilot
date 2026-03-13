@@ -29,6 +29,7 @@
 		83F51C31BD66971C931E7092 /* GitHubGraphQL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12FD73CCEE659006259881CD /* GitHubGraphQL.swift */; };
 		83F799B23DBC99896F1C7649 /* TokenCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E3F65C06B7BA972EAC6290D /* TokenCacheTests.swift */; };
 		850A3ABA22A0EDCB05798B9D /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C15EBD57347F4C981EB507D8 /* DashboardView.swift */; };
+		858FD3665934CA68CCA09656 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = CE1C0DB4D7264002D57A5043 /* PrivacyInfo.xcprivacy */; };
 		87C7E813416BBE39A49486DB /* PullRequestPilotWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 782A06435EEB66B6BEC6D3AB /* PullRequestPilotWidget.swift */; };
 		89D3CBDB6E2B784D8202E0E3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9D6EDC17C7FDDD59B016359F /* PrivacyInfo.xcprivacy */; };
 		8FB3F76F08D7C539BF8F21FE /* WidgetHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13E5BEDC8EE487B02730A1E5 /* WidgetHelpers.swift */; };
@@ -135,6 +136,7 @@
 		AE7DBBCDED1A5D00DF910CA4 /* PullRequestPilotWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PullRequestPilotWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B919383AC965AD29C544D35C /* LocalRepositoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRepositoryService.swift; sourceTree = "<group>"; };
 		C15EBD57347F4C981EB507D8 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		CE1C0DB4D7264002D57A5043 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		D15F556448815396EF8A8ED2 /* GitDirectoriesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitDirectoriesStore.swift; sourceTree = "<group>"; };
 		D4637988807C67722E35819C /* GitHubResponses.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubResponses.swift; sourceTree = "<group>"; };
 		ECF50E10022F26E7C0A9B89F /* GitHubResponsesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubResponsesTests.swift; sourceTree = "<group>"; };
@@ -168,6 +170,7 @@
 			children = (
 				7D10578F537D4DBC84E5E685 /* DashboardViewEntity.swift */,
 				FE4D0F5F6FD5656BFDA936ED /* Info.plist */,
+				CE1C0DB4D7264002D57A5043 /* PrivacyInfo.xcprivacy */,
 				4BDE5E98E84A1E172858C467 /* PullRequestPilotWidget.entitlements */,
 				782A06435EEB66B6BEC6D3AB /* PullRequestPilotWidget.swift */,
 				A1BC5B3AADE18A80A9DAB42F /* SelectViewIntent.swift */,
@@ -385,6 +388,7 @@
 			buildConfigurationList = 029DD57E1DD1A921E3D0FAEE /* Build configuration list for PBXNativeTarget "PullRequestPilotWidgetExtension" */;
 			buildPhases = (
 				4146213E737DF3DD1E3E7755 /* Sources */,
+				4BF00AFA74B51A19D3ABBEFB /* Resources */,
 			);
 			buildRules = (
 			);
@@ -480,6 +484,14 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		4BF00AFA74B51A19D3ABBEFB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				858FD3665934CA68CCA09656 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F36572EA41AEE0A7285D5FF7 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;

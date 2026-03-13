@@ -69,7 +69,7 @@ final class SettingsViewModel {
             hasSavedToken = true
             logger.info("Token saved to Keychain successfully")
         } catch {
-            logger.error("Failed to save token to Keychain: \(error)")
+            logger.error("Failed to save token to Keychain: \(error, privacy: .public)")
             saveError = "Could not save token to Keychain. Check that the app has Keychain access."
             validationState = .idle
             return
@@ -81,12 +81,12 @@ final class SettingsViewModel {
             let login = try await gitHubClient.fetchViewerLogin()
             viewerLogin = login
             validationState = .valid
-            logger.info("Token validated — authenticated as \(login)")
+            logger.info("Token validated — authenticated as \(login, privacy: .private)")
         } catch let error as GitHubClientError {
-            logger.error("Token validation failed: \(error.localizedDescription)")
+            logger.error("Token validation failed: \(error.localizedDescription, privacy: .public)")
             validationState = .invalid(userMessage(for: error))
         } catch {
-            logger.error("Unexpected error during token validation: \(error)")
+            logger.error("Unexpected error during token validation: \(error, privacy: .public)")
             validationState = .invalid("Something went wrong. Check the logs for details.")
         }
     }
@@ -97,7 +97,7 @@ final class SettingsViewModel {
             tokenCache.invalidate()
             logger.info("Token cleared from Keychain")
         } catch {
-            logger.error("Failed to clear token from Keychain: \(error)")
+            logger.error("Failed to clear token from Keychain: \(error, privacy: .public)")
         }
         token = ""
         viewerLogin = nil
@@ -117,7 +117,7 @@ final class SettingsViewModel {
                     try SMAppService.mainApp.unregister()
                 }
             } catch {
-                logger.error("Failed to update launch at login: \(error)")
+                logger.error("Failed to update launch at login: \(error, privacy: .public)")
             }
         }
     }
@@ -148,7 +148,6 @@ final class SettingsViewModel {
     ]
 
     private func restartRepoScan() {
-        let dirs = gitDirectories
         localRepositoryService.stopPeriodicRefresh()
         let store = gitDirectoriesStore
         localRepositoryService.startPeriodicRefresh(
@@ -170,7 +169,7 @@ final class SettingsViewModel {
 
         if !gitDirectories.contains(url) {
             guard gitDirectoriesStore.saveFromPanel(url) != nil else {
-                logger.error("Failed to create security-scoped bookmark for \(url.path)")
+                logger.error("Failed to create security-scoped bookmark for \(url.path, privacy: .private)")
                 return
             }
             gitDirectories.append(url)

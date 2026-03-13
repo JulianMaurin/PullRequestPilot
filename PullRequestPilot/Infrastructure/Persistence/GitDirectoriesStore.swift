@@ -42,7 +42,7 @@ final class GitDirectoriesStore: @unchecked Sendable {
     func startAccessing(_ urls: [URL]) {
         for url in urls {
             if url.startAccessingSecurityScopedResource() {
-                logger.debug("Started accessing security-scoped resource: \(url.path)")
+                logger.debug("Started accessing security-scoped resource: \(url.path, privacy: .private)")
             }
         }
     }
@@ -63,7 +63,7 @@ final class GitDirectoriesStore: @unchecked Sendable {
                 relativeTo: nil
             )
         } catch {
-            logger.error("Failed to create bookmark for \(url.path): \(error)")
+            logger.error("Failed to create bookmark for \(url.path, privacy: .private): \(error, privacy: .public)")
             return nil
         }
     }
@@ -78,11 +78,11 @@ final class GitDirectoriesStore: @unchecked Sendable {
                 bookmarkDataIsStale: &isStale
             )
             if isStale {
-                logger.warning("Bookmark is stale for \(url.path) — user may need to re-select")
+                logger.warning("Bookmark is stale for \(url.path, privacy: .private) — user may need to re-select")
             }
             return url
         } catch {
-            logger.error("Failed to resolve bookmark: \(error)")
+            logger.error("Failed to resolve bookmark: \(error, privacy: .public)")
             return nil
         }
     }
@@ -95,7 +95,7 @@ final class GitDirectoriesStore: @unchecked Sendable {
         let bookmarks = urls.compactMap { createBookmark(for: $0) }
         if !bookmarks.isEmpty {
             defaults.set(bookmarks, forKey: Self.key)
-            logger.info("Migrated \(bookmarks.count) directory bookmark(s) from legacy storage")
+            logger.info("Migrated \(bookmarks.count, privacy: .public) directory bookmark(s) from legacy storage")
         }
         defaults.removeObject(forKey: Self.legacyKey)
     }

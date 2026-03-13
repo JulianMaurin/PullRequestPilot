@@ -18,6 +18,19 @@ struct PullRequestRow: View {
             metadata
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private var accessibilitySummary: String {
+        var parts = [pullRequest.title]
+        parts.append("by \(pullRequest.author.login)")
+        parts.append("number \(pullRequest.number)")
+        parts.append(statusLabel)
+        if pullRequest.isDraft { parts.append("draft") }
+        if stackSize > 1 { parts.append("\(stackSize) stacked pull requests") }
+        parts.append("plus \(pullRequest.additions) minus \(pullRequest.deletions)")
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Subviews
@@ -158,6 +171,8 @@ struct PullRequestRow: View {
         .buttonStyle(.plain)
         .disabled(!isStacked)
         .help(isStacked ? "Stacked PRs — click to expand" : "Not stacked")
+        .accessibilityLabel(isStacked ? "\(stackSize) stacked pull requests" : "Not stacked")
+        .accessibilityHint(isStacked ? "Click to expand stacked pull requests" : "")
         .padding(.top, 4)
     }
 
