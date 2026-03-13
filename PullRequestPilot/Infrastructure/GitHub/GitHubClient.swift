@@ -43,7 +43,13 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
     private let session: URLSession
     private let logger = Logger(subsystem: "PullRequestPilot", category: "GitHubClient")
 
-    private static let endpoint = URL(string: "https://api.github.com/graphql")!
+    // swiftlint:disable:next force_unwrapping
+    private static let endpoint: URL = {
+        guard let url = URL(string: "https://api.github.com/graphql") else {
+            preconditionFailure("Invalid hardcoded GitHub API endpoint URL")
+        }
+        return url
+    }()
 
     init(tokenProvider: @escaping @Sendable () -> String?, session: URLSession = .shared) {
         self.tokenProvider = tokenProvider

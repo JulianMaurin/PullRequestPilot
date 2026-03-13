@@ -349,7 +349,7 @@ final class DashboardViewModel {
     private func requestNotificationPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { [weak self] granted, error in
             if let error {
-                self?.logger.error("Notification permission error: \(error)")
+                self?.logger.error("Notification permission error: \(error, privacy: .public)")
             }
         }
     }
@@ -387,7 +387,7 @@ final class DashboardViewModel {
 
         UNUserNotificationCenter.current().add(request) { [weak self] error in
             if let error {
-                self?.logger.error("Failed to deliver notification: \(error)")
+                self?.logger.error("Failed to deliver notification: \(error, privacy: .public)")
             }
         }
     }

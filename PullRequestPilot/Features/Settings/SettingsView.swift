@@ -172,6 +172,13 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
+            Section {
+                Link("Privacy Policy", destination: Constants.URLs.privacyPolicy)
+                Link("Support & Feedback", destination: Constants.URLs.support)
+            } header: {
+                Text("About")
+            }
+
             if isInitialSetup && viewModel.validationState == .valid {
                 Section {
                     Button {

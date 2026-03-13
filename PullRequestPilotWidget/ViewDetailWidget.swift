@@ -12,6 +12,14 @@ struct ViewDetailEntry: TimelineEntry {
 // MARK: - Timeline Provider
 
 struct ViewDetailProvider: AppIntentTimelineProvider {
+    // swiftlint:disable:next force_unwrapping
+    private static let placeholderURL: URL = {
+        guard let url = URL(string: "https://github.com") else {
+            preconditionFailure("Invalid hardcoded placeholder URL")
+        }
+        return url
+    }()
+
     func placeholder(in _: Context) -> ViewDetailEntry {
         ViewDetailEntry(date: .now, viewData: WidgetViewData(
             id: "placeholder",
@@ -20,7 +28,7 @@ struct ViewDetailProvider: AppIntentTimelineProvider {
             pullRequests: [
                 WidgetPullRequest(
                     id: "1", number: 42, title: "Add user authentication",
-                    url: URL(string: "https://github.com")!,
+                    url: Self.placeholderURL,
                     repositoryName: "org/repo", authorLogin: "dev",
                     createdAt: .now.addingTimeInterval(-7200),
                     reviewDecision: "APPROVED", checkStatus: "SUCCESS", isDraft: false
@@ -334,38 +342,40 @@ private struct ReviewSummaryPills: View {
 
 // MARK: - Previews
 
+private let sampleURL = URL(string: "https://github.com")!
+
 private let samplePRs: [WidgetPullRequest] = [
     WidgetPullRequest(
         id: "1", number: 142, title: "Add OAuth2 authentication flow",
-        url: URL(string: "https://github.com/org/repo/pull/142")!,
+        url: sampleURL,
         repositoryName: "org/api-service", authorLogin: "alice",
         createdAt: .now.addingTimeInterval(-3600),
         reviewDecision: "APPROVED", checkStatus: "SUCCESS", isDraft: false
     ),
     WidgetPullRequest(
         id: "2", number: 87, title: "Fix race condition in queue processor",
-        url: URL(string: "https://github.com/org/repo/pull/87")!,
+        url: sampleURL,
         repositoryName: "org/worker", authorLogin: "bob",
         createdAt: .now.addingTimeInterval(-86400),
         reviewDecision: "CHANGES_REQUESTED", checkStatus: "FAILURE", isDraft: false
     ),
     WidgetPullRequest(
         id: "3", number: 231, title: "Update dependencies to latest versions",
-        url: URL(string: "https://github.com/org/repo/pull/231")!,
+        url: sampleURL,
         repositoryName: "org/frontend", authorLogin: "carol",
         createdAt: .now.addingTimeInterval(-172800),
         reviewDecision: nil, checkStatus: "PENDING", isDraft: false
     ),
     WidgetPullRequest(
         id: "4", number: 55, title: "Refactor database migration scripts",
-        url: URL(string: "https://github.com/org/repo/pull/55")!,
+        url: sampleURL,
         repositoryName: "org/infra", authorLogin: "dave",
         createdAt: .now.addingTimeInterval(-259200),
         reviewDecision: "REVIEW_REQUIRED", checkStatus: "SUCCESS", isDraft: true
     ),
     WidgetPullRequest(
         id: "5", number: 99, title: "Add comprehensive logging for API calls",
-        url: URL(string: "https://github.com/org/repo/pull/99")!,
+        url: sampleURL,
         repositoryName: "org/api-service", authorLogin: "eve",
         createdAt: .now.addingTimeInterval(-7200),
         reviewDecision: "APPROVED", checkStatus: "SUCCESS", isDraft: false

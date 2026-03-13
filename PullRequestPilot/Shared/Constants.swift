@@ -18,6 +18,11 @@ enum Constants {
         static let notifiedViewIDs = "notifiedViewIDs"
     }
 
+    enum URLs {
+        static let privacyPolicy = URL(string: "https://julianmaurin.github.io/PullRequestPilot/privacy")!
+        static let support = URL(string: "https://github.com/JulianMaurin/PullRequestPilot/issues")!
+    }
+
     enum Notifications {
         static let prRefreshIntervalChanged = Notification.Name("prRefreshIntervalChanged")
     }
