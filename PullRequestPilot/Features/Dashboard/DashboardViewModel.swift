@@ -394,6 +394,9 @@ final class DashboardViewModel {
 
     // MARK: - Open in Editor
 
+    var isVSCodeAvailable: Bool { localRepositoryService.isVSCodeAvailable }
+    var isITermAvailable: Bool { localRepositoryService.isITermAvailable }
+
     func localMatch(for pr: PullRequest) -> LocalRepoMatch? {
         localRepositoryService.findLocalDirectory(for: pr)
     }

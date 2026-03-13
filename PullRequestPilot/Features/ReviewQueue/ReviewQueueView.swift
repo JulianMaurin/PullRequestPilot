@@ -502,14 +502,18 @@ struct ReviewQueueView: View {
                 viewModel.openInBrowser(pr)
             }
             if let match = viewModel.localMatch(for: pr) {
-                Button("Open in VS Code") {
-                    viewModel.openInEditor(pr)
+                if viewModel.isVSCodeAvailable {
+                    Button("Open in VS Code") {
+                        viewModel.openInEditor(pr)
+                    }
+                    .help(openInEditorHelp(match))
                 }
-                .help(openInEditorHelp(match))
-                Button("Open in iTerm") {
-                    viewModel.openInTerminal(pr)
+                if viewModel.isITermAvailable {
+                    Button("Open in iTerm") {
+                        viewModel.openInTerminal(pr)
+                    }
+                    .help(openInEditorHelp(match))
                 }
-                .help(openInEditorHelp(match))
             }
             Divider()
             Button("Copy URL") {

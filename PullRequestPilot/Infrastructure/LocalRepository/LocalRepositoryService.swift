@@ -113,6 +113,14 @@ final class LocalRepositoryService {
         return nil
     }
 
+    var isVSCodeAvailable: Bool {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.appBundleIDs["Visual Studio Code"]!) != nil
+    }
+
+    var isITermAvailable: Bool {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.appBundleIDs["iTerm"]!) != nil
+    }
+
     func openInVSCode(path: URL) {
         launchApp("Visual Studio Code", path: path)
     }
