@@ -144,7 +144,10 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var scanStatus: some View {
-        if viewModel.isScanning {
+        if !viewModel.gitAvailable {
+            Text("git was not found on this Mac. Install git to enable local repo scanning.")
+                .foregroundStyle(.orange)
+        } else if viewModel.isScanning {
             Text("Scanning...")
         } else if let lastScan = viewModel.lastScanDate {
             let count = viewModel.indexedRepoCount

@@ -44,6 +44,7 @@ final class SettingsViewModel {
     var isScanning: Bool { localRepositoryService.isScanning }
     var lastScanDate: Date? { localRepositoryService.lastScanDate }
     var indexedRepoCount: Int { localRepositoryService.indexedRepoCount }
+    var gitAvailable: Bool { localRepositoryService.gitAvailable }
 
     var hasToken: Bool {
         !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

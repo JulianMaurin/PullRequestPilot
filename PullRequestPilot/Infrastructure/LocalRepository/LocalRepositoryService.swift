@@ -22,6 +22,7 @@ final class LocalRepositoryService {
     private(set) var isScanning = false
     private(set) var lastScanDate: Date?
     private(set) var indexedRepoCount: Int = 0
+    private(set) var gitAvailable: Bool = true
     // internal setter for test injection via @testable import
     var repoIndex: [RepoEntry] = []
     private var refreshTask: Task<Void, Never>?
@@ -51,6 +52,21 @@ final class LocalRepositoryService {
 
     func scan(directories: [URL]) async {
         isScanning = true
+
+        let gitExists = await Task.detached {
+            Self.isGitInstalled()
+        }.value
+        gitAvailable = gitExists
+
+        guard gitExists else {
+            repoIndex = []
+            indexedRepoCount = 0
+            lastScanDate = Date()
+            isScanning = false
+            logger.warning("git not found at /usr/bin/git — install Xcode Command Line Tools to enable local repo scanning")
+            return
+        }
+
         let entries = await Task.detached { [logger] in
             Self.buildIndex(directories: directories, logger: logger)
         }.value
@@ -290,6 +306,23 @@ final class LocalRepositoryService {
     }
 
     // MARK: - Shell
+
+    nonisolated private static func isGitInstalled() -> Bool {
+        let url = URL(fileURLWithPath: "/usr/bin/git")
+        guard FileManager.default.isExecutableFile(atPath: url.path) else { return false }
+        let process = Process()
+        process.executableURL = url
+        process.arguments = ["--version"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
+    }
 
     nonisolated private static func runGit(_ args: [String], at directory: URL) -> String? {
         let process = Process()
