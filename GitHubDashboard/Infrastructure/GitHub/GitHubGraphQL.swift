@@ -31,6 +31,7 @@ enum GitHubGraphQL {
                 }
                 baseRefName
                 headRefName
+                headRefOid
                 repository {
                   nameWithOwner
                 }

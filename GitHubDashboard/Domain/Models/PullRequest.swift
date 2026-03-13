@@ -20,6 +20,7 @@ struct PullRequest: Identifiable, Hashable {
     let labels: [Label]
     let baseRefName: String
     let headRefName: String
+    let headCommitSha: String?
     let lastActivity: LastActivity?
 
     var linesChanged: Int { additions + deletions }

@@ -10,10 +10,13 @@ final class SettingsViewModel {
     private(set) var viewerLogin: String?
     private(set) var validationState: ValidationState = .idle
     private(set) var saveError: String?
+    var gitDirectories: [URL] = []
 
     private let keychain: KeychainService
     private let gitHubClient: GitHubClientProtocol
     private let tokenCache: TokenCache
+    private let gitDirectoriesStore: GitDirectoriesStore
+    private let localRepositoryService: LocalRepositoryService
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "GitHubDashboard", category: "Settings")
 
     enum ValidationState: Equatable {
@@ -23,12 +26,19 @@ final class SettingsViewModel {
         case invalid(String)
     }
 
-    init(keychain: KeychainService, gitHubClient: GitHubClientProtocol, tokenCache: TokenCache) {
+    init(keychain: KeychainService, gitHubClient: GitHubClientProtocol, tokenCache: TokenCache, gitDirectoriesStore: GitDirectoriesStore, localRepositoryService: LocalRepositoryService) {
         self.keychain = keychain
         self.gitHubClient = gitHubClient
         self.tokenCache = tokenCache
+        self.gitDirectoriesStore = gitDirectoriesStore
+        self.localRepositoryService = localRepositoryService
         self.token = tokenCache.token ?? ""
+        self.gitDirectories = gitDirectoriesStore.load()
     }
+
+    var isScanning: Bool { localRepositoryService.isScanning }
+    var lastScanDate: Date? { localRepositoryService.lastScanDate }
+    var indexedRepoCount: Int { localRepositoryService.indexedRepoCount }
 
     var hasToken: Bool {
         !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -97,6 +107,46 @@ final class SettingsViewModel {
             } catch {
                 logger.error("Failed to update launch at login: \(error)")
             }
+        }
+    }
+
+    // MARK: - Git Directories
+
+    func addGitDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.message = "Select a directory containing git repositories"
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        if !gitDirectories.contains(url) {
+            gitDirectories.append(url)
+            gitDirectoriesStore.save(gitDirectories)
+            triggerRescan()
+        }
+    }
+
+    func removeGitDirectory(at offsets: IndexSet) {
+        gitDirectories.remove(atOffsets: offsets)
+        gitDirectoriesStore.save(gitDirectories)
+        triggerRescan()
+    }
+
+    func removeGitDirectory(_ url: URL) {
+        gitDirectories.removeAll { $0 == url }
+        gitDirectoriesStore.save(gitDirectories)
+        triggerRescan()
+    }
+
+    func rescan() {
+        triggerRescan()
+    }
+
+    private func triggerRescan() {
+        Task {
+            await localRepositoryService.scan(directories: gitDirectories)
         }
     }
 

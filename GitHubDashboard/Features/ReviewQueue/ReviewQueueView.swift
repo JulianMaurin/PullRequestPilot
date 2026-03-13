@@ -471,6 +471,17 @@ struct ReviewQueueView: View {
             Button("Open in Browser") {
                 viewModel.openInBrowser(pr)
             }
+            if let match = viewModel.localMatch(for: pr) {
+                Button("Open in VS Code") {
+                    viewModel.openInEditor(pr)
+                }
+                .help(openInEditorHelp(match))
+                Button("Open in iTerm") {
+                    viewModel.openInTerminal(pr)
+                }
+                .help(openInEditorHelp(match))
+            }
+            Divider()
             Button("Copy URL") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(pr.url.absoluteString, forType: .string)
@@ -488,6 +499,19 @@ struct ReviewQueueView: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Editor
+
+    private func openInEditorHelp(_ match: LocalRepoMatch) -> String {
+        switch match.matchKind {
+        case .exactBranch:
+            return match.path.path
+        case .worktreeBranch:
+            return "Worktree: \(match.path.path)"
+        case .commitMatch:
+            return "Commit match: \(match.path.path)"
         }
     }
 

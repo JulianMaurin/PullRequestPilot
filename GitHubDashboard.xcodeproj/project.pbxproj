@@ -13,6 +13,7 @@
 		292EE851BF980D467F8E79B6 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B8E0E235ADD4B32EA86ED3 /* DashboardView.swift */; };
 		4B3280C8FCF20C661057D518 /* GitHubClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A9621D344BEA7D96AB7DD73 /* GitHubClient.swift */; };
 		50AF0C15DAC948268D9B3B15 /* GitHubResponses.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C11D8786859C8AD6B93F9A1 /* GitHubResponses.swift */; };
+		51A1B64CA6B1C8AEE81E0D05 /* GitDirectoriesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C7C1F537BE44D9E0FC52F10 /* GitDirectoriesStore.swift */; };
 		5EDE00C27B9B01B166D6A1E0 /* GitHubDashboardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F594A0EE8FB283578C930BF3 /* GitHubDashboardApp.swift */; };
 		5F9046F50EACD754B06046D7 /* ReviewQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F250EF6A85F0FDEBE8A905BE /* ReviewQueueView.swift */; };
 		65C167688E4BA863A7FE1FF7 /* PullRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19FD68DFCC3ABB3EAC9841FE /* PullRequest.swift */; };
@@ -23,6 +24,7 @@
 		8B5155AB75388FAD8DC64E85 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A0460EEF4D6E34126E8009 /* KeychainService.swift */; };
 		8CC12DADA661FDB9A6F93F12 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = E439B9AD1B9957A1144C8EB4 /* Constants.swift */; };
 		A4BA9E75DBF95522B0C2DDCB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F8EC53C897F118B2E5B231E4 /* Assets.xcassets */; };
+		A7AD15498A3CA9FADAA1E9E1 /* LocalRepositoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A7965A4F7261ECC254B4C8 /* LocalRepositoryService.swift */; };
 		C3E1A018D01ACF7E92D95344 /* MockGitHubClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A937F5037B64DA7CDEAA64D1 /* MockGitHubClient.swift */; };
 		CA21DCBA863BE6EC36880176 /* DashboardViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BC7B4FC9A81539AF60A6D33 /* DashboardViewModelTests.swift */; };
 		CB12616888099BB81D6BA4EB /* PullRequestRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 759512FEDC358C6DA5EAA2DA /* PullRequestRow.swift */; };
@@ -54,11 +56,13 @@
 		71A0460EEF4D6E34126E8009 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		759512FEDC358C6DA5EAA2DA /* PullRequestRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullRequestRow.swift; sourceTree = "<group>"; };
 		7BC7B4FC9A81539AF60A6D33 /* DashboardViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModelTests.swift; sourceTree = "<group>"; };
+		7C7C1F537BE44D9E0FC52F10 /* GitDirectoriesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitDirectoriesStore.swift; sourceTree = "<group>"; };
 		A116BA55A55E314B9426E1F2 /* TokenCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenCache.swift; sourceTree = "<group>"; };
 		A937F5037B64DA7CDEAA64D1 /* MockGitHubClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockGitHubClient.swift; sourceTree = "<group>"; };
 		B0109AB95011C15DC440BA98 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C37F02B1AFD0EA7DA904A01C /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		E0B8E0E235ADD4B32EA86ED3 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		E1A7965A4F7261ECC254B4C8 /* LocalRepositoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRepositoryService.swift; sourceTree = "<group>"; };
 		E439B9AD1B9957A1144C8EB4 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		E91013015983D69D6B709398 /* GitHubDashboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GitHubDashboard.entitlements; sourceTree = "<group>"; };
 		EB5AA64C1A4883F7511A7921 /* DashboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModel.swift; sourceTree = "<group>"; };
@@ -146,6 +150,14 @@
 			path = GitHubDashboardTests;
 			sourceTree = "<group>";
 		};
+		570B638605CBF1D4F372D188 /* LocalRepository */ = {
+			isa = PBXGroup;
+			children = (
+				E1A7965A4F7261ECC254B4C8 /* LocalRepositoryService.swift */,
+			);
+			path = LocalRepository;
+			sourceTree = "<group>";
+		};
 		659F54A2E91E85859FFFF1AF /* ReviewQueue */ = {
 			isa = PBXGroup;
 			children = (
@@ -166,6 +178,7 @@
 		7CF669457EAC29BBCC4D4818 /* Persistence */ = {
 			isa = PBXGroup;
 			children = (
+				7C7C1F537BE44D9E0FC52F10 /* GitDirectoriesStore.swift */,
 				0C3C3DE678A04B96319BE246 /* ViewsStore.swift */,
 			);
 			path = Persistence;
@@ -229,6 +242,7 @@
 			children = (
 				B32ACD120B744E6316E54514 /* GitHub */,
 				475A1417811D19D00BF5FEEA /* Keychain */,
+				570B638605CBF1D4F372D188 /* LocalRepository */,
 				7CF669457EAC29BBCC4D4818 /* Persistence */,
 			);
 			path = Infrastructure;
@@ -288,7 +302,9 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 2630;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+				};
 			};
 			buildConfigurationList = B9699E10D9D2034259FD252E /* Build configuration list for PBXProject "GitHubDashboard" */;
 			developmentRegion = en;
@@ -341,11 +357,13 @@
 				12433EFE1C25F104B8F4C55F /* ContentView.swift in Sources */,
 				292EE851BF980D467F8E79B6 /* DashboardView.swift in Sources */,
 				82A0033C9CC1178CBBB53887 /* DashboardViewModel.swift in Sources */,
+				51A1B64CA6B1C8AEE81E0D05 /* GitDirectoriesStore.swift in Sources */,
 				4B3280C8FCF20C661057D518 /* GitHubClient.swift in Sources */,
 				5EDE00C27B9B01B166D6A1E0 /* GitHubDashboardApp.swift in Sources */,
 				0864AA14F2F454665448BC9E /* GitHubGraphQL.swift in Sources */,
 				50AF0C15DAC948268D9B3B15 /* GitHubResponses.swift in Sources */,
 				8B5155AB75388FAD8DC64E85 /* KeychainService.swift in Sources */,
+				A7AD15498A3CA9FADAA1E9E1 /* LocalRepositoryService.swift in Sources */,
 				65C167688E4BA863A7FE1FF7 /* PullRequest.swift in Sources */,
 				CB12616888099BB81D6BA4EB /* PullRequestRow.swift in Sources */,
 				5F9046F50EACD754B06046D7 /* ReviewQueueView.swift in Sources */,
@@ -371,7 +389,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -402,11 +419,9 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -427,7 +442,6 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
@@ -438,7 +452,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -469,11 +482,9 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -487,7 +498,6 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6.0;
@@ -500,7 +510,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = GitHubDashboard/Resources/GitHubDashboard.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "GitHub Dashboard";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
@@ -519,7 +528,6 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
-				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -537,7 +545,6 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
-				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -556,7 +563,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = GitHubDashboard/Resources/GitHubDashboard.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "GitHub Dashboard";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";

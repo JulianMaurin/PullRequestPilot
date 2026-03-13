@@ -7,6 +7,7 @@ import Foundation
 struct DashboardViewModelTests {
     let mockClient = MockGitHubClient()
     let viewsStore = ViewsStore(defaults: UserDefaults(suiteName: "DashboardViewModelTests")!)
+    let localRepoService = LocalRepositoryService()
 
     init() {
         // Reset defaults for test isolation
@@ -18,7 +19,7 @@ struct DashboardViewModelTests {
         let pr = makePullRequest(number: 1, title: "Fix bug")
         mockClient.pullRequestsToReturn = [pr]
 
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: viewsStore)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: viewsStore, localRepositoryService: localRepoService)
         let viewID = viewModel.views.first!.id
         await viewModel.refresh(viewID: viewID)
 
@@ -33,7 +34,7 @@ struct DashboardViewModelTests {
     func handlesError() async {
         mockClient.errorToThrow = GitHubClientError.unauthorized
 
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: viewsStore)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: viewsStore, localRepositoryService: localRepoService)
         let viewID = viewModel.views.first!.id
         await viewModel.refresh(viewID: viewID)
 
@@ -46,7 +47,7 @@ struct DashboardViewModelTests {
     func isEmpty() async {
         mockClient.pullRequestsToReturn = []
 
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: viewsStore)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: viewsStore, localRepositoryService: localRepoService)
         let viewID = viewModel.views.first!.id
         await viewModel.refresh(viewID: viewID)
 
@@ -55,7 +56,7 @@ struct DashboardViewModelTests {
 
     @Test("passes the view query to the client")
     func passesQueryToClient() async {
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: viewsStore)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: viewsStore, localRepositoryService: localRepoService)
         let view = viewModel.views.first!
         await viewModel.refresh(viewID: view.id)
 
@@ -64,7 +65,7 @@ struct DashboardViewModelTests {
 
     @Test("add and delete views")
     func addAndDeleteViews() {
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: viewsStore)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: viewsStore, localRepositoryService: localRepoService)
         let initialCount = viewModel.views.count
 
         let newView = DashboardView(id: UUID(), title: "My PRs", query: "is:pr author:@me")
@@ -98,6 +99,7 @@ struct DashboardViewModelTests {
             labels: [],
             baseRefName: "main",
             headRefName: "feature-\(number)",
+            headCommitSha: nil,
             lastActivity: nil
         )
     }

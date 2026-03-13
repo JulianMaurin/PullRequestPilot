@@ -24,12 +24,14 @@ final class DashboardViewModel {
 
     private let gitHubClient: GitHubClientProtocol
     private let viewsStore: ViewsStore
+    private let localRepositoryService: LocalRepositoryService
     private var refreshTask: Task<Void, Never>?
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "GitHubDashboard", category: "Dashboard")
 
-    init(gitHubClient: GitHubClientProtocol, viewsStore: ViewsStore) {
+    init(gitHubClient: GitHubClientProtocol, viewsStore: ViewsStore, localRepositoryService: LocalRepositoryService) {
         self.gitHubClient = gitHubClient
         self.viewsStore = viewsStore
+        self.localRepositoryService = localRepositoryService
         self.views = viewsStore.load()
         self.selectedViewID = views.first?.id
 
@@ -168,5 +170,21 @@ final class DashboardViewModel {
 
     func openInBrowser(_ pr: PullRequest) {
         NSWorkspace.shared.open(pr.url)
+    }
+
+    // MARK: - Open in Editor
+
+    func localMatch(for pr: PullRequest) -> LocalRepoMatch? {
+        localRepositoryService.findLocalDirectory(for: pr)
+    }
+
+    func openInEditor(_ pr: PullRequest) {
+        guard let match = localMatch(for: pr) else { return }
+        localRepositoryService.openInVSCode(path: match.path)
+    }
+
+    func openInTerminal(_ pr: PullRequest) {
+        guard let match = localMatch(for: pr) else { return }
+        localRepositoryService.openInITerm(path: match.path)
     }
 }

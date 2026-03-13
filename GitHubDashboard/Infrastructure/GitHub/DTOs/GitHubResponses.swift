@@ -42,6 +42,7 @@ struct PullRequestNode: Decodable {
     let commits: CommitsConnection?
     let baseRefName: String
     let headRefName: String
+    let headRefOid: String?
     let repository: RepositoryNode
     let author: AuthorNode?
     let reviewThreads: ReviewThreadsConnection?
@@ -166,6 +167,7 @@ extension PullRequestNode {
             labels: labels.nodes.map { Label(name: $0.name, color: $0.color) },
             baseRefName: baseRefName,
             headRefName: headRefName,
+            headCommitSha: headRefOid,
             lastActivity: mapLastActivity(isoFormatter: isoFormatter, fallbackFormatter: fallbackFormatter)
         )
     }

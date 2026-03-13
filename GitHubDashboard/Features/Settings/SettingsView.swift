@@ -55,9 +55,68 @@ struct SettingsView: View {
             } header: {
                 Text("General")
             }
+
+            Section {
+                ForEach(viewModel.gitDirectories, id: \.self) { directory in
+                    HStack {
+                        Image(systemName: "folder")
+                            .foregroundStyle(.secondary)
+                        Text(directory.path)
+                            .lineLimit(1)
+                            .truncationMode(.head)
+                        Spacer()
+                        Button {
+                            viewModel.removeGitDirectory(directory)
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .foregroundStyle(.red)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                Button("Add Directory...") {
+                    viewModel.addGitDirectory()
+                }
+            } header: {
+                HStack {
+                    Text("Git Directories")
+                    Spacer()
+                    if viewModel.isScanning {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else if !viewModel.gitDirectories.isEmpty {
+                        Button {
+                            viewModel.rescan()
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Rescan repositories")
+                    }
+                }
+            } footer: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Directories containing cloned repositories. Used to locate PRs on disk and open them in your editor.")
+                    scanStatus
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
-        .frame(minWidth: 450, minHeight: 200)
+        .frame(minWidth: 450, minHeight: 250)
+    }
+
+    @ViewBuilder
+    private var scanStatus: some View {
+        if viewModel.isScanning {
+            Text("Scanning...")
+        } else if let lastScan = viewModel.lastScanDate {
+            let count = viewModel.indexedRepoCount
+            Text("\(count) repo\(count == 1 ? "" : "s") indexed — last scan \(lastScan, format: .relative(presentation: .named))")
+        }
     }
 
     @ViewBuilder
