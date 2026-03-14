@@ -163,6 +163,7 @@ This app is distributed via the Mac App Store. **Every line of code must be sand
 - **Widget WidgetBundle** — the extension uses a `WidgetBundle` (`PullRequestPilotWidgets`) to expose multiple widget types. Add new widgets there.
 - **AppIntentConfiguration for configurable widgets** — use `AppEntity` + `EntityQuery` + `WidgetConfigurationIntent` for widgets the user can configure (e.g., selecting a dashboard view). Mark static properties as `let` (not `var`) for Swift 6 strict concurrency.
 - **macOS caches widget metadata aggressively** — after changing widget kinds/names, you must: clear DerivedData (`rm -rf ~/Library/Developer/Xcode/DerivedData/PullRequestPilot-*`), kill NotificationCenter (`killall NotificationCenter`), and reinstall the app. A debug build in DerivedData can register a conflicting widget extension that shadows the installed app's widgets.
+- **Widget extension has its own `Assets.xcassets`** — the widget extension needs a separate asset catalog with an `AppIcon.appiconset` so the widget gallery shows the correct icon. The `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` build setting must be set in `project.yml` for the widget target.
 - **Deep linking** — widgets use `pullrequestpilot://` URL scheme (registered in `Info.plist` via `project.yml`). `Link(destination:)` wraps PR rows for direct GitHub URL opening. `widgetURL` or `pullrequestpilot://view/<viewID>` navigates to a specific dashboard view in the app.
 
 ### Data & Persistence
