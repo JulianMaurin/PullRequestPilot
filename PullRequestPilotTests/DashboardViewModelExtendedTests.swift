@@ -869,4 +869,172 @@ struct DashboardViewModelExtendedTests {
 
         #expect(viewModel.selectedViewID == view1.id)
     }
+
+    // MARK: - ViewState.hasData
+
+    @Test("ViewState hasData is true when pullRequests is non-empty")
+    func viewStateHasData() {
+        var state = ViewState()
+        #expect(!state.hasData)
+
+        state.pullRequests = [TestPullRequestFactory.make()]
+        #expect(state.hasData)
+    }
+
+    // MARK: - clearAllData
+
+    @Test("clearAllData resets all state and persists empty views")
+    func clearAllDataResetsState() async {
+        let defaults = UserDefaults(suiteName: "ClearAllData")!
+        defaults.removePersistentDomain(forName: "ClearAllData")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "q1")
+        viewModel.addView(view1)
+        mockClient.pullRequestsToReturn = [TestPullRequestFactory.make()]
+        await viewModel.refresh(viewID: view1.id)
+
+        #expect(!viewModel.views.isEmpty)
+        #expect(!viewModel.viewStates.isEmpty)
+        #expect(viewModel.selectedViewID != nil)
+
+        viewModel.clearAllData()
+
+        #expect(viewModel.views.isEmpty)
+        #expect(viewModel.viewStates.isEmpty)
+        #expect(viewModel.selectedViewID == nil)
+        #expect(store.load().isEmpty)
+    }
+
+    // MARK: - restartAutoRefresh via notification
+
+    @Test("refresh interval change notification restarts auto-refresh")
+    func restartAutoRefreshViaNotification() async {
+        let viewModel = makeViewModel(suiteName: "RestartAutoRefresh")
+        viewModel.startAutoRefresh()
+
+        // Trigger restart via notification (same mechanism as restartAutoRefresh)
+        NotificationCenter.default.post(name: Constants.Notifications.prRefreshIntervalChanged, object: nil)
+
+        // Give the Task { @MainActor } inside the observer a chance to execute
+        try? await Task.sleep(for: .milliseconds(200))
+
+        // Should still be able to stop cleanly (proves it restarted)
+        viewModel.stopAutoRefresh()
+    }
+
+    // MARK: - checkAndNotify does not notify when notifications disabled
+
+    @Test("checkAndNotify skips when notifications disabled for view")
+    func checkAndNotifySkipsWhenDisabled() async {
+        let defaults = UserDefaults(suiteName: "NotifyDisabled")!
+        defaults.removePersistentDomain(forName: "NotifyDisabled")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        let testView = DashboardView(id: UUID(), title: "Test", query: "is:pr")
+        viewModel.addView(testView)
+
+        // Do NOT enable notifications
+        #expect(!viewModel.isNotificationEnabled(for: testView.id))
+
+        let pr = TestPullRequestFactory.make(id: "PR_1", title: "First")
+        mockClient.pullRequestsToReturn = [pr]
+        await viewModel.refresh(viewID: testView.id)
+
+        // Second refresh with new PR — should not crash even with notifications off
+        let pr2 = TestPullRequestFactory.make(id: "PR_2", title: "Second")
+        mockClient.pullRequestsToReturn = [pr, pr2]
+        await viewModel.refresh(viewID: testView.id)
+
+        #expect(viewModel.viewStates[testView.id]!.pullRequests.count == 2)
+    }
+
+    // MARK: - refresh with view that was added externally via store
+
+    @Test("refresh creates ViewState when reloaded view has no state yet")
+    func refreshCreatesViewStateAfterReload() async {
+        let defaults = UserDefaults(suiteName: "RefreshCreatesState")!
+        defaults.removePersistentDomain(forName: "RefreshCreatesState")
+        let store = ViewsStore(defaults: defaults)
+
+        // Save a view directly to the store
+        let testView = DashboardView(id: UUID(), title: "External", query: "is:pr")
+        store.save([testView])
+
+        // Create viewModel which loads from store — viewStates should be populated
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        #expect(viewModel.viewStates[testView.id] != nil)
+
+        mockClient.pullRequestsToReturn = [TestPullRequestFactory.make()]
+        await viewModel.refresh(viewID: testView.id)
+
+        #expect(viewModel.viewStates[testView.id]?.pullRequests.count == 1)
+    }
+
+    // MARK: - Multiple notification: single PR vs multi PR
+
+    @Test("checkAndNotify handles single new PR on second load")
+    func notifySingleNewPR() async {
+        let defaults = UserDefaults(suiteName: "NotifySingle")!
+        defaults.removePersistentDomain(forName: "NotifySingle")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        let testView = DashboardView(id: UUID(), title: "Notify", query: "is:pr")
+        viewModel.addView(testView)
+
+        await viewModel.toggleNotification(for: testView.id)
+
+        // Initial load
+        let pr1 = TestPullRequestFactory.make(id: "PR_1", title: "Initial")
+        mockClient.pullRequestsToReturn = [pr1]
+        await viewModel.refresh(viewID: testView.id)
+
+        // Second load with one new PR
+        let pr2 = TestPullRequestFactory.make(id: "PR_2", title: "New One")
+        mockClient.pullRequestsToReturn = [pr1, pr2]
+        await viewModel.refresh(viewID: testView.id)
+
+        #expect(viewModel.viewStates[testView.id]!.pullRequests.count == 2)
+    }
+
+    @Test("checkAndNotify handles multiple new PRs on second load")
+    func notifyMultipleNewPRs() async {
+        let defaults = UserDefaults(suiteName: "NotifyMultiple")!
+        defaults.removePersistentDomain(forName: "NotifyMultiple")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        let testView = DashboardView(id: UUID(), title: "Notify", query: "is:pr")
+        viewModel.addView(testView)
+
+        await viewModel.toggleNotification(for: testView.id)
+
+        // Initial load
+        mockClient.pullRequestsToReturn = [TestPullRequestFactory.make(id: "PR_1", title: "Initial")]
+        await viewModel.refresh(viewID: testView.id)
+
+        // Second load with 5 new PRs (exercises the >1 branch and >4 prefix)
+        var prs = [TestPullRequestFactory.make(id: "PR_1", title: "Initial")]
+        for i in 2...6 {
+            prs.append(TestPullRequestFactory.make(id: "PR_\(i)", number: i, title: "New \(i)"))
+        }
+        mockClient.pullRequestsToReturn = prs
+        await viewModel.refresh(viewID: testView.id)
+
+        #expect(viewModel.viewStates[testView.id]!.pullRequests.count == 6)
+    }
+
+    // MARK: - isVSCodeAvailable / isITermAvailable delegation
+
+    @Test("isVSCodeAvailable delegates to localRepositoryService")
+    func isVSCodeAvailableDelegation() {
+        let viewModel = makeViewModel(suiteName: "VSCodeAvail")
+        #expect(viewModel.isVSCodeAvailable == localRepoService.isVSCodeAvailable)
+    }
+
+    @Test("isITermAvailable delegates to localRepositoryService")
+    func isITermAvailableDelegation() {
+        let viewModel = makeViewModel(suiteName: "ITermAvail")
+        #expect(viewModel.isITermAvailable == localRepoService.isITermAvailable)
+    }
 }

@@ -434,4 +434,46 @@ struct SettingsViewModelTests {
         // Should have loaded (possibly empty) from the store
         #expect(vm.gitDirectories is [URL])
     }
+
+    // MARK: - viewerAvatarURL
+
+    @Test("save sets viewerAvatarURL on success")
+    func saveStoresViewerAvatarURL() async {
+        let (vm, _, _, _) = makeViewModel(suiteName: "AvatarURL")
+        let avatarURL = URL(string: "https://avatars.githubusercontent.com/u/123")!
+        mockClient.viewerLoginToReturn = "octocat"
+        mockClient.viewerAvatarURLToReturn = avatarURL
+
+        vm.token = "ghp_valid"
+        await vm.save()
+
+        #expect(vm.viewerAvatarURL == avatarURL)
+        #expect(vm.viewerLogin == "octocat")
+    }
+
+    @Test("clearToken resets viewerAvatarURL")
+    func clearTokenResetsAvatarURL() async {
+        let (vm, _, _, _) = makeViewModel(storedToken: "ghp_token", suiteName: "ClearAvatar")
+        mockClient.viewerLoginToReturn = "octocat"
+        mockClient.viewerAvatarURLToReturn = URL(string: "https://example.com/avatar")
+        vm.token = "ghp_token"
+        await vm.save()
+
+        #expect(vm.viewerAvatarURL != nil)
+
+        vm.clearToken()
+
+        #expect(vm.viewerAvatarURL == nil)
+        #expect(vm.viewerLogin == nil)
+    }
+
+    // MARK: - prRefreshInterval persists to UserDefaults
+
+    @Test("prRefreshInterval persists value to UserDefaults")
+    func prRefreshIntervalPersists() {
+        let (vm, _, _, _) = makeViewModel(suiteName: "PRIntervalPersist")
+        vm.prRefreshInterval = 120
+        let stored = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
+        #expect(stored == 120)
+    }
 }
