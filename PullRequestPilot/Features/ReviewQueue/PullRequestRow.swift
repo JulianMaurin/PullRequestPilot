@@ -1,9 +1,11 @@
 import SwiftUI
 
-struct PullRequestRow: View {
+struct PullRequestRow<RowMenu: View>: View {
     let pullRequest: PullRequest
     var stackSize: Int = 0
     var onToggleStack: () -> Void = {}
+    var onFilterBy: ((String) -> Void)?
+    @ViewBuilder var rowContextMenu: () -> RowMenu
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -18,6 +20,14 @@ struct PullRequestRow: View {
             metadata
         }
         .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .contextMenu {
+            rowContextMenu()
+            if let onFilterBy {
+                Divider()
+                filterMenuItems(onFilterBy)
+            }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilitySummary)
     }
@@ -31,6 +41,48 @@ struct PullRequestRow: View {
         if stackSize > 1 { parts.append("\(stackSize) stacked pull requests") }
         parts.append("plus \(pullRequest.additions) minus \(pullRequest.deletions)")
         return parts.joined(separator: ", ")
+    }
+
+    // MARK: - Filter Menu
+
+    @ViewBuilder
+    private func filterMenuItems(_ onFilterBy: @escaping (String) -> Void) -> some View {
+        Button {
+            onFilterBy("author:\(pullRequest.author.login)")
+        } label: {
+            SwiftUI.Label(
+                "Filter by author \"\(pullRequest.author.login)\"",
+                systemImage: "line.3.horizontal.decrease.circle"
+            )
+        }
+
+        if pullRequest.labels.count == 1, let label = pullRequest.labels.first {
+            Button {
+                let value = label.name.contains(" ") ? "\"\(label.name)\"" : label.name
+                onFilterBy("label:\(value)")
+            } label: {
+                SwiftUI.Label(
+                    "Filter by label \"\(label.name)\"",
+                    systemImage: "line.3.horizontal.decrease.circle"
+                )
+            }
+        } else if pullRequest.labels.count > 1 {
+            Menu {
+                ForEach(Array(pullRequest.labels.prefix(10)), id: \.name) { label in
+                    Button {
+                        let value = label.name.contains(" ") ? "\"\(label.name)\"" : label.name
+                        onFilterBy("label:\(value)")
+                    } label: {
+                        SwiftUI.Label(
+                            label.name,
+                            systemImage: "tag"
+                        )
+                    }
+                }
+            } label: {
+                SwiftUI.Label("Filter by label", systemImage: "line.3.horizontal.decrease.circle")
+            }
+        }
     }
 
     // MARK: - Subviews

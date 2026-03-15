@@ -407,6 +407,16 @@ struct ReviewQueueView: View {
                         }
                     }
                 }
+                Divider()
+                Button {
+                    appendFilter("org:\(orgGroup.org)")
+                } label: {
+                    SwiftUI.Label(
+                        "Filter by org \"\(orgGroup.org)\"",
+                        systemImage: "line.3.horizontal.decrease.circle"
+                    )
+                }
+                .disabled(viewModel.views.first(where: { $0.id == viewModel.selectedViewID })?.query.contains("org:\(orgGroup.org)") ?? true)
             }
         }
     }
@@ -443,6 +453,17 @@ struct ReviewQueueView: View {
         }
         .buttonStyle(.plain)
         .padding(.leading, 8)
+        .contextMenu {
+            Button {
+                appendFilter("repo:\(org)/\(repoGroup.repo)")
+            } label: {
+                SwiftUI.Label(
+                    "Filter by repo \"\(org)/\(repoGroup.repo)\"",
+                    systemImage: "line.3.horizontal.decrease.circle"
+                )
+            }
+            .disabled(viewModel.views.first(where: { $0.id == viewModel.selectedViewID })?.query.contains("repo:\(org)/\(repoGroup.repo)") ?? true)
+        }
 
         if !isRepoCollapsed {
             ForEach(repoGroup.stacks) { stack in
@@ -493,39 +514,38 @@ struct ReviewQueueView: View {
                 }
                 .frame(width: 24)
             }
-            PullRequestRow(pullRequest: pr, stackSize: stackSize, onToggleStack: onToggleStack)
+            PullRequestRow(pullRequest: pr, stackSize: stackSize, onToggleStack: onToggleStack, onFilterBy: appendFilter) {
+                Button("Open in Browser") {
+                    viewModel.openInBrowser(pr)
+                }
+                if let match = viewModel.localMatch(for: pr) {
+                    if viewModel.isVSCodeAvailable {
+                        Button("Open in VS Code") {
+                            viewModel.openInEditor(pr)
+                        }
+                        .help(openInEditorHelp(match))
+                    }
+                    if viewModel.isITermAvailable {
+                        Button("Open in iTerm") {
+                            viewModel.openInTerminal(pr)
+                        }
+                        .help(openInEditorHelp(match))
+                    }
+                }
+                Divider()
+                Button("Copy URL") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(pr.url.absoluteString, forType: .string)
+                }
+                Button("Copy Branch") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(pr.headRefName, forType: .string)
+                }
+            }
         }
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
             viewModel.openInBrowser(pr)
-        }
-        .contextMenu {
-            Button("Open in Browser") {
-                viewModel.openInBrowser(pr)
-            }
-            if let match = viewModel.localMatch(for: pr) {
-                if viewModel.isVSCodeAvailable {
-                    Button("Open in VS Code") {
-                        viewModel.openInEditor(pr)
-                    }
-                    .help(openInEditorHelp(match))
-                }
-                if viewModel.isITermAvailable {
-                    Button("Open in iTerm") {
-                        viewModel.openInTerminal(pr)
-                    }
-                    .help(openInEditorHelp(match))
-                }
-            }
-            Divider()
-            Button("Copy URL") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(pr.url.absoluteString, forType: .string)
-            }
-            Button("Copy Branch") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(pr.headRefName, forType: .string)
-            }
         }
         .onAppear {
             if isLast, viewModel.selectedViewState.canLoadMore {
@@ -536,6 +556,18 @@ struct ReviewQueueView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Query Filters
+
+    private func appendFilter(_ qualifier: String) {
+        guard let id = viewModel.selectedViewID,
+              let dashView = viewModel.views.first(where: { $0.id == id }) else { return }
+        guard !dashView.query.contains(qualifier) else { return }
+        let newQuery = dashView.query + " " + qualifier
+        editingQuery = newQuery
+        viewModel.updateView(DashboardView(id: dashView.id, title: dashView.title, query: newQuery, hideReviewed: dashView.hideReviewed))
+        Task { await viewModel.refresh(viewID: id) }
     }
 
     // MARK: - Editor
