@@ -88,29 +88,25 @@ struct PullRequestRow<RowMenu: View>: View {
     // MARK: - Subviews
 
     private var authorAvatar: some View {
-        ZStack(alignment: .bottomTrailing) {
-            AsyncImage(url: pullRequest.author.avatarURL) { image in
-                image.resizable()
-            } placeholder: {
-                Circle().fill(.quaternary)
-            }
-            .frame(width: 32, height: 32)
-            .clipShape(Circle())
-
-            Circle()
-                .fill(statusColor)
-                .frame(width: 10, height: 10)
-                .overlay(Circle().stroke(.background, lineWidth: 1.5))
-                .help(statusLabel)
+        AsyncImage(url: pullRequest.author.avatarURL) { image in
+            image.resizable()
+        } placeholder: {
+            Circle().fill(.quaternary)
         }
+        .frame(width: 32, height: 32)
+        .clipShape(Circle())
         .padding(.top, 2)
     }
 
     private var titleRow: some View {
         HStack(spacing: 6) {
+            statusIndicator
+                .help(stateLabel)
             Text(pullRequest.title)
                 .font(.body)
                 .lineLimit(2)
+
+            checkStatusBadge
 
             if pullRequest.isDraft {
                 Text("Draft")
@@ -132,8 +128,6 @@ struct PullRequestRow<RowMenu: View>: View {
             Text(verbatim: "#\(pullRequest.number)")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
-
-            statusBadge
 
             threadsBadge
 
@@ -168,17 +162,21 @@ struct PullRequestRow<RowMenu: View>: View {
         }
     }
 
-    private var statusBadge: some View {
-        Group {
-            if !pullRequest.isDraft, pullRequest.reviewDecision != nil {
-                Text(statusLabel)
-                    .font(.caption2)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(statusColor.opacity(0.15))
-                    .foregroundStyle(statusColor)
-                    .clipShape(Capsule())
-            }
+    private var statusIndicator: some View {
+        PullRequestStateIcon(
+            state: pullRequest.state,
+            isDraft: pullRequest.isDraft,
+            size: 10
+        )
+    }
+
+    @ViewBuilder
+    private var checkStatusBadge: some View {
+        if let icon = checkStatusIcon {
+            Image(systemName: icon.name)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(icon.color)
+                .help(checkStatusLabel)
         }
     }
 
@@ -269,34 +267,42 @@ struct PullRequestRow<RowMenu: View>: View {
 
     // MARK: - Helpers
 
-    private var statusColor: Color {
+    private var stateColor: Color {
         switch pullRequest.state {
         case .merged: return .purple
-        case .closed: return .gray
-        case .open:
-            if pullRequest.isDraft { return .gray }
-            switch pullRequest.checkStatus {
-            case .pending, .expected: return .yellow
-            case .failure, .error: return .red
-            case .success: return .blue
-            case nil: return .secondary
-            }
+        case .closed: return .black
+        case .open: return pullRequest.isDraft ? Color(white: 0.55) : Color(white: 0.3)
+        }
+    }
+
+    private var checkStatusIcon: (name: String, color: Color)? {
+        switch pullRequest.checkStatus {
+        case .success: return ("checkmark", .blue)
+        case .pending, .expected: return ("circle.fill", .yellow)
+        case .failure, .error: return ("xmark", .red)
+        case nil: return nil
+        }
+    }
+
+    private var stateLabel: String {
+        switch pullRequest.state {
+        case .merged: return "Merged"
+        case .closed: return "Closed"
+        case .open: return pullRequest.isDraft ? "Draft" : "Open"
+        }
+    }
+
+    private var checkStatusLabel: String {
+        switch pullRequest.checkStatus {
+        case .pending, .expected: return "Checks running"
+        case .failure, .error: return "Checks failing"
+        case .success: return "Checks passing"
+        case nil: return "No checks"
         }
     }
 
     private var statusLabel: String {
-        switch pullRequest.state {
-        case .merged: return "Merged"
-        case .closed: return pullRequest.isDraft ? "Draft" : "Closed"
-        case .open:
-            if pullRequest.isDraft { return "Draft" }
-            switch pullRequest.checkStatus {
-            case .pending, .expected: return "Checks running"
-            case .failure, .error: return "Checks failing"
-            case .success: return "Checks passing"
-            case nil: return "No checks"
-            }
-        }
+        "\(stateLabel) · \(checkStatusLabel)"
     }
 }
 
