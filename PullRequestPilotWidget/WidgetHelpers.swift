@@ -3,14 +3,6 @@ import SwiftUI
 // MARK: - Color Palette
 
 enum WidgetColors {
-    static let viewAccents: [Color] = [
-        .blue, .purple, .orange, .green, .pink, .cyan, .indigo, .mint,
-    ]
-
-    static func accent(for index: Int) -> Color {
-        viewAccents[index % viewAccents.count]
-    }
-
     static func reviewColor(for decision: String?) -> Color {
         switch decision {
         case "APPROVED": .green

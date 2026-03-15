@@ -112,7 +112,7 @@ struct SummarySmallView: View {
                     ForEach(Array(entry.views.prefix(3).enumerated()), id: \.element.id) { index, view in
                         HStack(spacing: 6) {
                             RoundedRectangle(cornerRadius: 2)
-                                .fill(WidgetColors.accent(for: index).opacity(0.8))
+                                .fill(.secondary.opacity(0.5))
                                 .frame(width: 3, height: 12)
                             Text(view.title)
                                 .font(.system(size: 10))
@@ -178,7 +178,7 @@ struct SummaryMediumView: View {
                     ]
                     LazyVGrid(columns: columns, spacing: 4) {
                         ForEach(Array(entry.views.prefix(4).enumerated()), id: \.element.id) { index, viewData in
-                            ViewCardCompact(viewData: viewData, accentColor: WidgetColors.accent(for: index))
+                            ViewCardCompact(viewData: viewData)
                         }
                     }
 
@@ -229,7 +229,7 @@ struct SummaryLargeView: View {
                     Spacer()
                 } else {
                     ForEach(Array(entry.views.prefix(3).enumerated()), id: \.element.id) { index, viewData in
-                        ViewSection(viewData: viewData, accentColor: WidgetColors.accent(for: index))
+                        ViewSection(viewData: viewData)
                         if index < min(entry.views.count, 3) - 1 {
                             Divider()
                         }
@@ -250,12 +250,11 @@ struct SummaryLargeView: View {
 
 private struct ViewCardCompact: View {
     let viewData: WidgetViewData
-    let accentColor: Color
 
     var body: some View {
         HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 2)
-                .fill(accentColor)
+                .fill(.secondary.opacity(0.5))
                 .frame(width: 3)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -321,14 +320,13 @@ private struct ReviewBreakdownBar: View {
 
 private struct ViewSection: View {
     let viewData: WidgetViewData
-    let accentColor: Color
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             // Section header
             HStack(spacing: 6) {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(accentColor)
+                    .fill(.secondary.opacity(0.5))
                     .frame(width: 3, height: 14)
 
                 Text(viewData.title)
