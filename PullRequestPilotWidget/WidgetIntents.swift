@@ -23,7 +23,7 @@ struct CopyPRListIntent: AppIntent {
             return .result()
         }
 
-        let lines = view.pullRequests.map { "- #\($0.number): \($0.title)" }
+        let lines = view.pullRequests.map { "- \($0.url.absoluteString): \($0.title)" }
         let text = lines.joined(separator: "\n")
 
         NSPasteboard.general.clearContents()
