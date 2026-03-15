@@ -172,8 +172,6 @@ struct DetailMediumView: View {
                     .lineLimit(1)
                 Spacer()
 
-                WidgetActionButtons(viewID: viewData.id)
-
                 ReviewSummaryPills(viewData: viewData)
 
                 Text("\(viewData.count)")
@@ -212,6 +210,7 @@ struct DetailMediumView: View {
                             .font(.system(size: 8))
                             .foregroundStyle(.tertiary)
                     }
+                    WidgetActionButtons(viewID: viewData.id)
                 }
             }
         }
@@ -235,8 +234,6 @@ struct DetailLargeView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .lineLimit(1)
                 Spacer()
-
-                WidgetActionButtons(viewID: viewData.id)
 
                 ReviewSummaryPills(viewData: viewData)
 
@@ -278,6 +275,7 @@ struct DetailLargeView: View {
                             .font(.system(size: 8))
                             .foregroundStyle(.tertiary)
                     }
+                    WidgetActionButtons(viewID: viewData.id)
                 }
             }
         }
@@ -290,24 +288,19 @@ struct DetailLargeView: View {
 private struct WidgetActionButtons: View {
     let viewID: String
 
-    private let iconFrame: CGFloat = 14
-
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             Button(intent: CopyPRListIntent(viewID: viewID)) {
-                Image(systemName: "list.clipboard")
-                    .font(.system(size: 10))
-                    .frame(width: iconFrame, height: iconFrame)
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 8))
             }
             Button(intent: OpenAllPRsIntent(viewID: viewID)) {
-                Image(systemName: "safari")
-                    .font(.system(size: 10))
-                    .frame(width: iconFrame, height: iconFrame)
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 8))
             }
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.blue)
-        .padding(.trailing, 4)
+        .foregroundStyle(.tertiary)
     }
 }
 
