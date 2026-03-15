@@ -187,8 +187,14 @@ final class DashboardViewModel {
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refreshAll()
-                let interval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
-                let seconds = interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
+                let hasAnyData = self?.viewStates.values.contains(where: \.hasData) ?? false
+                let seconds: Double
+                if hasAnyData {
+                    let interval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
+                    seconds = interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
+                } else {
+                    seconds = 5
+                }
                 try? await Task.sleep(for: .seconds(seconds))
             }
         }
