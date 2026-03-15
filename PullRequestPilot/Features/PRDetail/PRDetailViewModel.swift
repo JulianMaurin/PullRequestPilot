@@ -5,6 +5,7 @@ import Foundation
 final class PRDetailViewModel {
     private(set) var selectedPR: PullRequest?
     private(set) var timelineEvents: [TimelineEvent] = []
+    private(set) var checkRuns: [CheckRun] = []
     private(set) var isLoading = false
     private(set) var error: String?
 
@@ -29,6 +30,7 @@ final class PRDetailViewModel {
         selectedPR = nil
         fetchTask?.cancel()
         timelineEvents = []
+        checkRuns = []
         error = nil
         isLoading = false
     }
@@ -41,16 +43,22 @@ final class PRDetailViewModel {
             isLoading = true
             error = nil
             timelineEvents = []
+            checkRuns = []
             do {
                 var allEvents: [TimelineEvent] = []
+                var fetchedCheckRuns: [CheckRun] = []
                 var cursor: String?
                 repeat {
                     let page = try await gitHubClient.fetchTimeline(nodeID: pr.id, cursor: cursor)
                     allEvents.append(contentsOf: page.events)
+                    if fetchedCheckRuns.isEmpty {
+                        fetchedCheckRuns = page.checkRuns
+                    }
                     cursor = page.nextCursor
                 } while cursor != nil
                 guard !Task.isCancelled else { return }
                 timelineEvents = allEvents
+                checkRuns = fetchedCheckRuns
             } catch is CancellationError {
                 return
             } catch {

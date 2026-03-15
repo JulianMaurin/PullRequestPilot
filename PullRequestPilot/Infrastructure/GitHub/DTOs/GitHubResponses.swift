@@ -151,6 +151,83 @@ struct TimelineNodeData: Decodable {
 
 struct TimelinePullRequestNode: Decodable {
     let timelineItems: TimelineItemsConnection?
+    let commits: CheckRunCommitsConnection?
+}
+
+// MARK: - Check Run DTOs
+
+struct CheckRunCommitsConnection: Decodable {
+    let nodes: [CheckRunCommitWrapper]
+
+    struct CheckRunCommitWrapper: Decodable {
+        let commit: CheckRunCommitDetail
+    }
+
+    struct CheckRunCommitDetail: Decodable {
+        let statusCheckRollup: CheckRunRollup?
+    }
+
+    struct CheckRunRollup: Decodable {
+        let contexts: CheckRunContextsConnection
+    }
+
+    struct CheckRunContextsConnection: Decodable {
+        let nodes: [CheckRunContextNode]
+    }
+}
+
+struct CheckRunContextNode: Decodable {
+    // swiftlint:disable:next identifier_name
+    let __typename: String
+    // CheckRun fields
+    let name: String?
+    let status: String?
+    let conclusion: String?
+    let detailsUrl: String?
+    // StatusContext fields
+    let context: String?
+    let state: String?
+    let targetUrl: String?
+}
+
+extension CheckRunCommitsConnection {
+    func toDomain() -> [CheckRun] {
+        guard let rollup = nodes.first?.commit.statusCheckRollup else { return [] }
+        let allNodes = rollup.contexts.nodes
+
+        // Process CheckRun first (richer data), then StatusContext for any not already seen
+        let checkRunNodes = allNodes.enumerated().filter { $0.element.__typename == "CheckRun" }
+        let statusContextNodes = allNodes.enumerated().filter { $0.element.__typename == "StatusContext" }
+
+        var seen = Set<String>()
+        var results: [CheckRun] = []
+
+        for (index, node) in checkRunNodes {
+            guard let name = node.name, seen.insert(name).inserted else { continue }
+            let status = node.status.flatMap { CheckRunStatus(rawValue: $0) } ?? .queued
+            let conclusion = node.conclusion.flatMap { CheckRunConclusion(rawValue: $0) }
+            let url = node.detailsUrl.flatMap { URL(string: $0) }
+            results.append(CheckRun(id: "check-\(index)-\(name)", name: name, status: status, conclusion: conclusion, detailsURL: url))
+        }
+
+        for (index, node) in statusContextNodes {
+            guard let context = node.context, seen.insert(context).inserted else { continue }
+            let conclusion: CheckRunConclusion? = node.state.flatMap {
+                switch $0 {
+                case "SUCCESS": return .success
+                case "FAILURE": return .failure
+                case "ERROR": return .failure
+                case "PENDING": return nil
+                default: return nil
+                }
+            }
+            let status: CheckRunStatus = node.state == "PENDING" ? .pending : .completed
+            let url = node.targetUrl.flatMap { URL(string: $0) }
+            results.append(CheckRun(id: "status-\(index)-\(context)", name: context, status: status, conclusion: conclusion, detailsURL: url))
+        }
+
+        return results
+    }
 }
 
 struct TimelineItemsConnection: Decodable {

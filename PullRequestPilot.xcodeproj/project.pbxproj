@@ -30,6 +30,7 @@
 		7485EF4CAF939DB4C5EBC0C5 /* SettingsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FBA9DC202E1C820FD45E57B /* SettingsViewModelTests.swift */; };
 		77C16D0F8E345235B722E6FB /* TimelineEventTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 611FE229324726ACB5D01619 /* TimelineEventTests.swift */; };
 		7AE9D1D59D755D749A07689D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E5FD8EDDD1395CE2E48479A /* SettingsView.swift */; };
+		7E49881AE6BD836AA1137F39 /* CheckRun.swift in Sources */ = {isa = PBXBuildFile; fileRef = 774BB0D9F4E2D73FC6DECF5F /* CheckRun.swift */; };
 		812EB44365E322642D879615 /* PullRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53AD27A0204C2931E1B75616 /* PullRequestTests.swift */; };
 		83F51C31BD66971C931E7092 /* GitHubGraphQL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12FD73CCEE659006259881CD /* GitHubGraphQL.swift */; };
 		83F799B23DBC99896F1C7649 /* TokenCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E3F65C06B7BA972EAC6290D /* TokenCacheTests.swift */; };
@@ -52,6 +53,7 @@
 		A9BF6A0F8472D55C7972DDF6 /* GitHubClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD46693817F4AC7B0929F1BD /* GitHubClientTests.swift */; };
 		AB1FC294A317B2E53B67FDA4 /* WidgetIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FB116EE8BD513763924D68E /* WidgetIntents.swift */; };
 		B3C40A539AD3B4176BBEB3D7 /* PRDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA99630A67726BEAA7144942 /* PRDetailView.swift */; };
+		B73D7594DD891F3F5DE1D799 /* CheckRunTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77412D15C854BB2FFB5413F8 /* CheckRunTests.swift */; };
 		BE07D374871AC955C82F0FD8 /* GitDirectoriesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D15F556448815396EF8A8ED2 /* GitDirectoriesStore.swift */; };
 		C485E7FD59A33E8A2B75815D /* DashboardViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E21D2ACD1877BC876B5A5E8 /* DashboardViewModelTests.swift */; };
 		C78763AFDD38D590EDF04DCF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5414944992661132D1247917 /* Assets.xcassets */; };
@@ -129,6 +131,8 @@
 		6D1DB214BC50D97E3CD1F5DA /* LocalRepositoryServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRepositoryServiceTests.swift; sourceTree = "<group>"; };
 		75A62AC3B6383F18C309DDA3 /* TokenCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenCache.swift; sourceTree = "<group>"; };
 		764B9FE62E6225465AD80999 /* TestPullRequestFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestPullRequestFactory.swift; sourceTree = "<group>"; };
+		77412D15C854BB2FFB5413F8 /* CheckRunTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckRunTests.swift; sourceTree = "<group>"; };
+		774BB0D9F4E2D73FC6DECF5F /* CheckRun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckRun.swift; sourceTree = "<group>"; };
 		782A06435EEB66B6BEC6D3AB /* PullRequestPilotWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullRequestPilotWidget.swift; sourceTree = "<group>"; };
 		7A6F20A8A9AED8D061E283CD /* DashboardViewModelExtendedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModelExtendedTests.swift; sourceTree = "<group>"; };
 		7B15D55AB77BB25686B9841A /* PullRequestRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullRequestRow.swift; sourceTree = "<group>"; };
@@ -206,6 +210,7 @@
 		219BE6D6FBCF90F3CF26A7D7 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				774BB0D9F4E2D73FC6DECF5F /* CheckRun.swift */,
 				C15EBD57347F4C981EB507D8 /* DashboardView.swift */,
 				46D916DDB38D7B774FFC58D0 /* PullRequest.swift */,
 				40557FE42C98E62F2A4EBB42 /* TimelineEvent.swift */,
@@ -247,6 +252,7 @@
 		3A159768426BD617D649F989 /* PullRequestPilotTests */ = {
 			isa = PBXGroup;
 			children = (
+				77412D15C854BB2FFB5413F8 /* CheckRunTests.swift */,
 				7A6F20A8A9AED8D061E283CD /* DashboardViewModelExtendedTests.swift */,
 				3E21D2ACD1877BC876B5A5E8 /* DashboardViewModelTests.swift */,
 				3E6DAF84A0905976CD143089 /* DashboardViewTests.swift */,
@@ -563,6 +569,7 @@
 			files = (
 				9BC58DE718C9445C76471D75 /* AppDelegate.swift in Sources */,
 				49693E22DFAE27F128D996A0 /* AppState.swift in Sources */,
+				7E49881AE6BD836AA1137F39 /* CheckRun.swift in Sources */,
 				7311E24679EF4F3FA32D1E53 /* Constants.swift in Sources */,
 				E456F00B61F4B43E3803C549 /* ContentView.swift in Sources */,
 				850A3ABA22A0EDCB05798B9D /* DashboardView.swift in Sources */,
@@ -593,6 +600,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B73D7594DD891F3F5DE1D799 /* CheckRunTests.swift in Sources */,
 				72D454E984EC5B6EA1673EAE /* DashboardViewModelExtendedTests.swift in Sources */,
 				C485E7FD59A33E8A2B75815D /* DashboardViewModelTests.swift in Sources */,
 				4EEBE8B39FBA5B52511D4006 /* DashboardViewTests.swift in Sources */,

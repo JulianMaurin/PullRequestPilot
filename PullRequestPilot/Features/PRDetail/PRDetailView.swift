@@ -7,7 +7,7 @@ struct PRDetailView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            timelineContent
+            detailContent
         }
     }
 
@@ -56,15 +56,15 @@ struct PRDetailView: View {
         .padding(12)
     }
 
-    // MARK: - Timeline
+    // MARK: - Content
 
     @ViewBuilder
-    private var timelineContent: some View {
+    private var detailContent: some View {
         if viewModel.isLoading {
             VStack(spacing: 12) {
                 Spacer()
                 ProgressView()
-                Text("Loading timeline...")
+                Text("Loading...")
                     .foregroundStyle(.secondary)
                     .font(.caption)
                 Spacer()
@@ -83,27 +83,89 @@ struct PRDetailView: View {
             }
             .padding()
             .frame(maxWidth: .infinity)
-        } else if viewModel.timelineEvents.isEmpty {
-            VStack {
-                Spacer()
-                Text("No timeline events")
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-                Spacer()
-            }
-            .frame(maxWidth: .infinity)
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(viewModel.timelineEvents) { event in
-                        timelineRow(event)
-                        if event.id != viewModel.timelineEvents.last?.id {
+                    if !viewModel.checkRuns.isEmpty {
+                        checksSection
+                    }
+                    if !viewModel.timelineEvents.isEmpty {
+                        if !viewModel.checkRuns.isEmpty {
                             Divider()
-                                .padding(.leading, 36)
                         }
+                        timelineSection
                     }
                 }
-                .padding(.vertical, 4)
+            }
+        }
+    }
+
+    // MARK: - Checks Section
+
+    private var checksSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Checks")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+
+            ForEach(viewModel.checkRuns) { check in
+                checkRow(check)
+                if check.id != viewModel.checkRuns.last?.id {
+                    Divider()
+                        .padding(.leading, 36)
+                }
+            }
+        }
+    }
+
+    private func checkRow(_ check: CheckRun) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: check.iconName)
+                .font(.caption)
+                .foregroundStyle(iconColor(check.iconColor))
+                .frame(width: 20, alignment: .center)
+
+            Text(check.name)
+                .font(.caption)
+                .lineLimit(1)
+
+            Spacer()
+
+            Text(check.displayStatus)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+
+            if let url = check.detailsURL {
+                Link(destination: url) {
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .help("Open in browser")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+    }
+
+    // MARK: - Timeline Section
+
+    private var timelineSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Activity")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+
+            ForEach(viewModel.timelineEvents) { event in
+                timelineRow(event)
+                if event.id != viewModel.timelineEvents.last?.id {
+                    Divider()
+                        .padding(.leading, 36)
+                }
             }
         }
     }
@@ -127,12 +189,13 @@ struct PRDetailView: View {
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
-
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
     }
+
+    // MARK: - Helpers
 
     private func iconColor(_ name: String) -> Color {
         switch name {
@@ -140,6 +203,7 @@ struct PRDetailView: View {
         case "red": return .red
         case "purple": return .purple
         case "blue": return .blue
+        case "yellow": return .yellow
         case "gray": return .gray
         default: return .secondary
         }

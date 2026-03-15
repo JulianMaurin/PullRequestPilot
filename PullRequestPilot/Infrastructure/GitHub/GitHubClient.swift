@@ -11,6 +11,7 @@ struct PullRequestPage: Sendable {
 
 struct TimelinePage: Sendable {
     let events: [TimelineEvent]
+    let checkRuns: [CheckRun]
     let nextCursor: String?
 }
 
@@ -87,13 +88,15 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             throw GitHubClientError.graphQLErrors(messages)
         }
 
-        guard let connection = data.node?.timelineItems else {
-            return TimelinePage(events: [], nextCursor: nil)
+        guard let prNode = data.node else {
+            return TimelinePage(events: [], checkRuns: [], nextCursor: nil)
         }
 
-        let events = connection.toDomain()
-        let nextCursor = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : nil
-        return TimelinePage(events: events, nextCursor: nextCursor)
+        let events = prNode.timelineItems?.toDomain() ?? []
+        let checkRuns = prNode.commits?.toDomain() ?? []
+        let nextCursor = prNode.timelineItems?.pageInfo.hasNextPage == true
+            ? prNode.timelineItems?.pageInfo.endCursor : nil
+        return TimelinePage(events: events, checkRuns: checkRuns, nextCursor: nextCursor)
     }
 
     func fetchViewer() async throws -> (login: String, avatarURL: URL?) {

@@ -188,6 +188,30 @@ enum GitHubGraphQL {
                   endCursor
                 }
               }
+              commits(last: 1) {
+                nodes {
+                  commit {
+                    statusCheckRollup {
+                      contexts(first: 100) {
+                        nodes {
+                          __typename
+                          ... on CheckRun {
+                            name
+                            status
+                            conclusion
+                            detailsUrl
+                          }
+                          ... on StatusContext {
+                            context
+                            state
+                            targetUrl
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
