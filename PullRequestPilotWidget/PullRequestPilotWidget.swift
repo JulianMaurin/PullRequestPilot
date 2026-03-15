@@ -351,7 +351,7 @@ private struct ViewSection: View {
                 ForEach(viewData.pullRequests.prefix(3)) { pr in
                     Link(destination: pr.url) {
                         HStack(spacing: 4) {
-                            ReviewDecisionIcon(decision: pr.reviewDecision)
+                            WidgetCheckStatusIcon(status: pr.checkStatus)
                             Text(pr.title)
                                 .font(.system(size: 10))
                                 .lineLimit(1)

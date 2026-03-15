@@ -18,7 +18,8 @@ struct WidgetDataTests {
             createdAt: createdAt,
             reviewDecision: nil,
             checkStatus: nil,
-            isDraft: false
+            isDraft: false,
+            state: "OPEN"
         )
     }
 
@@ -79,7 +80,7 @@ struct WidgetDataTests {
             url: URL(string: "https://github.com/owner/my-repo/pull/1")!,
             repositoryName: "owner/my-repo",
             authorLogin: "author", createdAt: Date(),
-            reviewDecision: nil, checkStatus: nil, isDraft: false
+            reviewDecision: nil, checkStatus: nil, isDraft: false, state: "OPEN"
         )
         #expect(pr.repoShortName == "my-repo")
     }
@@ -91,7 +92,7 @@ struct WidgetDataTests {
             url: URL(string: "https://github.com/repo/pull/1")!,
             repositoryName: "standalone-repo",
             authorLogin: "author", createdAt: Date(),
-            reviewDecision: nil, checkStatus: nil, isDraft: false
+            reviewDecision: nil, checkStatus: nil, isDraft: false, state: "OPEN"
         )
         #expect(pr.repoShortName == "standalone-repo")
     }
@@ -110,7 +111,8 @@ struct WidgetDataTests {
                 createdAt: Date(),
                 reviewDecision: decision,
                 checkStatus: nil,
-                isDraft: false
+                isDraft: false,
+                state: "OPEN"
             )
         }
         return WidgetViewData(id: "view1", title: "Test", count: prs.count, pullRequests: prs)

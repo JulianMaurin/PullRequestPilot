@@ -168,7 +168,8 @@ final class DashboardViewModel {
                     createdAt: pr.createdAt,
                     reviewDecision: pr.reviewDecision?.rawValue,
                     checkStatus: pr.checkStatus?.rawValue,
-                    isDraft: pr.isDraft
+                    isDraft: pr.isDraft,
+                    state: pr.state.rawValue
                 )
             }
             return WidgetViewData(

@@ -30,7 +30,30 @@ enum WidgetColors {
     }
 }
 
-// MARK: - Review Decision Icon
+// MARK: - CI Status Icon (matches app's checkStatusBadge)
+
+struct WidgetCheckStatusIcon: View {
+    let status: String?
+
+    var body: some View {
+        if let icon = checkIcon {
+            Image(systemName: icon.name)
+                .font(.system(size: 7, weight: .bold))
+                .foregroundStyle(icon.color)
+        }
+    }
+
+    private var checkIcon: (name: String, color: Color)? {
+        switch status {
+        case "SUCCESS": return ("checkmark", .blue)
+        case "PENDING", "EXPECTED": return ("circle.fill", .yellow)
+        case "FAILURE", "ERROR": return ("xmark", .red)
+        default: return nil
+        }
+    }
+}
+
+// MARK: - Review Decision Icon (kept for summary pills)
 
 struct ReviewDecisionIcon: View {
     let decision: String?
@@ -51,7 +74,7 @@ struct ReviewDecisionIcon: View {
     }
 }
 
-// MARK: - Check Status Dot
+// MARK: - Check Status Dot (kept for summary pills)
 
 struct CheckStatusDot: View {
     let status: String?
@@ -90,8 +113,7 @@ struct PRRowView: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            ReviewDecisionIcon(decision: pr.reviewDecision)
-            CheckStatusDot(status: pr.checkStatus)
+            WidgetCheckStatusIcon(status: pr.checkStatus)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(pr.title)
@@ -118,12 +140,6 @@ struct PRRowView: View {
 
             if showAge {
                 AgeBadge(age: pr.compactAge)
-            }
-
-            if pr.isDraft {
-                Image(systemName: "pencil.circle")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
             }
         }
     }

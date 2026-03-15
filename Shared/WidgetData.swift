@@ -13,6 +13,7 @@ struct WidgetPullRequest: Codable, Sendable, Hashable, Identifiable {
     let reviewDecision: String?
     let checkStatus: String?
     let isDraft: Bool
+    let state: String?
 
     var compactAge: String {
         let interval = Date.now.timeIntervalSince(createdAt)

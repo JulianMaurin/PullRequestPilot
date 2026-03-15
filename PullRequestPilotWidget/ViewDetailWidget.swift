@@ -31,7 +31,7 @@ struct ViewDetailProvider: AppIntentTimelineProvider {
                     url: Self.placeholderURL,
                     repositoryName: "org/repo", authorLogin: "dev",
                     createdAt: .now.addingTimeInterval(-7200),
-                    reviewDecision: "APPROVED", checkStatus: "SUCCESS", isDraft: false
+                    reviewDecision: "APPROVED", checkStatus: "SUCCESS", isDraft: false, state: "OPEN"
                 ),
             ]
         ))
@@ -139,7 +139,7 @@ struct DetailSmallView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(viewData.pullRequests.prefix(3)) { pr in
                         HStack(spacing: 4) {
-                            ReviewDecisionIcon(decision: pr.reviewDecision)
+                            WidgetCheckStatusIcon(status: pr.checkStatus)
                             Text(pr.title)
                                 .font(.system(size: 10))
                                 .lineLimit(1)
@@ -343,35 +343,35 @@ private let samplePRs: [WidgetPullRequest] = [
         url: sampleURL,
         repositoryName: "org/api-service", authorLogin: "alice",
         createdAt: .now.addingTimeInterval(-3600),
-        reviewDecision: "APPROVED", checkStatus: "SUCCESS", isDraft: false
+        reviewDecision: "APPROVED", checkStatus: "SUCCESS", isDraft: false, state: "OPEN"
     ),
     WidgetPullRequest(
         id: "2", number: 87, title: "Fix race condition in queue processor",
         url: sampleURL,
         repositoryName: "org/worker", authorLogin: "bob",
         createdAt: .now.addingTimeInterval(-86400),
-        reviewDecision: "CHANGES_REQUESTED", checkStatus: "FAILURE", isDraft: false
+        reviewDecision: "CHANGES_REQUESTED", checkStatus: "FAILURE", isDraft: false, state: "OPEN"
     ),
     WidgetPullRequest(
         id: "3", number: 231, title: "Update dependencies to latest versions",
         url: sampleURL,
         repositoryName: "org/frontend", authorLogin: "carol",
         createdAt: .now.addingTimeInterval(-172800),
-        reviewDecision: nil, checkStatus: "PENDING", isDraft: false
+        reviewDecision: nil, checkStatus: "PENDING", isDraft: false, state: "OPEN"
     ),
     WidgetPullRequest(
         id: "4", number: 55, title: "Refactor database migration scripts",
         url: sampleURL,
         repositoryName: "org/infra", authorLogin: "dave",
         createdAt: .now.addingTimeInterval(-259200),
-        reviewDecision: "REVIEW_REQUIRED", checkStatus: "SUCCESS", isDraft: true
+        reviewDecision: "REVIEW_REQUIRED", checkStatus: "SUCCESS", isDraft: true, state: "OPEN"
     ),
     WidgetPullRequest(
         id: "5", number: 99, title: "Add comprehensive logging for API calls",
         url: sampleURL,
         repositoryName: "org/api-service", authorLogin: "eve",
         createdAt: .now.addingTimeInterval(-7200),
-        reviewDecision: "APPROVED", checkStatus: "SUCCESS", isDraft: false
+        reviewDecision: "APPROVED", checkStatus: "SUCCESS", isDraft: false, state: "MERGED"
     ),
 ]
 
