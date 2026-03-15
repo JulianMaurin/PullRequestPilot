@@ -17,6 +17,7 @@ struct PullRequestPilotApp: App {
             if let appState {
                 ContentView(
                     dashboardViewModel: appState.dashboardViewModel,
+                    prDetailViewModel: appState.prDetailViewModel,
                     settingsViewModel: appState.settingsViewModel
                 )
                 .background(WindowAccessor())

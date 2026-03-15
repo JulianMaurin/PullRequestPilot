@@ -143,6 +143,146 @@ struct ViewerNode: Decodable {
     let avatarUrl: String?
 }
 
+// MARK: - Timeline Response
+
+struct TimelineNodeData: Decodable {
+    let node: TimelinePullRequestNode?
+}
+
+struct TimelinePullRequestNode: Decodable {
+    let timelineItems: TimelineItemsConnection?
+}
+
+struct TimelineItemsConnection: Decodable {
+    let nodes: [TimelineItemDetailNode]
+    let pageInfo: PageInfo
+}
+
+struct TimelineItemDetailNode: Decodable {
+    // swiftlint:disable:next identifier_name
+    let __typename: String
+    let createdAt: String?
+    let author: PullRequestNode.AuthorNode?
+    let actor: PullRequestNode.AuthorNode?
+    let state: String?
+    let body: String?
+    let commit: CommitDetailNode?
+    let assignee: AssigneeNode?
+    let requestedReviewer: RequestedReviewerNode?
+
+    struct CommitDetailNode: Decodable {
+        let committedDate: String?
+        let message: String?
+        let author: CommitAuthorWrapper?
+
+        struct CommitAuthorWrapper: Decodable {
+            let user: PullRequestNode.AuthorNode?
+        }
+    }
+
+    struct AssigneeNode: Decodable {
+        let login: String?
+    }
+
+    struct RequestedReviewerNode: Decodable {
+        let login: String?
+        let name: String?
+    }
+}
+
+extension TimelineItemsConnection {
+    func toDomain() -> [TimelineEvent] {
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        let fallbackFormatter = ISO8601DateFormatter()
+        fallbackFormatter.formatOptions = [.withInternetDateTime]
+
+        return nodes.enumerated().compactMap { index, node in
+            let kind: TimelineEventKind
+            let actorNode: PullRequestNode.AuthorNode?
+            let dateString: String?
+            let body: String?
+
+            switch node.__typename {
+            case "IssueComment":
+                kind = .comment
+                actorNode = node.author
+                dateString = node.createdAt
+                body = node.body
+            case "PullRequestReview":
+                let reviewState: ReviewState? = node.state.flatMap { ReviewState(rawValue: $0) }
+                kind = .review(reviewState)
+                actorNode = node.author
+                dateString = node.createdAt
+                body = node.body
+            case "MergedEvent":
+                kind = .merged
+                actorNode = node.actor
+                dateString = node.createdAt
+                body = nil
+            case "ClosedEvent":
+                kind = .closed
+                actorNode = node.actor
+                dateString = node.createdAt
+                body = nil
+            case "ReopenedEvent":
+                kind = .reopened
+                actorNode = node.actor
+                dateString = node.createdAt
+                body = nil
+            case "HeadRefForcePushedEvent":
+                kind = .forcePushed
+                actorNode = node.actor
+                dateString = node.createdAt
+                body = nil
+            case "PullRequestCommit":
+                kind = .commit(message: node.commit?.message)
+                actorNode = node.commit?.author?.user
+                dateString = node.commit?.committedDate ?? node.createdAt
+                body = nil
+            case "ReadyForReviewEvent":
+                kind = .readyForReview
+                actorNode = node.actor
+                dateString = node.createdAt
+                body = nil
+            case "ConvertToDraftEvent":
+                kind = .convertedToDraft
+                actorNode = node.actor
+                dateString = node.createdAt
+                body = nil
+            case "AssignedEvent":
+                kind = .assigned(assignee: node.assignee?.login ?? "unknown")
+                actorNode = node.actor
+                dateString = node.createdAt
+                body = nil
+            case "ReviewRequestedEvent":
+                let reviewer = node.requestedReviewer?.login ?? node.requestedReviewer?.name ?? "unknown"
+                kind = .reviewRequested(reviewer: reviewer)
+                actorNode = node.actor
+                dateString = node.createdAt
+                body = nil
+            default:
+                return nil
+            }
+
+            guard let dateStr = dateString,
+                  let date = isoFormatter.date(from: dateStr) ?? fallbackFormatter.date(from: dateStr) else {
+                return nil
+            }
+
+            let actor = actorNode.map { Author(login: $0.login, avatarURL: $0.avatarUrl.flatMap(URL.init(string:))) }
+            return TimelineEvent(
+                id: "\(index)-\(node.__typename)-\(dateStr)",
+                kind: kind,
+                actor: actor,
+                timestamp: date,
+                body: body
+            )
+        }
+    }
+}
+
 // MARK: - DTO → Domain Mapping
 
 extension PullRequestNode {

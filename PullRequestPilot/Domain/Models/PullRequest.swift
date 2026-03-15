@@ -40,7 +40,7 @@ struct Repository: Hashable {
     var name: String { String(nameWithOwner.split(separator: "/").last ?? "") }
 }
 
-struct Author: Hashable {
+struct Author: Hashable, Sendable {
     let login: String
     let avatarURL: URL?
 }
@@ -77,7 +77,7 @@ struct UserReview: Hashable {
     let state: ReviewState
 }
 
-enum ReviewState: String {
+enum ReviewState: String, Sendable {
     case approved = "APPROVED"
     case changesRequested = "CHANGES_REQUESTED"
     case commented = "COMMENTED"

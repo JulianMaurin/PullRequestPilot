@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct ReviewQueueView: View {
     @Bindable var viewModel: DashboardViewModel
+    var prDetailViewModel: PRDetailViewModel
     var onOpenSettings: () -> Void
     @State private var expandedStacks: Set<String> = []
     @State private var collapsedOrgs: Set<String> = []
@@ -21,7 +22,14 @@ struct ReviewQueueView: View {
             viewTabs
             queryBar
             Divider()
-            contentArea
+            HSplitView {
+                contentArea
+                    .frame(minWidth: 350)
+                if prDetailViewModel.selectedPR != nil {
+                    PRDetailView(viewModel: prDetailViewModel)
+                        .frame(minWidth: 500, maxWidth: 700)
+                }
+            }
         }
         .onTapGesture {
             isQueryFocused = false
@@ -30,6 +38,7 @@ struct ReviewQueueView: View {
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Button {
+                    prDetailViewModel.deselect()
                     Task {
                         if let id = viewModel.selectedViewID {
                             await viewModel.refresh(viewID: id)
@@ -51,6 +60,7 @@ struct ReviewQueueView: View {
             }
             ToolbarItem(placement: .automatic) {
                 Button {
+                    prDetailViewModel.deselect()
                     onOpenSettings()
                 } label: {
                     Image(systemName: "gearshape")
@@ -67,6 +77,11 @@ struct ReviewQueueView: View {
         }
         .onChange(of: viewModel.selectedViewID) {
             syncEditingQuery()
+            prDetailViewModel.deselect()
+        }
+        .onKeyPress(.escape) {
+            prDetailViewModel.deselect()
+            return .handled
         }
         .alert("Delete View", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) { viewToDelete = nil }
@@ -106,6 +121,7 @@ struct ReviewQueueView: View {
     private func tabButton(for dashView: DashboardView) -> some View {
         let isSelected = dashView.id == viewModel.selectedViewID
         return Button {
+            prDetailViewModel.deselect()
             viewModel.selectedViewID = dashView.id
         } label: {
             HStack(spacing: 4) {
@@ -155,6 +171,7 @@ struct ReviewQueueView: View {
 
     private var addButton: some View {
         Button {
+            prDetailViewModel.deselect()
             newViewTitle = ""
             newViewQuery = ""
             isAddingView = true
@@ -178,6 +195,7 @@ struct ReviewQueueView: View {
             TextField("GitHub search query", text: $editingQuery, onCommit: {
                 commitQueryEdit()
             })
+            .onTapGesture { prDetailViewModel.deselect() }
             .textFieldStyle(.plain)
             .font(.system(.caption, design: .monospaced))
             .foregroundStyle(isQueryFocused ? .primary : .tertiary)
@@ -350,6 +368,7 @@ struct ReviewQueueView: View {
             }
         } header: {
             Button {
+                prDetailViewModel.deselect()
                 withAnimation(.easeInOut(duration: 0.2)) {
                     if isOrgCollapsed {
                         collapsedOrgs.remove(orgGroup.org)
@@ -428,6 +447,7 @@ struct ReviewQueueView: View {
         let prCount = repoGroup.stacks.reduce(0) { $0 + $1.totalCount }
 
         Button {
+            prDetailViewModel.deselect()
             withAnimation(.easeInOut(duration: 0.2)) {
                 if isRepoCollapsed {
                     collapsedRepos.remove(repoKey)
@@ -543,9 +563,19 @@ struct ReviewQueueView: View {
                 }
             }
         }
+        .padding(.trailing, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(prDetailViewModel.selectedPR?.id == pr.id
+                    ? Color.accentColor.opacity(0.15)
+                    : Color.clear)
+        )
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
             viewModel.openInBrowser(pr)
+        }
+        .onTapGesture(count: 1) {
+            prDetailViewModel.selectPR(pr)
         }
         .onAppear {
             if isLast, viewModel.selectedViewState.canLoadMore {

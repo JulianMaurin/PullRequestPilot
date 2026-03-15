@@ -47,6 +47,40 @@ struct GitHubGraphQLTests {
         }
     }
 
+    // MARK: - Timeline Query
+
+    @Test("timelineQuery includes nodeID")
+    func timelineQueryIncludesNodeID() {
+        let query = GitHubGraphQL.timelineQuery(nodeID: "PR_abc123")
+        #expect(query.contains(#"node(id: "PR_abc123")"#))
+    }
+
+    @Test("timelineQuery without cursor omits after parameter")
+    func timelineQueryNoCursor() {
+        let query = GitHubGraphQL.timelineQuery(nodeID: "PR_1")
+        #expect(!query.contains("after:"))
+    }
+
+    @Test("timelineQuery with cursor includes after parameter")
+    func timelineQueryWithCursor() {
+        let query = GitHubGraphQL.timelineQuery(nodeID: "PR_1", cursor: "cursor123")
+        #expect(query.contains(#"after: "cursor123""#))
+    }
+
+    @Test("timelineQuery includes all event types")
+    func timelineQueryIncludesAllEventTypes() {
+        let query = GitHubGraphQL.timelineQuery(nodeID: "PR_1")
+        let expectedTypes = [
+            "ISSUE_COMMENT", "PULL_REQUEST_REVIEW", "MERGED_EVENT",
+            "CLOSED_EVENT", "HEAD_REF_FORCE_PUSHED_EVENT", "PULL_REQUEST_COMMIT",
+            "REOPENED_EVENT", "READY_FOR_REVIEW_EVENT", "CONVERT_TO_DRAFT_EVENT",
+            "ASSIGNED_EVENT", "REVIEW_REQUESTED_EVENT",
+        ]
+        for eventType in expectedTypes {
+            #expect(query.contains(eventType), "Missing event type: \(eventType)")
+        }
+    }
+
     @Test("viewerQuery requests viewer login")
     func viewerQueryContent() {
         let query = GitHubGraphQL.viewerQuery

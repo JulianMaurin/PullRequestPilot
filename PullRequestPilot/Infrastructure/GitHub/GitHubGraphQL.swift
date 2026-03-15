@@ -102,6 +102,98 @@ enum GitHubGraphQL {
         """
     }
 
+    static func timelineQuery(nodeID: String, cursor: String? = nil) -> String {
+        let after = cursor.map { ", after: \"\($0)\"" } ?? ""
+        return """
+        {
+          node(id: "\(nodeID)") {
+            ... on PullRequest {
+              timelineItems(first: 100, itemTypes: [
+                ISSUE_COMMENT,
+                PULL_REQUEST_REVIEW,
+                MERGED_EVENT,
+                CLOSED_EVENT,
+                HEAD_REF_FORCE_PUSHED_EVENT,
+                PULL_REQUEST_COMMIT,
+                REOPENED_EVENT,
+                READY_FOR_REVIEW_EVENT,
+                CONVERT_TO_DRAFT_EVENT,
+                ASSIGNED_EVENT,
+                REVIEW_REQUESTED_EVENT
+              ]\(after)) {
+                nodes {
+                  __typename
+                  ... on IssueComment {
+                    createdAt
+                    author { login avatarUrl }
+                    body
+                  }
+                  ... on PullRequestReview {
+                    createdAt
+                    state
+                    author { login avatarUrl }
+                    body
+                  }
+                  ... on MergedEvent {
+                    createdAt
+                    actor { login avatarUrl }
+                  }
+                  ... on ClosedEvent {
+                    createdAt
+                    actor { login avatarUrl }
+                  }
+                  ... on HeadRefForcePushedEvent {
+                    createdAt
+                    actor { login avatarUrl }
+                  }
+                  ... on PullRequestCommit {
+                    commit {
+                      committedDate
+                      message
+                      author {
+                        user { login avatarUrl }
+                      }
+                    }
+                  }
+                  ... on ReopenedEvent {
+                    createdAt
+                    actor { login avatarUrl }
+                  }
+                  ... on ReadyForReviewEvent {
+                    createdAt
+                    actor { login avatarUrl }
+                  }
+                  ... on ConvertToDraftEvent {
+                    createdAt
+                    actor { login avatarUrl }
+                  }
+                  ... on AssignedEvent {
+                    createdAt
+                    actor { login avatarUrl }
+                    assignee {
+                      ... on User { login }
+                    }
+                  }
+                  ... on ReviewRequestedEvent {
+                    createdAt
+                    actor { login avatarUrl }
+                    requestedReviewer {
+                      ... on User { login }
+                      ... on Team { name }
+                    }
+                  }
+                }
+                pageInfo {
+                  hasNextPage
+                  endCursor
+                }
+              }
+            }
+          }
+        }
+        """
+    }
+
     static let viewerQuery = """
     {
       viewer {

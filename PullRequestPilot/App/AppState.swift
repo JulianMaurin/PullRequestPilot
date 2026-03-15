@@ -11,6 +11,7 @@ final class AppState {
     let localRepositoryService: LocalRepositoryService
 
     let dashboardViewModel: DashboardViewModel
+    let prDetailViewModel: PRDetailViewModel
     let settingsViewModel: SettingsViewModel
 
     init() {
@@ -29,6 +30,7 @@ final class AppState {
         self.viewsStore = viewsStore
         self.gitDirectoriesStore = gitDirectoriesStore
         self.localRepositoryService = localRepositoryService
+        self.prDetailViewModel = PRDetailViewModel(gitHubClient: gitHubClient)
         self.dashboardViewModel = DashboardViewModel(
             gitHubClient: gitHubClient,
             viewsStore: viewsStore,

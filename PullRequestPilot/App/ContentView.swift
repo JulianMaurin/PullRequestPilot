@@ -2,13 +2,15 @@ import SwiftUI
 
 struct ContentView: View {
     let dashboardViewModel: DashboardViewModel
+    let prDetailViewModel: PRDetailViewModel
     let settingsViewModel: SettingsViewModel
     @State private var showingSettings = false
     /// True when the app launched without a saved token — stays true until "Get Started" is clicked.
     @State private var needsInitialSetup: Bool
 
-    init(dashboardViewModel: DashboardViewModel, settingsViewModel: SettingsViewModel) {
+    init(dashboardViewModel: DashboardViewModel, prDetailViewModel: PRDetailViewModel, settingsViewModel: SettingsViewModel) {
         self.dashboardViewModel = dashboardViewModel
+        self.prDetailViewModel = prDetailViewModel
         self.settingsViewModel = settingsViewModel
         self._needsInitialSetup = State(initialValue: !settingsViewModel.hasSavedToken)
     }
@@ -39,7 +41,7 @@ struct ContentView: View {
                         }
                     }
             } else {
-                ReviewQueueView(viewModel: dashboardViewModel, onOpenSettings: {
+                ReviewQueueView(viewModel: dashboardViewModel, prDetailViewModel: prDetailViewModel, onOpenSettings: {
                     showingSettings = true
                 })
                 .navigationTitle("")

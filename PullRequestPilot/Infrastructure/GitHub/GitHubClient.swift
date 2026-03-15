@@ -9,8 +9,14 @@ struct PullRequestPage: Sendable {
     var hasNextPage: Bool { nextCursor != nil }
 }
 
+struct TimelinePage: Sendable {
+    let events: [TimelineEvent]
+    let nextCursor: String?
+}
+
 protocol GitHubClientProtocol: Sendable {
     func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage
+    func fetchTimeline(nodeID: String, cursor: String?) async throws -> TimelinePage
     func fetchViewer() async throws -> (login: String, avatarURL: URL?)
 }
 
@@ -70,6 +76,24 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
 
         let nextCursor = data.search.pageInfo.hasNextPage ? data.search.pageInfo.endCursor : nil
         return PullRequestPage(pullRequests: prs, nextCursor: nextCursor)
+    }
+
+    func fetchTimeline(nodeID: String, cursor: String? = nil) async throws -> TimelinePage {
+        let query = GitHubGraphQL.timelineQuery(nodeID: nodeID, cursor: cursor)
+        let response: GraphQLResponse<TimelineNodeData> = try await execute(query: query)
+
+        guard let data = response.data else {
+            let messages = response.errors?.map(\.message) ?? ["Unknown error"]
+            throw GitHubClientError.graphQLErrors(messages)
+        }
+
+        guard let connection = data.node?.timelineItems else {
+            return TimelinePage(events: [], nextCursor: nil)
+        }
+
+        let events = connection.toDomain()
+        let nextCursor = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : nil
+        return TimelinePage(events: events, nextCursor: nextCursor)
     }
 
     func fetchViewer() async throws -> (login: String, avatarURL: URL?) {

@@ -6,6 +6,8 @@ final class MockGitHubClient: GitHubClientProtocol, @unchecked Sendable {
     var nextCursorToReturn: String?
     var viewerLoginToReturn: String = "testuser"
     var viewerAvatarURLToReturn: URL?
+    var timelineEventsToReturn: [TimelineEvent] = []
+    var timelineNextCursorToReturn: String?
     var errorToThrow: Error?
     var fetchPullRequestsCallCount = 0
     var receivedQueries: [String] = []
@@ -17,6 +19,11 @@ final class MockGitHubClient: GitHubClientProtocol, @unchecked Sendable {
         receivedCursors.append(cursor)
         if let error = errorToThrow { throw error }
         return PullRequestPage(pullRequests: pullRequestsToReturn, nextCursor: nextCursorToReturn)
+    }
+
+    func fetchTimeline(nodeID: String, cursor: String?) async throws -> TimelinePage {
+        if let error = errorToThrow { throw error }
+        return TimelinePage(events: timelineEventsToReturn, nextCursor: timelineNextCursorToReturn)
     }
 
     func fetchViewer() async throws -> (login: String, avatarURL: URL?) {
