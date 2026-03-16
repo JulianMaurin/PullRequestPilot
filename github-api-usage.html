@@ -21,13 +21,18 @@
         }
         h1 { font-size: 1.6em; }
         h2 { font-size: 1.2em; margin-top: 1.5em; }
+        .back { font-size: 0.9em; margin-bottom: 1.5em; display: inline-block; }
         code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
         @media (prefers-color-scheme: dark) {
             code { background: #333; }
         }
+        nav { margin: 2em 0; border-top: 1px solid #e5e5e5; padding-top: 1.5em; }
+        @media (prefers-color-scheme: dark) { nav { border-color: #333; } }
+        nav a { margin-right: 1.5em; }
     </style>
 </head>
 <body>
+    <a class="back" href="./">&larr; Pull Request Pilot</a>
     <h1>GitHub API Usage</h1>
 
     <h2>GitHub API Compliance</h2>
@@ -44,6 +49,10 @@
 
     <p>See also: <a href="./privacy">Privacy Policy</a> for data handling details.</p>
 
-    <p><a href="./">← Back to Pull Request Pilot</a></p>
+    <nav>
+        <a href="changelog">Changelog</a>
+        <a href="privacy">Privacy Policy</a>
+        <a href="support">Support</a>
+    </nav>
 </body>
 </html>
