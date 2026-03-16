@@ -5,9 +5,6 @@ import UserNotifications
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     private var statusItem: NSStatusItem?
-    private var clickCount = 0
-    private var clickTimer: Timer?
-
     /// Set by PullRequestPilotApp once AppState is available.
     var dashboardViewModel: DashboardViewModel?
 
@@ -24,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             }
             button.action = #selector(statusBarButtonClicked)
             button.target = self
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
     }
 
@@ -51,19 +49,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     // MARK: - Status Bar Click Handling
 
     @objc private func statusBarButtonClicked() {
-        clickCount += 1
-        if clickCount == 2 {
-            clickTimer?.invalidate()
-            clickTimer = nil
-            clickCount = 0
+        guard let event = NSApp.currentEvent else {
             showWindow()
+            return
+        }
+
+        if event.modifierFlags.contains(.control) || event.type == .rightMouseUp {
+            showStatusMenu()
         } else {
-            clickTimer = Timer.scheduledTimer(withTimeInterval: NSEvent.doubleClickInterval, repeats: false) { [weak self] _ in
-                Task { @MainActor in
-                    self?.clickCount = 0
-                    self?.showStatusMenu()
-                }
-            }
+            showWindow()
         }
     }
 
@@ -106,9 +100,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     // MARK: - Window
 
     private func showWindow() {
-        NSApplication.shared.activate()
         if let window = NSApplication.shared.windows.first(where: { $0.canBecomeKey }) {
+            window.collectionBehavior.insert(.moveToActiveSpace)
             window.makeKeyAndOrderFront(nil)
         }
+        NSApplication.shared.activate()
     }
 }
