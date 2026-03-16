@@ -352,24 +352,26 @@ struct ReviewQueueView: View {
 
     private func listView(_ pullRequests: [PullRequest]) -> some View {
         let grouped = groupedByOrgAndRepo(pullRequests)
-        return List {
-            ForEach(grouped, id: \.org) { orgGroup in
-                orgSection(orgGroup, pullRequests: pullRequests)
-            }
-            if viewModel.selectedViewState.isLoadingMore {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Loading more...")
-                        .foregroundStyle(.secondary)
-                        .font(.caption)
-                    Spacer()
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(grouped.enumerated()), id: \.element.org) { _, orgGroup in
+                    orgSection(orgGroup, pullRequests: pullRequests)
                 }
-                .padding(.vertical, 8)
+                if viewModel.selectedViewState.isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Loading more...")
+                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                        Spacer()
+                    }
+                    .padding(.vertical, 8)
+                }
             }
+            .padding(.vertical, 4)
         }
-        .listStyle(.inset(alternatesRowBackgrounds: true))
     }
 
     @ViewBuilder
@@ -377,82 +379,82 @@ struct ReviewQueueView: View {
         let isOrgCollapsed = collapsedOrgs.contains(orgGroup.org)
         let prCount = orgGroup.repos.reduce(0) { $0 + $1.stacks.reduce(0) { $0 + $1.totalCount } }
 
-        Section {
-            if !isOrgCollapsed {
-                ForEach(orgGroup.repos, id: \.repo) { repoGroup in
-                    repoSection(repoGroup, org: orgGroup.org, pullRequests: pullRequests)
-                }
-            }
-        } header: {
-            Button {
-                prDetailViewModel.deselect()
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    if isOrgCollapsed {
-                        collapsedOrgs.remove(orgGroup.org)
-                    } else {
-                        collapsedOrgs.insert(orgGroup.org)
-                    }
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: isOrgCollapsed ? "chevron.right" : "chevron.down")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 10)
-                    Text(orgGroup.org)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                    Text("\(prCount)")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                    Spacer()
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .contextMenu {
+        Button {
+            prDetailViewModel.deselect()
+            withAnimation(.easeInOut(duration: 0.2)) {
                 if isOrgCollapsed {
-                    Button("Expand") {
-                        withAnimation { _ = collapsedOrgs.remove(orgGroup.org) }
-                    }
+                    collapsedOrgs.remove(orgGroup.org)
                 } else {
-                    Button("Collapse Repos") {
-                        withAnimation {
-                            for repo in orgGroup.repos {
-                                collapsedRepos.insert("\(orgGroup.org)/\(repo.repo)")
-                            }
+                    collapsedOrgs.insert(orgGroup.org)
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: isOrgCollapsed ? "chevron.right" : "chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 10)
+                Text(orgGroup.org)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Text("\(prCount)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .contextMenu {
+            if isOrgCollapsed {
+                Button("Expand") {
+                    withAnimation { _ = collapsedOrgs.remove(orgGroup.org) }
+                }
+            } else {
+                Button("Collapse Repos") {
+                    withAnimation {
+                        for repo in orgGroup.repos {
+                            collapsedRepos.insert("\(orgGroup.org)/\(repo.repo)")
                         }
                     }
-                    Button("Expand Repos") {
-                        withAnimation {
-                            for repo in orgGroup.repos {
-                                _ = collapsedRepos.remove("\(orgGroup.org)/\(repo.repo)")
-                            }
-                        }
-                    }
-                    Divider()
-                    Button("Collapse All Orgs") {
-                        withAnimation {
-                            let grouped = groupedByOrgAndRepo(viewModel.selectedViewState.pullRequests)
-                            for org in grouped { collapsedOrgs.insert(org.org) }
-                        }
-                    }
-                    Button("Expand All Orgs") {
-                        withAnimation {
-                            collapsedOrgs.removeAll()
+                }
+                Button("Expand Repos") {
+                    withAnimation {
+                        for repo in orgGroup.repos {
+                            _ = collapsedRepos.remove("\(orgGroup.org)/\(repo.repo)")
                         }
                     }
                 }
                 Divider()
-                Button {
-                    appendFilter("org:\(orgGroup.org)")
-                } label: {
-                    SwiftUI.Label(
-                        "Filter by org \"\(orgGroup.org)\"",
-                        systemImage: "line.3.horizontal.decrease.circle"
-                    )
+                Button("Collapse All Orgs") {
+                    withAnimation {
+                        let grouped = groupedByOrgAndRepo(viewModel.selectedViewState.pullRequests)
+                        for org in grouped { collapsedOrgs.insert(org.org) }
+                    }
                 }
-                .disabled(viewModel.views.first(where: { $0.id == viewModel.selectedViewID })?.query.contains("org:\(orgGroup.org)") ?? true)
+                Button("Expand All Orgs") {
+                    withAnimation {
+                        collapsedOrgs.removeAll()
+                    }
+                }
+            }
+            Divider()
+            Button {
+                appendFilter("org:\(orgGroup.org)")
+            } label: {
+                SwiftUI.Label(
+                    "Filter by org \"\(orgGroup.org)\"",
+                    systemImage: "line.3.horizontal.decrease.circle"
+                )
+            }
+            .disabled(viewModel.views.first(where: { $0.id == viewModel.selectedViewID })?.query.contains("org:\(orgGroup.org)") ?? true)
+        }
+
+        if !isOrgCollapsed {
+            ForEach(orgGroup.repos, id: \.repo) { repoGroup in
+                repoSection(repoGroup, org: orgGroup.org, pullRequests: pullRequests)
             }
         }
     }
@@ -489,7 +491,9 @@ struct ReviewQueueView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .padding(.horizontal, 12)
         .padding(.leading, 8)
+        .padding(.vertical, 4)
         .contextMenu {
             Button {
                 appendFilter("repo:\(org)/\(repoGroup.repo)")
@@ -580,12 +584,15 @@ struct ReviewQueueView: View {
                 }
             }
         }
+        .padding(.horizontal, 12)
         .padding(.trailing, 4)
+        .padding(.vertical, 2)
         .background(
             RoundedRectangle(cornerRadius: 4)
                 .fill(prDetailViewModel.selectedPR?.id == pr.id
                     ? Color.accentColor.opacity(0.15)
                     : Color.clear)
+                .padding(.horizontal, 8)
         )
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
