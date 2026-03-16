@@ -31,6 +31,12 @@ struct ReviewQueueView: View {
                 }
             }
         }
+        .onChange(of: viewModel.selectedViewState.pullRequests) {
+            if let selected = prDetailViewModel.selectedPR,
+               !viewModel.selectedViewState.pullRequests.contains(where: { $0.id == selected.id }) {
+                prDetailViewModel.deselect()
+            }
+        }
         .onTapGesture {
             isQueryFocused = false
         }
