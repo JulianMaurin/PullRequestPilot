@@ -18,7 +18,6 @@
         @media (prefers-color-scheme: dark) {
             body { color: #f5f5f7; background: #1d1d1f; }
             a { color: #6cb4ee; }
-            .feature { border-color: #333; }
         }
         h1 { font-size: 1.8em; margin-bottom: 0.2em; }
         h2 { font-size: 1.3em; margin-top: 2em; }
@@ -38,18 +37,7 @@
         @media (prefers-color-scheme: dark) {
             .badge span { background: #333; color: #aaa; }
         }
-        .features { margin-top: 1.5em; }
-        .feature {
-            border: 1px solid #e5e5e5;
-            border-radius: 10px;
-            padding: 14px 16px;
-            margin-bottom: 10px;
-        }
-        .feature strong { display: block; margin-bottom: 4px; }
-        .feature p { margin: 0; font-size: 0.95em; color: #555; }
-        @media (prefers-color-scheme: dark) {
-            .feature p { color: #aaa; }
-        }
+        .screenshot { width: 100%; height: auto; border-radius: 10px; margin: 1.5em 0; }
         nav { margin: 2em 0; border-top: 1px solid #e5e5e5; padding-top: 1.5em; }
         @media (prefers-color-scheme: dark) { nav { border-color: #333; } }
         nav a { margin-right: 1.5em; }
@@ -70,39 +58,15 @@
         </div>
     </div>
 
-    <h2>Features</h2>
-    <div class="features">
-        <div class="feature">
-            <strong>Custom Dashboard Views</strong>
-            <p>Create filtered views using any GitHub search query. Monitor review requests, your own PRs, team activity, or anything you can search for on GitHub.</p>
-        </div>
-        <div class="feature">
-            <strong>Rich PR Details</strong>
-            <p>See author, review status, CI checks, comment threads with unresolved counts, labels, lines changed, and age at a glance. PRs are grouped by organization and repository.</p>
-        </div>
-        <div class="feature">
-            <strong>PR Stack Detection</strong>
-            <p>Automatically detects stacked PRs and displays them as expandable chains, so you can review dependent changes in order.</p>
-        </div>
-        <div class="feature">
-            <strong>Local Repository Integration</strong>
-            <p>Point the app at your git directories and it matches PRs to local branches, worktrees, and recent commits. Open any PR directly in VS Code or iTerm.</p>
-        </div>
-        <div class="feature">
-            <strong>Desktop Notifications</strong>
-            <p>Get notified when new pull requests appear in any of your views. Configurable per view.</p>
-        </div>
-        <div class="feature">
-            <strong>Desktop Widgets</strong>
-            <p>Add summary and detail widgets to your desktop for a quick overview of your review queue without opening the app.</p>
-        </div>
-        <div class="feature">
-            <strong>Auto-Refresh</strong>
-            <p>Configurable refresh intervals from 30 seconds to 30 minutes for both PR data and local repository scanning.</p>
-        </div>
-    </div>
+    <p>Create custom views to organize PRs the way you work — needs my review, my PRs, my drafts, recently merged, or build your own with GitHub search filters. See PR details, labels, review status, and recent activity at a glance.</p>
 
-    <p class="requirements">Requires macOS 14 (Sonoma) or later and a GitHub personal access token with <code>repo</code> scope.</p>
+    <p>Add desktop widgets to keep your review queue visible at all times — from a simple count to a full PR list, in multiple sizes.</p>
+
+    <p>Get notified when new pull requests appear in any of your views so you never miss an update.</p>
+
+    <img class="screenshot" src="screenshot.png" alt="Pull Request Pilot — PR list with detail panel" width="2880" height="1800">
+
+    <p class="requirements">Built natively with SwiftUI. No external dependencies, no tracking, no data collection.<br>Requires macOS 14 (Sonoma) or later.</p>
 
     <nav>
         <a href="changelog">Changelog</a>
