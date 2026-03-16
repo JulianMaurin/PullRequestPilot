@@ -279,4 +279,30 @@ struct GitHubClientTests {
         }
         """
     }
+
+    // MARK: - isNetworkError
+
+    @Test("isNetworkError returns true for GitHubClientError.networkError")
+    func networkErrorDetected() {
+        let error: Error = GitHubClientError.networkError(URLError(.notConnectedToInternet))
+        #expect(error.isNetworkError)
+    }
+
+    @Test("isNetworkError returns true for URLError offline codes")
+    func urlErrorOfflineDetected() {
+        let codes: [URLError.Code] = [
+            .notConnectedToInternet, .networkConnectionLost, .timedOut,
+            .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed,
+        ]
+        for code in codes {
+            let error: Error = URLError(code)
+            #expect(error.isNetworkError, "Expected true for URLError code \(code.rawValue)")
+        }
+    }
+
+    @Test("isNetworkError returns false for non-network errors")
+    func nonNetworkErrorReturnsFalse() {
+        let error: Error = GitHubClientError.unauthorized
+        #expect(!error.isNetworkError)
+    }
 }

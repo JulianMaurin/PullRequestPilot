@@ -8,6 +8,7 @@ final class PRDetailViewModel {
     private(set) var checkRuns: [CheckRun] = []
     private(set) var isLoading = false
     private(set) var error: String?
+    private(set) var isNetworkError = false
 
     private let gitHubClient: GitHubClientProtocol
     private var fetchTask: Task<Void, Never>?
@@ -32,6 +33,7 @@ final class PRDetailViewModel {
         timelineEvents = []
         checkRuns = []
         error = nil
+        isNetworkError = false
         isLoading = false
     }
 
@@ -42,6 +44,7 @@ final class PRDetailViewModel {
         fetchTask = Task {
             isLoading = true
             error = nil
+            isNetworkError = false
             timelineEvents = []
             checkRuns = []
             do {
@@ -63,6 +66,7 @@ final class PRDetailViewModel {
                 return
             } catch {
                 guard !Task.isCancelled else { return }
+                self.isNetworkError = error.isNetworkError
                 self.error = error.localizedDescription
             }
             isLoading = false

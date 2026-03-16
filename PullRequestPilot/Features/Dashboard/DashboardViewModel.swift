@@ -10,6 +10,7 @@ struct ViewState {
     var isLoading = false
     var isLoadingMore = false
     var error: String?
+    var isNetworkError = false
     var nextCursor: String?
     var reachedLimit = false
 
@@ -62,6 +63,7 @@ final class DashboardViewModel {
         }
         viewStates[viewID]?.isLoading = true
         viewStates[viewID]?.error = nil
+        viewStates[viewID]?.isNetworkError = false
 
         if view.hideReviewed {
             await fetchViewerLoginIfNeeded()
@@ -88,6 +90,7 @@ final class DashboardViewModel {
             return
         } catch {
             logger.error("Failed to fetch PRs for '\(view.title, privacy: .public)': \(error, privacy: .public)")
+            viewStates[viewID]?.isNetworkError = error.isNetworkError
             viewStates[viewID]?.error = error.localizedDescription
         }
 
@@ -117,6 +120,7 @@ final class DashboardViewModel {
             return
         } catch {
             logger.error("Failed to load more PRs for '\(view.title, privacy: .public)': \(error, privacy: .public)")
+            viewStates[viewID]?.isNetworkError = error.isNetworkError
             viewStates[viewID]?.error = error.localizedDescription
         }
 

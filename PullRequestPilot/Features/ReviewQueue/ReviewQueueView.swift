@@ -267,7 +267,7 @@ struct ReviewQueueView: View {
             if state.isLoading && !state.hasData {
                 loadingView
             } else if let error = state.error, !state.hasData {
-                errorView(error)
+                errorView(error, isNetworkError: state.isNetworkError)
             } else if state.isEmpty {
                 emptyView
             } else {
@@ -300,14 +300,25 @@ struct ReviewQueueView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func errorView(_ message: String) -> some View {
+    private func errorView(_ message: String, isNetworkError: Bool = false) -> some View {
         VStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.largeTitle)
-                .foregroundStyle(.orange)
-            Text(message)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
+            if isNetworkError {
+                Image(systemName: "wifi.slash")
+                    .font(.system(size: 40))
+                    .foregroundStyle(.secondary)
+                Text("No Connection")
+                    .font(.headline)
+                Text("Check your internet connection and try again.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+            } else {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.largeTitle)
+                    .foregroundStyle(.orange)
+                Text(message)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+            }
             Button("Retry") {
                 Task {
                     if let id = viewModel.selectedViewID {

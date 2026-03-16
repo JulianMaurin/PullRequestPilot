@@ -70,15 +70,24 @@ struct PRDetailView: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity)
-        } else if let error = viewModel.error {
+        } else if viewModel.error != nil {
             VStack(spacing: 8) {
                 Spacer()
-                Image(systemName: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+                if viewModel.isNetworkError {
+                    Image(systemName: "wifi.slash")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                    Text("No Connection")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                    Text(viewModel.error ?? "")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
                 Spacer()
             }
             .padding()
