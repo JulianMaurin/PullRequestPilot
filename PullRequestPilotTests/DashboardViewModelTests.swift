@@ -113,6 +113,69 @@ struct DashboardViewModelTests {
         #expect(!titles.contains("Approved"))
     }
 
+    // MARK: - Network Error State
+
+    @Test("refresh sets isNetworkError on network failure")
+    func refreshSetsNetworkError() async {
+        mockClient.errorToThrow = GitHubClientError.networkError(URLError(.notConnectedToInternet))
+
+        let viewModel = makeViewModel(suiteName: "NetworkError")
+        let viewID = viewModel.views.first!.id
+        await viewModel.refresh(viewID: viewID)
+
+        let state = viewModel.viewStates[viewID]!
+        #expect(state.isNetworkError)
+        #expect(state.error != nil)
+    }
+
+    @Test("refresh clears isNetworkError on success after previous network error")
+    func refreshClearsNetworkError() async {
+        mockClient.errorToThrow = GitHubClientError.networkError(URLError(.notConnectedToInternet))
+
+        let viewModel = makeViewModel(suiteName: "ClearsNetworkError")
+        let viewID = viewModel.views.first!.id
+        await viewModel.refresh(viewID: viewID)
+        #expect(viewModel.viewStates[viewID]!.isNetworkError)
+
+        mockClient.errorToThrow = nil
+        mockClient.pullRequestsToReturn = [makePullRequest(number: 1, title: "OK")]
+        await viewModel.refresh(viewID: viewID)
+
+        let state = viewModel.viewStates[viewID]!
+        #expect(!state.isNetworkError)
+        #expect(state.error == nil)
+    }
+
+    @Test("isNetworkError is false for non-network errors")
+    func nonNetworkErrorDoesNotSetFlag() async {
+        mockClient.errorToThrow = GitHubClientError.unauthorized
+
+        let viewModel = makeViewModel(suiteName: "NonNetworkError")
+        let viewID = viewModel.views.first!.id
+        await viewModel.refresh(viewID: viewID)
+
+        let state = viewModel.viewStates[viewID]!
+        #expect(!state.isNetworkError)
+        #expect(state.error != nil)
+    }
+
+    // MARK: - showingSettings
+
+    @Test("showingSettings defaults to false")
+    func showingSettingsDefault() {
+        let viewModel = makeViewModel(suiteName: "SettingsDefault")
+        #expect(!viewModel.showingSettings)
+    }
+
+    @Test("showingSettings can be toggled")
+    func showingSettingsToggle() {
+        let viewModel = makeViewModel(suiteName: "SettingsToggle")
+        viewModel.showingSettings = true
+        #expect(viewModel.showingSettings)
+        viewModel.showingSettings = false
+        #expect(!viewModel.showingSettings)
+    }
+
     // MARK: - Helpers
 
     private func makePullRequest(number: Int, title: String, reviews: [UserReview] = []) -> PullRequest {

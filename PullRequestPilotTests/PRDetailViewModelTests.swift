@@ -121,4 +121,46 @@ struct PRDetailViewModelTests {
 
         #expect(vm.selectedPR?.id == "PR_2")
     }
+
+    // MARK: - Network Error State
+
+    @Test("selectPR sets isNetworkError on network failure")
+    func selectSetsNetworkError() async throws {
+        let client = MockGitHubClient()
+        client.errorToThrow = GitHubClientError.networkError(URLError(.notConnectedToInternet))
+        let (vm, _) = makeViewModel(client: client)
+
+        vm.selectPR(makePR())
+        try await Task.sleep(for: .milliseconds(50))
+
+        #expect(vm.isNetworkError)
+        #expect(vm.error != nil)
+    }
+
+    @Test("selectPR does not set isNetworkError for non-network errors")
+    func selectDoesNotSetNetworkErrorForOtherErrors() async throws {
+        let client = MockGitHubClient()
+        client.errorToThrow = GitHubClientError.unauthorized
+        let (vm, _) = makeViewModel(client: client)
+
+        vm.selectPR(makePR())
+        try await Task.sleep(for: .milliseconds(50))
+
+        #expect(!vm.isNetworkError)
+        #expect(vm.error != nil)
+    }
+
+    @Test("deselect clears isNetworkError")
+    func deselectClearsNetworkError() async throws {
+        let client = MockGitHubClient()
+        client.errorToThrow = GitHubClientError.networkError(URLError(.timedOut))
+        let (vm, _) = makeViewModel(client: client)
+
+        vm.selectPR(makePR())
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(vm.isNetworkError)
+
+        vm.deselect()
+        #expect(!vm.isNetworkError)
+    }
 }
