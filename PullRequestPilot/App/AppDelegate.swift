@@ -99,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     // MARK: - Window
 
-    private func showWindow() {
+    func showWindow() {
         if let window = NSApplication.shared.windows.first(where: { $0.canBecomeKey }) {
             window.collectionBehavior.insert(.moveToActiveSpace)
             window.makeKeyAndOrderFront(nil)

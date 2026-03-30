@@ -25,6 +25,7 @@ final class DashboardViewModel {
     private(set) var views: [DashboardView]
     private(set) var viewStates: [UUID: ViewState] = [:]
     var selectedViewID: UUID?
+    var showingSettings = false
 
     private let gitHubClient: GitHubClientProtocol
     private let viewsStore: ViewsStore

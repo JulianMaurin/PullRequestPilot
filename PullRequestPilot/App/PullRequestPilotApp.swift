@@ -30,6 +30,34 @@ struct PullRequestPilotApp: App {
             }
         }
         .defaultSize(width: 700, height: 500)
+        .commands {
+            CommandGroup(replacing: .windowList) {
+                if let viewModel = appState?.dashboardViewModel, !viewModel.views.isEmpty {
+                    ForEach(Array(viewModel.views.enumerated()), id: \.element.id) { index, view in
+                        let count = viewModel.viewStates[view.id]?.pullRequests.count ?? 0
+                        if index < 9 {
+                            Button("\(view.title) (\(count))") {
+                                viewModel.showingSettings = false
+                                viewModel.selectedViewID = view.id
+                                appDelegate.showWindow()
+                            }
+                            .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                        } else {
+                            Button("\(view.title) (\(count))") {
+                                viewModel.showingSettings = false
+                                viewModel.selectedViewID = view.id
+                                appDelegate.showWindow()
+                            }
+                        }
+                    }
+                } else {
+                    Button("Show Pull Requests") {
+                        appDelegate.showWindow()
+                    }
+                    .keyboardShortcut("0", modifiers: .command)
+                }
+            }
+        }
     }
 }
 

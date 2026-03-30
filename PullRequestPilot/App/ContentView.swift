@@ -4,7 +4,6 @@ struct ContentView: View {
     let dashboardViewModel: DashboardViewModel
     let prDetailViewModel: PRDetailViewModel
     let settingsViewModel: SettingsViewModel
-    @State private var showingSettings = false
     /// True when the app launched without a saved token — stays true until "Get Started" is clicked.
     @State private var needsInitialSetup: Bool
 
@@ -17,22 +16,22 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            if showingSettings || needsInitialSetup {
+            if dashboardViewModel.showingSettings || needsInitialSetup {
                 SettingsView(
                     viewModel: settingsViewModel,
                     dashboardViewModel: dashboardViewModel,
                     isInitialSetup: needsInitialSetup,
                     onDismiss: {
                         needsInitialSetup = false
-                        showingSettings = false
+                        dashboardViewModel.showingSettings = false
                     }
                 )
                     .navigationTitle("Settings")
                     .toolbar {
-                        if showingSettings && !needsInitialSetup {
+                        if dashboardViewModel.showingSettings && !needsInitialSetup {
                             ToolbarItem(placement: .automatic) {
                                 Button {
-                                    showingSettings = false
+                                    dashboardViewModel.showingSettings = false
                                 } label: {
                                     Image(systemName: "xmark")
                                 }
@@ -42,15 +41,15 @@ struct ContentView: View {
                     }
             } else {
                 ReviewQueueView(viewModel: dashboardViewModel, prDetailViewModel: prDetailViewModel, onOpenSettings: {
-                    showingSettings = true
+                    dashboardViewModel.showingSettings = true
                 })
-                .navigationTitle("")
+                .navigationTitle("PR Views")
             }
         }
         .onChange(of: settingsViewModel.hasSavedToken) { _, hasSaved in
             if !hasSaved {
                 needsInitialSetup = true
-                showingSettings = false
+                dashboardViewModel.showingSettings = false
             }
         }
     }
