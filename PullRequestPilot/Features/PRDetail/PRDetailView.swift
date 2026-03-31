@@ -129,8 +129,13 @@ struct PRDetailView: View {
         }
     }
 
+    @State private var hoveredCheckRunID: String?
+
     private func checkRow(_ check: CheckRun) -> some View {
-        HStack(spacing: 8) {
+        let isHovered = hoveredCheckRunID == check.id
+        let hasLink = check.detailsURL != nil
+
+        return HStack(spacing: 8) {
             Image(systemName: check.iconName)
                 .font(.caption)
                 .foregroundStyle(iconColor(check.iconColor))
@@ -145,18 +150,31 @@ struct PRDetailView: View {
             Text(check.displayStatus)
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
-
-            if let url = check.detailsURL {
-                Link(destination: url) {
-                    Image(systemName: "arrow.up.right.square")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-                .help("Open in browser")
-            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
+        .background(isHovered && hasLink ? Color.primary.opacity(0.06) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            hoveredCheckRunID = hovering ? check.id : nil
+        }
+        .contextMenu {
+            if let url = check.detailsURL {
+                Button("Open in Browser") {
+                    NSWorkspace.shared.open(url)
+                }
+                Button("Copy URL") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(url.absoluteString, forType: .string)
+                }
+            }
+        }
+        .onTapGesture(count: 2) {
+            if let url = check.detailsURL {
+                NSWorkspace.shared.open(url)
+            }
+        }
     }
 
     // MARK: - Timeline Section
