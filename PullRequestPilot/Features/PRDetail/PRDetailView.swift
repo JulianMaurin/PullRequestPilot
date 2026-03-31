@@ -137,7 +137,7 @@ struct PRDetailView: View {
 
         return HStack(spacing: 8) {
             Image(systemName: check.iconName)
-                .font(.caption)
+                .font(check.status == .inProgress && check.conclusion == nil ? .system(size: 7) : .caption)
                 .foregroundStyle(iconColor(check.iconColor))
                 .frame(width: 20, alignment: .center)
 

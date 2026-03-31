@@ -173,8 +173,9 @@ struct PullRequestRow<RowMenu: View>: View {
     @ViewBuilder
     private var checkStatusBadge: some View {
         if let icon = checkStatusIcon {
+            let isPending = icon.name == "circle.fill"
             Image(systemName: icon.name)
-                .font(.caption2.weight(.bold))
+                .font(isPending ? .system(size: 6) : .caption2.weight(.bold))
                 .foregroundStyle(icon.color)
                 .help(checkStatusLabel)
         }
