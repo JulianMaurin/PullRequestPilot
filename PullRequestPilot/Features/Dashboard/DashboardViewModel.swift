@@ -406,6 +406,17 @@ final class DashboardViewModel {
         notifiedViewIDs = ids
     }
 
+    func requestNotificationPermissionAndOpenSettings() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        if settings.authorizationStatus == .notDetermined {
+            let granted = await requestNotificationPermission()
+            systemNotificationsAuthorized = granted
+        }
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     private func requestNotificationPermission() async -> Bool {
         do {
             return try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])

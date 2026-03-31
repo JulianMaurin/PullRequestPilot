@@ -131,8 +131,8 @@ struct SettingsView: View {
                 if !dashboardViewModel.systemNotificationsAuthorized {
                     LabeledContent {
                         Button("Open Settings") {
-                            if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings") {
-                                NSWorkspace.shared.open(url)
+                            Task {
+                                await dashboardViewModel.requestNotificationPermissionAndOpenSettings()
                             }
                         }
                     } label: {
