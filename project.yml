@@ -24,8 +24,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pullrequestpilot.app
-        MARKETING_VERSION: "1.2.0"
-        CURRENT_PROJECT_VERSION: "4"
+        MARKETING_VERSION: "1.2.1"
+        CURRENT_PROJECT_VERSION: "5"
         CODE_SIGN_ENTITLEMENTS: PullRequestPilot/Resources/PullRequestPilot.entitlements
         SWIFT_STRICT_CONCURRENCY: complete
     info:
