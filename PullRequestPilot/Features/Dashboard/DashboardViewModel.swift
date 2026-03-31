@@ -43,6 +43,7 @@ final class DashboardViewModel {
         self.localRepositoryService = localRepositoryService
         self.views = viewsStore.load()
         self.selectedViewID = views.first?.id
+        self.notifiedViewIDs = Set(UserDefaults.standard.stringArray(forKey: Constants.UserDefaultsKeys.notifiedViewIDs) ?? [])
 
         for view in views {
             viewStates[view.id] = ViewState()
@@ -356,12 +357,9 @@ final class DashboardViewModel {
 
     // MARK: - Notifications
 
-    var notifiedViewIDs: Set<String> {
-        get {
-            Set(UserDefaults.standard.stringArray(forKey: Constants.UserDefaultsKeys.notifiedViewIDs) ?? [])
-        }
-        set {
-            UserDefaults.standard.set(Array(newValue), forKey: Constants.UserDefaultsKeys.notifiedViewIDs)
+    var notifiedViewIDs: Set<String> = [] {
+        didSet {
+            UserDefaults.standard.set(Array(notifiedViewIDs), forKey: Constants.UserDefaultsKeys.notifiedViewIDs)
         }
     }
 
@@ -380,30 +378,34 @@ final class DashboardViewModel {
         }
     }
 
-    func toggleNotification(for viewID: UUID) async {
+    func setNotification(for viewID: UUID, enabled: Bool) {
+        var ids = notifiedViewIDs
+        if enabled {
+            ids.insert(viewID.uuidString)
+        } else {
+            ids.remove(viewID.uuidString)
+        }
+        notifiedViewIDs = ids
+    }
+
+    func ensureNotificationPermission(for viewID: UUID) async {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
 
         switch settings.authorizationStatus {
         case .notDetermined:
             let granted = await requestNotificationPermission()
             systemNotificationsAuthorized = granted
-            guard granted else { return }
+            if !granted {
+                setNotification(for: viewID, enabled: false)
+            }
         case .denied:
             systemNotificationsAuthorized = false
-            return
+            setNotification(for: viewID, enabled: false)
         case .authorized, .provisional, .ephemeral:
             systemNotificationsAuthorized = true
         @unknown default:
             break
         }
-
-        var ids = notifiedViewIDs
-        if ids.contains(viewID.uuidString) {
-            ids.remove(viewID.uuidString)
-        } else {
-            ids.insert(viewID.uuidString)
-        }
-        notifiedViewIDs = ids
     }
 
     func requestNotificationPermissionAndOpenSettings() async {

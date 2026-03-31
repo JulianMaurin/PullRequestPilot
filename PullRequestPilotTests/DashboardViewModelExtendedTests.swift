@@ -174,8 +174,8 @@ struct DashboardViewModelExtendedTests {
 
     // MARK: - Notifications
 
-    @Test("toggleNotification enables and disables")
-    func toggleNotification() async {
+    @Test("setNotification enables and disables")
+    func setNotification() async {
         let defaults = UserDefaults(suiteName: "ToggleNotification")!
         defaults.removePersistentDomain(forName: "ToggleNotification")
 
@@ -187,10 +187,10 @@ struct DashboardViewModelExtendedTests {
 
         #expect(!viewModel.isNotificationEnabled(for: viewID))
 
-        await viewModel.toggleNotification(for: viewID)
+        viewModel.setNotification(for: viewID, enabled: true)
         #expect(viewModel.isNotificationEnabled(for: viewID))
 
-        await viewModel.toggleNotification(for: viewID)
+        viewModel.setNotification(for: viewID, enabled: false)
         #expect(!viewModel.isNotificationEnabled(for: viewID))
     }
 
@@ -406,7 +406,7 @@ struct DashboardViewModelExtendedTests {
         let viewID = testView.id
 
         // Enable notifications for this view
-        await viewModel.toggleNotification(for: viewID)
+        viewModel.setNotification(for: viewID, enabled: true)
         #expect(viewModel.isNotificationEnabled(for: viewID))
 
         let pr = TestPullRequestFactory.make(id: "PR_1", title: "First PR")
@@ -765,7 +765,7 @@ struct DashboardViewModelExtendedTests {
         let viewModel = makeViewModel(suiteName: "NotifiedPersist")
         let viewID = viewModel.views.first!.id
 
-        await viewModel.toggleNotification(for: viewID)
+        viewModel.setNotification(for: viewID, enabled: true)
         #expect(viewModel.isNotificationEnabled(for: viewID))
 
         // Read from UserDefaults directly
@@ -983,7 +983,7 @@ struct DashboardViewModelExtendedTests {
         let testView = DashboardView(id: UUID(), title: "Notify", query: "is:pr")
         viewModel.addView(testView)
 
-        await viewModel.toggleNotification(for: testView.id)
+        viewModel.setNotification(for: testView.id, enabled: true)
 
         // Initial load
         let pr1 = TestPullRequestFactory.make(id: "PR_1", title: "Initial")
@@ -1007,7 +1007,7 @@ struct DashboardViewModelExtendedTests {
         let testView = DashboardView(id: UUID(), title: "Notify", query: "is:pr")
         viewModel.addView(testView)
 
-        await viewModel.toggleNotification(for: testView.id)
+        viewModel.setNotification(for: testView.id, enabled: true)
 
         // Initial load
         mockClient.pullRequestsToReturn = [TestPullRequestFactory.make(id: "PR_1", title: "Initial")]

@@ -148,14 +148,14 @@ struct SettingsView: View {
                     Text("No views configured yet.")
                         .foregroundStyle(.secondary)
                 } else {
-                    let disabled = !dashboardViewModel.systemNotificationsAuthorized
                     ForEach(dashboardViewModel.views) { view in
                         Toggle(view.title, isOn: Binding(
                             get: { dashboardViewModel.isNotificationEnabled(for: view.id) },
-                            set: { _ in Task { await dashboardViewModel.toggleNotification(for: view.id) } }
+                            set: { newValue in
+                                dashboardViewModel.setNotification(for: view.id, enabled: newValue)
+                                Task { await dashboardViewModel.ensureNotificationPermission(for: view.id) }
+                            }
                         ))
-                        .foregroundStyle(disabled ? .tertiary : .primary)
-                        .disabled(disabled)
                     }
                 }
             } header: {
