@@ -673,7 +673,7 @@ struct ReviewQueueView: View {
 
     private func buildStacks(_ pullRequests: [PullRequest]) -> [PRStack] {
         // Map head branch → PR for this repo
-        let headToPR = Dictionary(uniqueKeysWithValues: pullRequests.map { ($0.headRefName, $0) })
+        let headToPR = Dictionary(pullRequests.map { ($0.headRefName, $0) }, uniquingKeysWith: { first, _ in first })
 
         // A PR is a child if its base branch is another PR's head branch
         let childIDs = Set(pullRequests.compactMap { pr -> String? in
