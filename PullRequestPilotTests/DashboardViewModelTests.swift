@@ -240,6 +240,64 @@ struct DashboardViewModelTests {
         #expect(stored == nil)
     }
 
+    // MARK: - Collapsed Sections Persistence
+
+    @Test("collapsedOrgs is persisted to UserDefaults on change")
+    func collapsedOrgsPersisted() {
+        let defaults = UserDefaults(suiteName: "CollapsedOrgsPersist")!
+        defaults.removePersistentDomain(forName: "CollapsedOrgsPersist")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+
+        viewModel.collapsedOrgs.insert("my-org")
+        viewModel.collapsedOrgs.insert("other-org")
+
+        let stored = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.collapsedOrgs) ?? [])
+        #expect(stored == Set(["my-org", "other-org"]))
+    }
+
+    @Test("collapsedRepos is persisted to UserDefaults on change")
+    func collapsedReposPersisted() {
+        let defaults = UserDefaults(suiteName: "CollapsedReposPersist")!
+        defaults.removePersistentDomain(forName: "CollapsedReposPersist")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+
+        viewModel.collapsedRepos.insert("my-org/repo-a")
+
+        let stored = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.collapsedRepos) ?? [])
+        #expect(stored == Set(["my-org/repo-a"]))
+    }
+
+    @Test("collapsed sections are restored from UserDefaults on init")
+    func collapsedSectionsRestored() {
+        let defaults = UserDefaults(suiteName: "CollapsedRestore")!
+        defaults.removePersistentDomain(forName: "CollapsedRestore")
+        defaults.set(["org-a", "org-b"], forKey: Constants.UserDefaultsKeys.collapsedOrgs)
+        defaults.set(["org-a/repo-1"], forKey: Constants.UserDefaultsKeys.collapsedRepos)
+
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+
+        #expect(viewModel.collapsedOrgs == Set(["org-a", "org-b"]))
+        #expect(viewModel.collapsedRepos == Set(["org-a/repo-1"]))
+    }
+
+    @Test("clearAllData resets collapsed sections")
+    func clearAllDataResetsCollapsedSections() {
+        let defaults = UserDefaults(suiteName: "ClearCollapsed")!
+        defaults.removePersistentDomain(forName: "ClearCollapsed")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+
+        viewModel.collapsedOrgs.insert("some-org")
+        viewModel.collapsedRepos.insert("some-org/repo")
+        viewModel.clearAllData()
+
+        #expect(viewModel.collapsedOrgs.isEmpty)
+        #expect(viewModel.collapsedRepos.isEmpty)
+    }
+
     // MARK: - Helpers
 
     private func makePullRequest(number: Int, title: String, reviews: [UserReview] = []) -> PullRequest {

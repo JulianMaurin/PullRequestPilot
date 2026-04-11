@@ -28,6 +28,12 @@ final class DashboardViewModel {
         didSet { persistSelectedViewID() }
     }
     var showingSettings = false
+    var collapsedOrgs: Set<String> {
+        didSet { persistCollapsedSections() }
+    }
+    var collapsedRepos: Set<String> {
+        didSet { persistCollapsedSections() }
+    }
 
     private let gitHubClient: GitHubClientProtocol
     private let viewsStore: ViewsStore
@@ -45,9 +51,12 @@ final class DashboardViewModel {
         self.viewsStore = viewsStore
         self.localRepositoryService = localRepositoryService
         self.defaults = defaults
-        self.views = viewsStore.load()
-        self.selectedViewID = Self.restoreSelectedViewID(from: defaults, views: views)
+        self.collapsedOrgs = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.collapsedOrgs) ?? [])
+        self.collapsedRepos = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.collapsedRepos) ?? [])
         self.notifiedViewIDs = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.notifiedViewIDs) ?? [])
+        let loadedViews = viewsStore.load()
+        self.views = loadedViews
+        self.selectedViewID = Self.restoreSelectedViewID(from: defaults, views: loadedViews)
 
         for view in views {
             viewStates[view.id] = ViewState()
@@ -65,6 +74,11 @@ final class DashboardViewModel {
 
     private func persistSelectedViewID() {
         defaults.set(selectedViewID?.uuidString, forKey: Constants.UserDefaultsKeys.selectedViewID)
+    }
+
+    private func persistCollapsedSections() {
+        defaults.set(Array(collapsedOrgs), forKey: Constants.UserDefaultsKeys.collapsedOrgs)
+        defaults.set(Array(collapsedRepos), forKey: Constants.UserDefaultsKeys.collapsedRepos)
     }
 
     var selectedViewState: ViewState {
@@ -263,6 +277,8 @@ final class DashboardViewModel {
         hasCompletedInitialLoad = []
         viewerLogin = nil
         notifiedViewIDs = []
+        collapsedOrgs = []
+        collapsedRepos = []
         defaults.removeObject(forKey: Constants.UserDefaultsKeys.selectedViewID)
         viewsStore.save([])
         WidgetData(views: [], lastUpdated: .now).save()

@@ -6,8 +6,6 @@ struct ReviewQueueView: View {
     var prDetailViewModel: PRDetailViewModel
     var onOpenSettings: () -> Void
     @State private var expandedStacks: Set<String> = []
-    @State private var collapsedOrgs: Set<String> = []
-    @State private var collapsedRepos: Set<String> = []
     @State private var isAddingView = false
     @State private var newViewTitle = ""
     @State private var newViewQuery = ""
@@ -376,16 +374,16 @@ struct ReviewQueueView: View {
 
     @ViewBuilder
     private func orgSection(_ orgGroup: OrgGroup, pullRequests: [PullRequest]) -> some View {
-        let isOrgCollapsed = collapsedOrgs.contains(orgGroup.org)
+        let isOrgCollapsed = viewModel.collapsedOrgs.contains(orgGroup.org)
         let prCount = orgGroup.repos.reduce(0) { $0 + $1.stacks.reduce(0) { $0 + $1.totalCount } }
 
         Button {
             prDetailViewModel.deselect()
             withAnimation(.easeInOut(duration: 0.2)) {
                 if isOrgCollapsed {
-                    collapsedOrgs.remove(orgGroup.org)
+                    viewModel.collapsedOrgs.remove(orgGroup.org)
                 } else {
-                    collapsedOrgs.insert(orgGroup.org)
+                    viewModel.collapsedOrgs.insert(orgGroup.org)
                 }
             }
         } label: {
@@ -410,20 +408,20 @@ struct ReviewQueueView: View {
         .contextMenu {
             if isOrgCollapsed {
                 Button("Expand") {
-                    withAnimation { _ = collapsedOrgs.remove(orgGroup.org) }
+                    withAnimation { _ = viewModel.collapsedOrgs.remove(orgGroup.org) }
                 }
             } else {
                 Button("Collapse Repos") {
                     withAnimation {
                         for repo in orgGroup.repos {
-                            collapsedRepos.insert("\(orgGroup.org)/\(repo.repo)")
+                            viewModel.collapsedRepos.insert("\(orgGroup.org)/\(repo.repo)")
                         }
                     }
                 }
                 Button("Expand Repos") {
                     withAnimation {
                         for repo in orgGroup.repos {
-                            _ = collapsedRepos.remove("\(orgGroup.org)/\(repo.repo)")
+                            _ = viewModel.collapsedRepos.remove("\(orgGroup.org)/\(repo.repo)")
                         }
                     }
                 }
@@ -431,12 +429,12 @@ struct ReviewQueueView: View {
                 Button("Collapse All Orgs") {
                     withAnimation {
                         let grouped = groupedByOrgAndRepo(viewModel.selectedViewState.pullRequests)
-                        for org in grouped { collapsedOrgs.insert(org.org) }
+                        for org in grouped { viewModel.collapsedOrgs.insert(org.org) }
                     }
                 }
                 Button("Expand All Orgs") {
                     withAnimation {
-                        collapsedOrgs.removeAll()
+                        viewModel.collapsedOrgs.removeAll()
                     }
                 }
             }
@@ -462,16 +460,16 @@ struct ReviewQueueView: View {
     @ViewBuilder
     private func repoSection(_ repoGroup: RepoGroup, org: String, pullRequests: [PullRequest]) -> some View {
         let repoKey = "\(org)/\(repoGroup.repo)"
-        let isRepoCollapsed = collapsedRepos.contains(repoKey)
+        let isRepoCollapsed = viewModel.collapsedRepos.contains(repoKey)
         let prCount = repoGroup.stacks.reduce(0) { $0 + $1.totalCount }
 
         Button {
             prDetailViewModel.deselect()
             withAnimation(.easeInOut(duration: 0.2)) {
                 if isRepoCollapsed {
-                    collapsedRepos.remove(repoKey)
+                    viewModel.collapsedRepos.remove(repoKey)
                 } else {
-                    collapsedRepos.insert(repoKey)
+                    viewModel.collapsedRepos.insert(repoKey)
                 }
             }
         } label: {

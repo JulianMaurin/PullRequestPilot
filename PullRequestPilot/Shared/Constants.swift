@@ -17,6 +17,8 @@ enum Constants {
         static let repoScanInterval = "repoScanInterval"
         static let notifiedViewIDs = "notifiedViewIDs"
         static let selectedViewID = "selectedViewID"
+        static let collapsedOrgs = "collapsedOrgs"
+        static let collapsedRepos = "collapsedRepos"
     }
 
     enum URLs {
