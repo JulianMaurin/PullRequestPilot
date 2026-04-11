@@ -320,6 +320,24 @@ final class DashboardViewModel {
         viewsStore.save(views)
     }
 
+    // MARK: - View Navigation
+
+    func selectNextView() {
+        guard let currentID = selectedViewID,
+              let currentIndex = views.firstIndex(where: { $0.id == currentID }),
+              !views.isEmpty else { return }
+        let nextIndex = (currentIndex + 1) % views.count
+        selectedViewID = views[nextIndex].id
+    }
+
+    func selectPreviousView() {
+        guard let currentID = selectedViewID,
+              let currentIndex = views.firstIndex(where: { $0.id == currentID }),
+              !views.isEmpty else { return }
+        let previousIndex = (currentIndex - 1 + views.count) % views.count
+        selectedViewID = views[previousIndex].id
+    }
+
     func deleteView(id: UUID) {
         views.removeAll { $0.id == id }
         viewStates.removeValue(forKey: id)

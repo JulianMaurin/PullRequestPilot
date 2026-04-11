@@ -240,6 +240,94 @@ struct DashboardViewModelTests {
         #expect(stored == nil)
     }
 
+    // MARK: - View Navigation
+
+    @Test("selectNextView cycles to next view")
+    func selectNextView() {
+        let defaults = UserDefaults(suiteName: "SelectNextView")!
+        defaults.removePersistentDomain(forName: "SelectNextView")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        let view2 = DashboardView(id: UUID(), title: "View 2", query: "is:pr")
+        let view3 = DashboardView(id: UUID(), title: "View 3", query: "is:pr")
+        viewModel.addView(view1)
+        viewModel.addView(view2)
+        viewModel.addView(view3)
+        viewModel.selectedViewID = view1.id
+
+        viewModel.selectNextView()
+        #expect(viewModel.selectedViewID == view2.id)
+
+        viewModel.selectNextView()
+        #expect(viewModel.selectedViewID == view3.id)
+    }
+
+    @Test("selectNextView wraps around to first view")
+    func selectNextViewWraps() {
+        let defaults = UserDefaults(suiteName: "SelectNextViewWrap")!
+        defaults.removePersistentDomain(forName: "SelectNextViewWrap")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        let view2 = DashboardView(id: UUID(), title: "View 2", query: "is:pr")
+        viewModel.addView(view1)
+        viewModel.addView(view2)
+        viewModel.selectedViewID = view2.id
+
+        viewModel.selectNextView()
+        #expect(viewModel.selectedViewID == view1.id)
+    }
+
+    @Test("selectPreviousView cycles to previous view")
+    func selectPreviousView() {
+        let defaults = UserDefaults(suiteName: "SelectPrevView")!
+        defaults.removePersistentDomain(forName: "SelectPrevView")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        let view2 = DashboardView(id: UUID(), title: "View 2", query: "is:pr")
+        let view3 = DashboardView(id: UUID(), title: "View 3", query: "is:pr")
+        viewModel.addView(view1)
+        viewModel.addView(view2)
+        viewModel.addView(view3)
+        viewModel.selectedViewID = view3.id
+
+        viewModel.selectPreviousView()
+        #expect(viewModel.selectedViewID == view2.id)
+
+        viewModel.selectPreviousView()
+        #expect(viewModel.selectedViewID == view1.id)
+    }
+
+    @Test("selectPreviousView wraps around to last view")
+    func selectPreviousViewWraps() {
+        let defaults = UserDefaults(suiteName: "SelectPrevViewWrap")!
+        defaults.removePersistentDomain(forName: "SelectPrevViewWrap")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        let view2 = DashboardView(id: UUID(), title: "View 2", query: "is:pr")
+        viewModel.addView(view1)
+        viewModel.addView(view2)
+        viewModel.selectedViewID = view1.id
+
+        viewModel.selectPreviousView()
+        #expect(viewModel.selectedViewID == view2.id)
+    }
+
+    @Test("selectNextView is no-op when no views exist")
+    func selectNextViewNoViews() {
+        let defaults = UserDefaults(suiteName: "SelectNextNoViews")!
+        defaults.removePersistentDomain(forName: "SelectNextNoViews")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        viewModel.selectedViewID = nil
+
+        viewModel.selectNextView()
+        #expect(viewModel.selectedViewID == nil)
+    }
+
     // MARK: - Collapsed Sections Persistence
 
     @Test("collapsedOrgs is persisted to UserDefaults on change")

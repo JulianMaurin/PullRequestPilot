@@ -87,6 +87,21 @@ struct ReviewQueueView: View {
             prDetailViewModel.deselect()
             return .handled
         }
+        .background {
+            Button("") {
+                prDetailViewModel.deselect()
+                viewModel.selectNextView()
+            }
+            .keyboardShortcut("]", modifiers: .command)
+            .hidden()
+
+            Button("") {
+                prDetailViewModel.deselect()
+                viewModel.selectPreviousView()
+            }
+            .keyboardShortcut("[", modifiers: .command)
+            .hidden()
+        }
         .alert("Delete View", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) { viewToDelete = nil }
             Button("Delete", role: .destructive) {
