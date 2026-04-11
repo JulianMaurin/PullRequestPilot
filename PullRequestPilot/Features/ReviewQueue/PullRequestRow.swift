@@ -3,6 +3,7 @@ import SwiftUI
 struct PullRequestRow<RowMenu: View>: View {
     let pullRequest: PullRequest
     var stackSize: Int = 0
+    var now: Date = .now
     var onToggleStack: () -> Void = {}
     var onFilterBy: ((String) -> Void)?
     @ViewBuilder var rowContextMenu: () -> RowMenu
@@ -155,7 +156,7 @@ struct PullRequestRow<RowMenu: View>: View {
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
 
-                Text(activity.timestampText)
+                Text(activity.timestampText(relativeTo: now))
                     .font(.caption2)
                     .foregroundStyle(.quaternary)
             }
@@ -229,7 +230,7 @@ struct PullRequestRow<RowMenu: View>: View {
 
     private var metadata: some View {
         VStack(alignment: .trailing, spacing: 4) {
-            Text(pullRequest.age)
+            Text(pullRequest.age(relativeTo: now))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 

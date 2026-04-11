@@ -26,10 +26,12 @@ struct PullRequest: Identifiable, Hashable {
 
     var linesChanged: Int { additions + deletions }
 
-    var age: String {
+    var age: String { age(relativeTo: .now) }
+
+    func age(relativeTo now: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: createdAt, relativeTo: .now)
+        return formatter.localizedString(for: createdAt, relativeTo: now)
     }
 }
 
@@ -128,7 +130,9 @@ struct LastActivity: Hashable {
         }
     }
 
-    var timestampText: String {
+    var timestampText: String { timestampText(relativeTo: .now) }
+
+    func timestampText(relativeTo now: Date) -> String {
         let calendar = Calendar.current
         let timeFormatter = DateFormatter()
         timeFormatter.dateFormat = "HH:mm"

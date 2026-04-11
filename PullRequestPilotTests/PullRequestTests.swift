@@ -152,6 +152,36 @@ struct PullRequestTests {
         #expect(activity.timestampText.contains("at"))
     }
 
+    // MARK: - age(relativeTo:)
+
+    @Test("age(relativeTo:) computes relative time from the given date")
+    func ageRelativeTo() {
+        let createdAt = Date(timeIntervalSince1970: 1_000_000)
+        let pr = TestPullRequestFactory.make(createdAt: createdAt)
+        let oneHourLater = createdAt.addingTimeInterval(3600)
+        let age = pr.age(relativeTo: oneHourLater)
+        #expect(!age.isEmpty)
+        // The exact format depends on locale, but it should differ from "0 seconds"
+        #expect(age != pr.age(relativeTo: createdAt))
+    }
+
+    @Test("age(relativeTo:) changes as the reference date advances")
+    func ageRelativeToAdvances() {
+        let createdAt = Date(timeIntervalSince1970: 1_000_000)
+        let pr = TestPullRequestFactory.make(createdAt: createdAt)
+        let age1 = pr.age(relativeTo: createdAt.addingTimeInterval(60))
+        let age2 = pr.age(relativeTo: createdAt.addingTimeInterval(86400))
+        #expect(age1 != age2)
+    }
+
+    // MARK: - timestampText(relativeTo:)
+
+    @Test("timestampText(relativeTo:) shows 'today' when same day")
+    func timestampTextRelativeToToday() {
+        let activity = LastActivity(kind: .comment, actor: nil, timestamp: Date())
+        #expect(activity.timestampText(relativeTo: Date()).hasPrefix("today at"))
+    }
+
     // MARK: - Hashable / Identifiable
 
     @Test("PullRequest identity is based on id")
