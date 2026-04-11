@@ -12,7 +12,7 @@ struct DashboardViewModelTests {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Test View", query: "is:pr is:open")
         viewModel.addView(testView)
         return viewModel
@@ -97,7 +97,7 @@ struct DashboardViewModelTests {
         let defaults = UserDefaults(suiteName: "HideReviewedTests")!
         defaults.removePersistentDomain(forName: "HideReviewedTests")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Review", query: "is:pr", hideReviewed: true)
         viewModel.addView(testView)
         let viewID = testView.id
@@ -174,6 +174,70 @@ struct DashboardViewModelTests {
         #expect(viewModel.showingSettings)
         viewModel.showingSettings = false
         #expect(!viewModel.showingSettings)
+    }
+
+    // MARK: - Selected View Persistence
+
+    @Test("selectedViewID is persisted to UserDefaults on change")
+    func selectedViewIDPersisted() {
+        let defaults = UserDefaults(suiteName: "SelectedViewPersist")!
+        defaults.removePersistentDomain(forName: "SelectedViewPersist")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        let view2 = DashboardView(id: UUID(), title: "View 2", query: "is:pr")
+        viewModel.addView(view1)
+        viewModel.addView(view2)
+
+        viewModel.selectedViewID = view2.id
+
+        let stored = defaults.string(forKey: Constants.UserDefaultsKeys.selectedViewID)
+        #expect(stored == view2.id.uuidString)
+    }
+
+    @Test("selectedViewID is restored from UserDefaults on init")
+    func selectedViewIDRestored() {
+        let defaults = UserDefaults(suiteName: "SelectedViewRestore")!
+        defaults.removePersistentDomain(forName: "SelectedViewRestore")
+        let store = ViewsStore(defaults: defaults)
+
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        let view2 = DashboardView(id: UUID(), title: "View 2", query: "is:pr")
+        store.save([view1, view2])
+        defaults.set(view2.id.uuidString, forKey: Constants.UserDefaultsKeys.selectedViewID)
+
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        #expect(viewModel.selectedViewID == view2.id)
+    }
+
+    @Test("selectedViewID falls back to first view when stored ID is invalid")
+    func selectedViewIDFallsBackOnInvalidID() {
+        let defaults = UserDefaults(suiteName: "SelectedViewFallback")!
+        defaults.removePersistentDomain(forName: "SelectedViewFallback")
+        let store = ViewsStore(defaults: defaults)
+
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        store.save([view1])
+        defaults.set(UUID().uuidString, forKey: Constants.UserDefaultsKeys.selectedViewID)
+
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        #expect(viewModel.selectedViewID == view1.id)
+    }
+
+    @Test("clearAllData removes persisted selectedViewID")
+    func clearAllDataRemovesSelectedViewID() {
+        let defaults = UserDefaults(suiteName: "ClearSelectedView")!
+        defaults.removePersistentDomain(forName: "ClearSelectedView")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        viewModel.addView(view1)
+        viewModel.selectedViewID = view1.id
+
+        viewModel.clearAllData()
+
+        let stored = defaults.string(forKey: Constants.UserDefaultsKeys.selectedViewID)
+        #expect(stored == nil)
     }
 
     // MARK: - Helpers

@@ -24,12 +24,15 @@ struct ViewState {
 final class DashboardViewModel {
     private(set) var views: [DashboardView]
     private(set) var viewStates: [UUID: ViewState] = [:]
-    var selectedViewID: UUID?
+    var selectedViewID: UUID? {
+        didSet { persistSelectedViewID() }
+    }
     var showingSettings = false
 
     private let gitHubClient: GitHubClientProtocol
     private let viewsStore: ViewsStore
     private let localRepositoryService: LocalRepositoryService
+    private let defaults: UserDefaults
     private var refreshTask: Task<Void, Never>?
     private var refreshIntervalObserver: (any NSObjectProtocol)?
     private var previousPRIDs: [UUID: Set<String>] = [:]
@@ -37,17 +40,31 @@ final class DashboardViewModel {
     private var viewerLogin: String?
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Dashboard")
 
-    init(gitHubClient: GitHubClientProtocol, viewsStore: ViewsStore, localRepositoryService: LocalRepositoryService) {
+    init(gitHubClient: GitHubClientProtocol, viewsStore: ViewsStore, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard) {
         self.gitHubClient = gitHubClient
         self.viewsStore = viewsStore
         self.localRepositoryService = localRepositoryService
+        self.defaults = defaults
         self.views = viewsStore.load()
-        self.selectedViewID = views.first?.id
-        self.notifiedViewIDs = Set(UserDefaults.standard.stringArray(forKey: Constants.UserDefaultsKeys.notifiedViewIDs) ?? [])
+        self.selectedViewID = Self.restoreSelectedViewID(from: defaults, views: views)
+        self.notifiedViewIDs = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.notifiedViewIDs) ?? [])
 
         for view in views {
             viewStates[view.id] = ViewState()
         }
+    }
+
+    private static func restoreSelectedViewID(from defaults: UserDefaults, views: [DashboardView]) -> UUID? {
+        guard let stored = defaults.string(forKey: Constants.UserDefaultsKeys.selectedViewID),
+              let uuid = UUID(uuidString: stored),
+              views.contains(where: { $0.id == uuid }) else {
+            return views.first?.id
+        }
+        return uuid
+    }
+
+    private func persistSelectedViewID() {
+        defaults.set(selectedViewID?.uuidString, forKey: Constants.UserDefaultsKeys.selectedViewID)
     }
 
     var selectedViewState: ViewState {
@@ -246,6 +263,7 @@ final class DashboardViewModel {
         hasCompletedInitialLoad = []
         viewerLogin = nil
         notifiedViewIDs = []
+        defaults.removeObject(forKey: Constants.UserDefaultsKeys.selectedViewID)
         viewsStore.save([])
         WidgetData(views: [], lastUpdated: .now).save()
         WidgetCenter.shared.reloadAllTimelines()
@@ -359,7 +377,7 @@ final class DashboardViewModel {
 
     var notifiedViewIDs: Set<String> = [] {
         didSet {
-            UserDefaults.standard.set(Array(notifiedViewIDs), forKey: Constants.UserDefaultsKeys.notifiedViewIDs)
+            defaults.set(Array(notifiedViewIDs), forKey: Constants.UserDefaultsKeys.notifiedViewIDs)
         }
     }
 

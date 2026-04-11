@@ -16,6 +16,7 @@ enum Constants {
         static let prRefreshInterval = "prRefreshInterval"
         static let repoScanInterval = "repoScanInterval"
         static let notifiedViewIDs = "notifiedViewIDs"
+        static let selectedViewID = "selectedViewID"
     }
 
     enum URLs {
