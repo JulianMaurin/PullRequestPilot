@@ -10,13 +10,16 @@ struct PRDetailRetryTests {
         TestPullRequestFactory.make(id: id)
     }
 
-    /// Yield to let the Task start, then poll until the view model finishes loading.
-    private func waitForLoad(_ vm: PRDetailViewModel, timeout: Duration = .milliseconds(500)) async throws {
-        // Yield to let the fire-and-forget Task created by selectPR/retry begin.
-        await Task.yield()
+    /// Wait for the fire-and-forget Task to start and finish loading.
+    private func waitForLoad(_ vm: PRDetailViewModel, timeout: Duration = .milliseconds(2000)) async throws {
         let deadline = ContinuousClock.now + timeout
+        // Phase 1: yield until the Task sets isLoading = true (task started)
+        while !vm.isLoading, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        // Phase 2: wait for isLoading to go back to false (task finished)
         while vm.isLoading, ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(10))
+            try await Task.sleep(for: .milliseconds(5))
         }
     }
 
