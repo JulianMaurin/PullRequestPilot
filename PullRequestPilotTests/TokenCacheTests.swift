@@ -5,6 +5,7 @@ import Foundation
 @Suite("TokenCache")
 struct TokenCacheTests {
     private let testService = "com.pullrequestpilot.tokencache.tests.\(UUID().uuidString)"
+    private let envTokenSet = ProcessInfo.processInfo.environment["GITHUB_TOKEN"] != nil
 
     private func makeCache(storedToken: String? = nil) -> TokenCache {
         let keychain = KeychainService(service: testService)
@@ -14,22 +15,19 @@ struct TokenCacheTests {
         return TokenCache(keychain: keychain)
     }
 
-    @Test("first access loads token from keychain")
+    @Test("first access loads token from keychain",
+          .enabled(if: ProcessInfo.processInfo.environment["GITHUB_TOKEN"] == nil,
+                   "Skipped: GITHUB_TOKEN env var overrides Keychain in DEBUG builds"))
     func firstAccessLoadsFromKeychain() {
         let cache = makeCache(storedToken: "ghp_stored")
-        // In DEBUG builds, env var takes precedence, so skip if GITHUB_TOKEN is set
-        if ProcessInfo.processInfo.environment["GITHUB_TOKEN"] != nil {
-            return
-        }
         #expect(cache.token == "ghp_stored")
     }
 
-    @Test("subsequent access returns cached value without re-reading keychain")
+    @Test("subsequent access returns cached value without re-reading keychain",
+          .enabled(if: ProcessInfo.processInfo.environment["GITHUB_TOKEN"] == nil,
+                   "Skipped: GITHUB_TOKEN env var overrides Keychain in DEBUG builds"))
     func subsequentAccessUsesCached() {
         let cache = makeCache(storedToken: "ghp_original")
-        if ProcessInfo.processInfo.environment["GITHUB_TOKEN"] != nil {
-            return
-        }
         _ = cache.token // first load
         // Even if keychain changes, cache should return the same value
         #expect(cache.token == "ghp_original")
@@ -42,7 +40,9 @@ struct TokenCacheTests {
         #expect(cache.token == "ghp_new_token")
     }
 
-    @Test("invalidate clears cached token and forces reload")
+    @Test("invalidate clears cached token and forces reload",
+          .enabled(if: ProcessInfo.processInfo.environment["GITHUB_TOKEN"] == nil,
+                   "Skipped: GITHUB_TOKEN env var overrides Keychain in DEBUG builds"))
     func invalidateClearsCache() {
         let cache = makeCache(storedToken: "ghp_stored")
         cache.set("ghp_override")
@@ -50,18 +50,23 @@ struct TokenCacheTests {
 
         cache.invalidate()
         // After invalidate, next access should re-read from keychain
-        if ProcessInfo.processInfo.environment["GITHUB_TOKEN"] != nil {
-            return
-        }
         #expect(cache.token == "ghp_stored")
     }
 
-    @Test("token returns nil when keychain has no value")
+    @Test("token returns nil when keychain has no value",
+          .enabled(if: ProcessInfo.processInfo.environment["GITHUB_TOKEN"] == nil,
+                   "Skipped: GITHUB_TOKEN env var overrides Keychain in DEBUG builds"))
     func tokenReturnsNilWhenEmpty() {
         let cache = makeCache(storedToken: nil)
-        if ProcessInfo.processInfo.environment["GITHUB_TOKEN"] != nil {
-            return
-        }
         #expect(cache.token == nil)
+    }
+
+    @Test("invalidate prevents stale reads from overwriting cache")
+    func invalidatePreventsStaleReads() {
+        let cache = makeCache(storedToken: "ghp_original")
+        cache.set("ghp_new")
+        cache.invalidate()
+        cache.set("ghp_final")
+        #expect(cache.token == "ghp_final")
     }
 }

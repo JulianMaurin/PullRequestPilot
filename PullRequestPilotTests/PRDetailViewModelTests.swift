@@ -25,6 +25,16 @@ struct PRDetailViewModelTests {
         )
     }
 
+    /// Yield to let the Task start, then poll until the view model finishes loading.
+    private func waitForLoad(_ vm: PRDetailViewModel, timeout: Duration = .milliseconds(500)) async throws {
+        // Yield to let the fire-and-forget Task created by selectPR/retry begin.
+        await Task.yield()
+        let deadline = ContinuousClock.now + timeout
+        while vm.isLoading, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
     // MARK: - Selection
 
     @Test("selectPR sets selectedPR")
@@ -52,8 +62,7 @@ struct PRDetailViewModelTests {
 
         let pr = makePR()
         vm.selectPR(pr)
-        // Wait for fetch
-        try await Task.sleep(for: .milliseconds(50))
+        try await waitForLoad(vm)
 
         vm.deselect()
         #expect(vm.selectedPR == nil)
@@ -75,7 +84,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR())
-        try await Task.sleep(for: .milliseconds(50))
+        try await waitForLoad(vm)
 
         #expect(vm.timelineEvents.count == 2)
         #expect(vm.isLoading == false)
@@ -88,7 +97,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR())
-        try await Task.sleep(for: .milliseconds(50))
+        try await waitForLoad(vm)
 
         #expect(vm.error != nil)
         #expect(vm.timelineEvents.isEmpty)
@@ -102,7 +111,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR())
-        try await Task.sleep(for: .milliseconds(50))
+        try await waitForLoad(vm)
 
         #expect(vm.timelineEvents.isEmpty)
         #expect(vm.error == nil)
@@ -117,7 +126,7 @@ struct PRDetailViewModelTests {
 
         vm.selectPR(makePR(id: "PR_1"))
         vm.selectPR(makePR(id: "PR_2"))
-        try await Task.sleep(for: .milliseconds(50))
+        try await waitForLoad(vm)
 
         #expect(vm.selectedPR?.id == "PR_2")
     }
@@ -131,7 +140,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR())
-        try await Task.sleep(for: .milliseconds(50))
+        try await waitForLoad(vm)
 
         #expect(vm.isNetworkError)
         #expect(vm.error != nil)
@@ -144,7 +153,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR())
-        try await Task.sleep(for: .milliseconds(50))
+        try await waitForLoad(vm)
 
         #expect(!vm.isNetworkError)
         #expect(vm.error != nil)
@@ -157,7 +166,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR())
-        try await Task.sleep(for: .milliseconds(50))
+        try await waitForLoad(vm)
         #expect(vm.isNetworkError)
 
         vm.deselect()
@@ -177,7 +186,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR())
-        try await Task.sleep(for: .milliseconds(50))
+        try await waitForLoad(vm)
 
         #expect(vm.reviewers.count == 2)
         #expect(vm.reviewers[0].displayName == "alice")
@@ -204,7 +213,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR())
-        try await Task.sleep(for: .milliseconds(50))
+        try await waitForLoad(vm)
 
         #expect(vm.checkRuns.count == 3)
         #expect(vm.checkRuns[0].name == "lint")
