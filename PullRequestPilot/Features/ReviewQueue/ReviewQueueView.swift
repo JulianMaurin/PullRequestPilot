@@ -42,9 +42,12 @@ struct ReviewQueueView: View {
             }
         }
         .onChange(of: viewModel.selectedViewState.pullRequests) {
-            if let selected = prDetailViewModel.selectedPR,
-               !viewModel.selectedViewState.pullRequests.contains(where: { $0.id == selected.id }) {
-                prDetailViewModel.deselect()
+            if let selected = prDetailViewModel.selectedPR {
+                if let updated = viewModel.selectedViewState.pullRequests.first(where: { $0.id == selected.id }) {
+                    prDetailViewModel.updateSelectedPR(updated)
+                } else {
+                    prDetailViewModel.deselect()
+                }
             }
         }
         .onTapGesture {
@@ -653,14 +656,12 @@ struct ReviewQueueView: View {
                 .padding(.horizontal, 8)
         )
         .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            viewModel.openInBrowser(pr)
+        }
         .onTapGesture {
             prDetailViewModel.selectPR(pr)
         }
-        .simultaneousGesture(
-            TapGesture(count: 2).onEnded {
-                viewModel.openInBrowser(pr)
-            }
-        )
         .onAppear {
             if isLast, viewModel.selectedViewState.canLoadMore {
                 Task {
