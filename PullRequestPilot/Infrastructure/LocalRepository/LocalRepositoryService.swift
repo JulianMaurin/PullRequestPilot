@@ -49,16 +49,27 @@ final class LocalRepositoryService {
 
     // MARK: - Scanning
 
+    private var activeScanTask: Task<[RepoEntry], Never>?
+
     func scan(directories: [URL]) async {
+        activeScanTask?.cancel()
         isScanning = true
 
-        let entries = await Task.detached { [logger] in
+        let task = Task.detached { [logger] in
             Self.buildIndex(directories: directories, logger: logger)
-        }.value
+        }
+        activeScanTask = task
+        let entries = await task.value
+
+        guard !Task.isCancelled else {
+            isScanning = false
+            return
+        }
         repoIndex = entries
         indexedRepoCount = entries.count
         lastScanDate = Date()
         isScanning = false
+        activeScanTask = nil
         logger.info("Scan complete: indexed \(entries.count, privacy: .public) repo(s)")
     }
 
