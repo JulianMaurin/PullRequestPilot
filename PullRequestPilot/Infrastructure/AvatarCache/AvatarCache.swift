@@ -11,11 +11,15 @@ final class AvatarCache: @unchecked Sendable {
     private let session: URLSession
     private let logger = Logger(subsystem: "PullRequestPilot", category: "AvatarCache")
 
-    init() {
+    init(session: URLSession? = nil) {
         cache.countLimit = 200
-        let config = URLSessionConfiguration.default
-        config.urlCache = URLCache(memoryCapacity: 0, diskCapacity: 20 * 1024 * 1024) // 20 MB disk cache
-        session = URLSession(configuration: config)
+        if let session {
+            self.session = session
+        } else {
+            let config = URLSessionConfiguration.default
+            config.urlCache = URLCache(memoryCapacity: 0, diskCapacity: 20 * 1024 * 1024) // 20 MB disk cache
+            self.session = URLSession(configuration: config)
+        }
     }
 
     func image(for url: URL) async -> NSImage? {
