@@ -269,14 +269,6 @@ struct PullRequestRow<RowMenu: View>: View {
 
     // MARK: - Helpers
 
-    private var stateColor: Color {
-        switch pullRequest.state {
-        case .merged: return .purple
-        case .closed: return .black
-        case .open: return pullRequest.isDraft ? Color(white: 0.55) : Color(white: 0.3)
-        }
-    }
-
     private var checkStatusIcon: (name: String, color: Color)? {
         switch pullRequest.checkStatus {
         case .success: return ("checkmark", .blue)

@@ -92,6 +92,11 @@ struct PRDetailView: View {
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
+                Button("Retry") {
+                    if let pr = viewModel.selectedPR {
+                        viewModel.selectPR(pr)
+                    }
+                }
                 Spacer()
             }
             .padding()
@@ -239,9 +244,6 @@ struct PRDetailView: View {
     private var checksSummaryBadge: some View {
         let total = viewModel.checkRuns.count
         let passed = viewModel.checkRuns.filter { $0.conclusion == .success }.count
-        let failed = viewModel.checkRuns.filter {
-            $0.conclusion == .failure || $0.conclusion == .startupFailure || $0.conclusion == .timedOut
-        }.count
         return Text("\(passed)/\(total)")
             .font(.caption2.weight(.medium).monospacedDigit())
             .foregroundStyle(.secondary)
