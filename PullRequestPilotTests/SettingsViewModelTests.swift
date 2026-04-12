@@ -11,7 +11,7 @@ struct SettingsViewModelTests {
     private func makeViewModel(
         storedToken: String? = nil,
         suiteName: String = "SettingsVMTests"
-    ) -> (SettingsViewModel, KeychainService, TokenCache, GitDirectoriesStore) {
+    ) -> (SettingsViewModel, KeychainService, TokenCache, GitDirectoriesStore, UserDefaults) {
         let keychainService = "com.pullrequestpilot.settings.tests.\(suiteName)"
         let keychain = KeychainService(service: keychainService)
         if let storedToken {
@@ -29,16 +29,17 @@ struct SettingsViewModelTests {
             gitHubClient: mockClient,
             tokenCache: tokenCache,
             gitDirectoriesStore: gitDirStore,
-            localRepositoryService: localRepoService
+            localRepositoryService: localRepoService,
+            defaults: defaults
         )
-        return (vm, keychain, tokenCache, gitDirStore)
+        return (vm, keychain, tokenCache, gitDirStore, defaults)
     }
 
     // MARK: - Token
 
     @Test("hasToken is false when token is empty or whitespace")
     func hasTokenEmpty() {
-        let (vm, _, _, _) = makeViewModel(suiteName: "HasTokenEmpty")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "HasTokenEmpty")
         vm.token = ""
         #expect(!vm.hasToken)
 
@@ -51,14 +52,14 @@ struct SettingsViewModelTests {
 
     @Test("hasToken is true when token has content")
     func hasTokenWithContent() {
-        let (vm, _, _, _) = makeViewModel(suiteName: "HasTokenContent")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "HasTokenContent")
         vm.token = "ghp_abc123"
         #expect(vm.hasToken)
     }
 
     @Test("save stores token and validates against GitHub API")
     func saveTokenSuccess() async {
-        let (vm, keychain, _, _) = makeViewModel(suiteName: "SaveSuccess")
+        let (vm, keychain, _, _, _) = makeViewModel(suiteName: "SaveSuccess")
         mockClient.viewerLoginToReturn = "octocat"
 
         vm.token = "ghp_valid_token"
@@ -70,7 +71,7 @@ struct SettingsViewModelTests {
 
     @Test("save transitions through validating state")
     func saveTransitionsStates() async {
-        let (vm, _, _, _) = makeViewModel(suiteName: "SaveTransitions")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "SaveTransitions")
         mockClient.viewerLoginToReturn = "user"
 
         vm.token = "ghp_token"
@@ -84,7 +85,7 @@ struct SettingsViewModelTests {
 
     @Test("save sets invalid state when API returns unauthorized")
     func saveTokenUnauthorized() async {
-        let (vm, _, _, _) = makeViewModel(suiteName: "SaveUnauth")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "SaveUnauth")
         mockClient.errorToThrow = GitHubClientError.unauthorized
 
         vm.token = "ghp_bad_token"
@@ -99,7 +100,7 @@ struct SettingsViewModelTests {
 
     @Test("save sets invalid state for graphQL errors")
     func saveTokenGraphQLError() async {
-        let (vm, _, _, _) = makeViewModel(suiteName: "SaveGraphQL")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "SaveGraphQL")
         mockClient.errorToThrow = GitHubClientError.graphQLErrors(["scope missing"])
 
         vm.token = "ghp_token"
@@ -114,7 +115,7 @@ struct SettingsViewModelTests {
 
     @Test("save sets invalid state for network errors")
     func saveTokenNetworkError() async {
-        let (vm, _, _, _) = makeViewModel(suiteName: "SaveNetwork")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "SaveNetwork")
         mockClient.errorToThrow = GitHubClientError.networkError(URLError(.notConnectedToInternet))
 
         vm.token = "ghp_token"
@@ -129,7 +130,7 @@ struct SettingsViewModelTests {
 
     @Test("save sets invalid state for decoding errors")
     func saveTokenDecodingError() async {
-        let (vm, _, _, _) = makeViewModel(suiteName: "SaveDecoding")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "SaveDecoding")
         mockClient.errorToThrow = GitHubClientError.decodingError(URLError(.cannotParseResponse))
 
         vm.token = "ghp_token"
@@ -144,7 +145,7 @@ struct SettingsViewModelTests {
 
     @Test("clearToken removes from keychain and resets state")
     func clearToken() {
-        let (vm, keychain, tokenCache, _) = makeViewModel(storedToken: "ghp_existing", suiteName: "ClearToken")
+        let (vm, keychain, tokenCache, _, _) = makeViewModel(storedToken: "ghp_existing", suiteName: "ClearToken")
         vm.token = "ghp_existing"
 
         vm.clearToken()
@@ -159,19 +160,19 @@ struct SettingsViewModelTests {
 
     @Test("isScanning delegates to localRepositoryService")
     func isScanningDelegation() {
-        let (vm, _, _, _) = makeViewModel(suiteName: "Scanning")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "Scanning")
         #expect(vm.isScanning == localRepoService.isScanning)
     }
 
     @Test("lastScanDate delegates to localRepositoryService")
     func lastScanDateDelegation() {
-        let (vm, _, _, _) = makeViewModel(suiteName: "LastScan")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "LastScan")
         #expect(vm.lastScanDate == localRepoService.lastScanDate)
     }
 
     @Test("indexedRepoCount delegates to localRepositoryService")
     func indexedRepoCountDelegation() {
-        let (vm, _, _, _) = makeViewModel(suiteName: "RepoCount")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "RepoCount")
         #expect(vm.indexedRepoCount == localRepoService.indexedRepoCount)
     }
 
@@ -179,7 +180,7 @@ struct SettingsViewModelTests {
 
     @Test("removeGitDirectory by URL removes and saves")
     func removeGitDirectoryByURL() {
-        let (vm, _, _, _) = makeViewModel(suiteName: "RemoveDir")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "RemoveDir")
         let url = URL(fileURLWithPath: "/tmp/test-repo")
         vm.gitDirectories = [url]
 
@@ -190,7 +191,7 @@ struct SettingsViewModelTests {
 
     @Test("removeGitDirectory by offsets removes correct entry")
     func removeGitDirectoryByOffset() {
-        let (vm, _, _, _) = makeViewModel(suiteName: "RemoveDirOffset")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "RemoveDirOffset")
         let url1 = URL(fileURLWithPath: "/tmp/repo1")
         let url2 = URL(fileURLWithPath: "/tmp/repo2")
         vm.gitDirectories = [url1, url2]
@@ -230,7 +231,7 @@ struct SettingsViewModelTests {
 
     @Test("rescan triggers a scan on localRepositoryService")
     func rescanTriggersScan() async {
-        let (vm, _, _, _) = makeViewModel(suiteName: "Rescan")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "Rescan")
         vm.rescan()
         // Give the async Task inside triggerRescan a chance to start
         try? await Task.sleep(for: .milliseconds(100))
@@ -241,7 +242,7 @@ struct SettingsViewModelTests {
 
     @Test("prRefreshInterval posts notification on change")
     func prRefreshIntervalPostsNotification() {
-        let (vm, _, _, _) = makeViewModel(suiteName: "PRInterval")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "PRInterval")
         var notificationReceived = false
         let observer = NotificationCenter.default.addObserver(
             forName: Constants.Notifications.prRefreshIntervalChanged,
@@ -259,9 +260,9 @@ struct SettingsViewModelTests {
 
     @Test("repoScanInterval persists to UserDefaults")
     func repoScanIntervalPersists() {
-        let (vm, _, _, _) = makeViewModel(suiteName: "RepoInterval")
+        let (vm, _, _, _, defaults) = makeViewModel(suiteName: "RepoInterval")
         vm.repoScanInterval = 600
-        let stored = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.repoScanInterval)
+        let stored = defaults.double(forKey: Constants.UserDefaultsKeys.repoScanInterval)
         #expect(stored == 600)
     }
 
@@ -269,7 +270,7 @@ struct SettingsViewModelTests {
 
     @Test("save sets invalid state for unexpected errors")
     func saveTokenGenericError() async {
-        let (vm, _, _, _) = makeViewModel(suiteName: "SaveGeneric")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "SaveGeneric")
 
         // Create a custom error that is NOT GitHubClientError
         struct TestError: Error {}
@@ -289,7 +290,7 @@ struct SettingsViewModelTests {
 
     @Test("save trims whitespace from token before saving")
     func saveTrimsWhitespace() async {
-        let (vm, keychain, _, _) = makeViewModel(suiteName: "SaveTrim")
+        let (vm, keychain, _, _, _) = makeViewModel(suiteName: "SaveTrim")
         mockClient.viewerLoginToReturn = "user"
 
         vm.token = "  ghp_token_with_spaces  \n"
@@ -302,7 +303,7 @@ struct SettingsViewModelTests {
 
     @Test("init loads existing token from cache")
     func initLoadsToken() {
-        let (vm, _, _, _) = makeViewModel(storedToken: "ghp_existing", suiteName: "InitLoads")
+        let (vm, _, _, _, _) = makeViewModel(storedToken: "ghp_existing", suiteName: "InitLoads")
         // In DEBUG with GITHUB_TOKEN env var, the env var takes precedence
         if ProcessInfo.processInfo.environment["GITHUB_TOKEN"] == nil {
             #expect(vm.token == "ghp_existing")
@@ -314,19 +315,19 @@ struct SettingsViewModelTests {
 
     @Test("hasSavedToken is true when token exists in cache")
     func hasSavedTokenTrue() {
-        let (vm, _, _, _) = makeViewModel(storedToken: "ghp_token", suiteName: "HasSavedTrue")
+        let (vm, _, _, _, _) = makeViewModel(storedToken: "ghp_token", suiteName: "HasSavedTrue")
         #expect(vm.hasSavedToken)
     }
 
     @Test("hasSavedToken is false when no token in cache")
     func hasSavedTokenFalse() {
-        let (vm, _, _, _) = makeViewModel(suiteName: "HasSavedFalse")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "HasSavedFalse")
         #expect(!vm.hasSavedToken)
     }
 
     @Test("save sets hasSavedToken to true")
     func saveSetsSavedToken() async {
-        let (vm, _, _, _) = makeViewModel(suiteName: "SaveSetsSaved")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "SaveSetsSaved")
         mockClient.viewerLoginToReturn = "user"
         #expect(!vm.hasSavedToken)
 
@@ -338,7 +339,7 @@ struct SettingsViewModelTests {
 
     @Test("clearToken sets hasSavedToken to false")
     func clearTokenResetsSavedToken() {
-        let (vm, _, _, _) = makeViewModel(storedToken: "ghp_existing", suiteName: "ClearSaved")
+        let (vm, _, _, _, _) = makeViewModel(storedToken: "ghp_existing", suiteName: "ClearSaved")
         #expect(vm.hasSavedToken)
 
         vm.clearToken()
@@ -350,7 +351,7 @@ struct SettingsViewModelTests {
 
     @Test("save sets viewerLogin on success")
     func saveStoresViewerLogin() async {
-        let (vm, _, _, _) = makeViewModel(suiteName: "ViewerLogin")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "ViewerLogin")
         mockClient.viewerLoginToReturn = "octocat"
 
         vm.token = "ghp_valid"
@@ -361,7 +362,7 @@ struct SettingsViewModelTests {
 
     @Test("clearToken clears viewerLogin")
     func clearTokenClearsViewerLogin() async {
-        let (vm, _, _, _) = makeViewModel(storedToken: "ghp_token", suiteName: "ClearViewerLogin")
+        let (vm, _, _, _, _) = makeViewModel(storedToken: "ghp_token", suiteName: "ClearViewerLogin")
         mockClient.viewerLoginToReturn = "octocat"
         vm.token = "ghp_token"
         await vm.save()
@@ -376,7 +377,7 @@ struct SettingsViewModelTests {
 
     @Test("save clears saveError on new attempt")
     func saveClearsSaveError() async {
-        let (vm, _, _, _) = makeViewModel(suiteName: "ClearSaveError")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "ClearSaveError")
         mockClient.viewerLoginToReturn = "user"
 
         vm.token = "ghp_token"
@@ -390,15 +391,21 @@ struct SettingsViewModelTests {
     @Test("init loads prRefreshInterval from UserDefaults")
     func initLoadsPRInterval() {
         let suiteName = "InitPRInterval"
-        UserDefaults.standard.set(300.0, forKey: Constants.UserDefaultsKeys.prRefreshInterval)
-        let (vm, _, _, _) = makeViewModel(suiteName: suiteName)
+        let keychainService = "com.pullrequestpilot.settings.tests.\(suiteName)"
+        let keychain = KeychainService(service: keychainService)
+        try? keychain.delete(key: Constants.Keychain.githubToken)
+        let tokenCache = TokenCache(keychain: keychain)
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set(300.0, forKey: Constants.UserDefaultsKeys.prRefreshInterval)
+        let gitDirStore = GitDirectoriesStore(defaults: defaults)
+        let vm = SettingsViewModel(keychain: keychain, gitHubClient: mockClient, tokenCache: tokenCache, gitDirectoriesStore: gitDirStore, localRepositoryService: localRepoService, defaults: defaults)
         #expect(vm.prRefreshInterval == 300.0)
     }
 
     @Test("init uses default interval when UserDefaults has no value")
     func initUsesDefaultInterval() {
-        UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
-        let (vm, _, _, _) = makeViewModel(suiteName: "InitDefaultInterval")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "InitDefaultInterval")
         #expect(vm.prRefreshInterval == Constants.App.defaultPRRefreshInterval)
     }
 
@@ -406,23 +413,30 @@ struct SettingsViewModelTests {
 
     @Test("repoScanInterval persists and restarts scan")
     func repoScanIntervalRestartsScan() {
-        let (vm, _, _, _) = makeViewModel(suiteName: "RepoScanRestart")
+        let (vm, _, _, _, defaults) = makeViewModel(suiteName: "RepoScanRestart")
         vm.repoScanInterval = 900
-        let stored = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.repoScanInterval)
+        let stored = defaults.double(forKey: Constants.UserDefaultsKeys.repoScanInterval)
         #expect(stored == 900)
     }
 
     @Test("init loads repoScanInterval from UserDefaults")
     func initLoadsRepoInterval() {
-        UserDefaults.standard.set(600.0, forKey: Constants.UserDefaultsKeys.repoScanInterval)
-        let (vm, _, _, _) = makeViewModel(suiteName: "InitRepoInterval")
+        let suiteName = "InitRepoInterval"
+        let keychainService = "com.pullrequestpilot.settings.tests.\(suiteName)"
+        let keychain = KeychainService(service: keychainService)
+        try? keychain.delete(key: Constants.Keychain.githubToken)
+        let tokenCache = TokenCache(keychain: keychain)
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set(600.0, forKey: Constants.UserDefaultsKeys.repoScanInterval)
+        let gitDirStore = GitDirectoriesStore(defaults: defaults)
+        let vm = SettingsViewModel(keychain: keychain, gitHubClient: mockClient, tokenCache: tokenCache, gitDirectoriesStore: gitDirStore, localRepositoryService: localRepoService, defaults: defaults)
         #expect(vm.repoScanInterval == 600.0)
     }
 
     @Test("init uses default repoScanInterval when UserDefaults has no value")
     func initUsesDefaultRepoInterval() {
-        UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.repoScanInterval)
-        let (vm, _, _, _) = makeViewModel(suiteName: "InitDefaultRepoInterval")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "InitDefaultRepoInterval")
         #expect(vm.repoScanInterval == Constants.App.defaultRepoScanInterval)
     }
 
@@ -430,16 +444,16 @@ struct SettingsViewModelTests {
 
     @Test("init loads git directories from store")
     func initLoadsGitDirectories() {
-        let (vm, _, _, _) = makeViewModel(suiteName: "InitGitDirs")
-        // Should have loaded (possibly empty) from the store
-        #expect(vm.gitDirectories is [URL])
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "InitGitDirs")
+        // Should have loaded (possibly empty) from the store — verify it's accessible
+        #expect(vm.gitDirectories.isEmpty)
     }
 
     // MARK: - viewerAvatarURL
 
     @Test("save sets viewerAvatarURL on success")
     func saveStoresViewerAvatarURL() async {
-        let (vm, _, _, _) = makeViewModel(suiteName: "AvatarURL")
+        let (vm, _, _, _, _) = makeViewModel(suiteName: "AvatarURL")
         let avatarURL = URL(string: "https://avatars.githubusercontent.com/u/123")!
         mockClient.viewerLoginToReturn = "octocat"
         mockClient.viewerAvatarURLToReturn = avatarURL
@@ -453,7 +467,7 @@ struct SettingsViewModelTests {
 
     @Test("clearToken resets viewerAvatarURL")
     func clearTokenResetsAvatarURL() async {
-        let (vm, _, _, _) = makeViewModel(storedToken: "ghp_token", suiteName: "ClearAvatar")
+        let (vm, _, _, _, _) = makeViewModel(storedToken: "ghp_token", suiteName: "ClearAvatar")
         mockClient.viewerLoginToReturn = "octocat"
         mockClient.viewerAvatarURLToReturn = URL(string: "https://example.com/avatar")
         vm.token = "ghp_token"
@@ -471,9 +485,9 @@ struct SettingsViewModelTests {
 
     @Test("prRefreshInterval persists value to UserDefaults")
     func prRefreshIntervalPersists() {
-        let (vm, _, _, _) = makeViewModel(suiteName: "PRIntervalPersist")
+        let (vm, _, _, _, defaults) = makeViewModel(suiteName: "PRIntervalPersist")
         vm.prRefreshInterval = 120
-        let stored = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
+        let stored = defaults.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
         #expect(stored == 120)
     }
 }

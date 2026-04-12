@@ -13,11 +13,14 @@ final class SettingsViewModel {
     private(set) var saveError: String?
     var gitDirectories: [URL] = []
 
+    private(set) var launchAtLoginError: String?
+
     private let keychain: KeychainService
     private let gitHubClient: GitHubClientProtocol
     private let tokenCache: TokenCache
     private let gitDirectoriesStore: GitDirectoriesStore
     private let localRepositoryService: LocalRepositoryService
+    private let defaults: UserDefaults
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Settings")
 
     enum ValidationState: Equatable {
@@ -31,19 +34,20 @@ final class SettingsViewModel {
     /// Used by ContentView to decide whether to show settings or the dashboard.
     private(set) var hasSavedToken: Bool = false
 
-    init(keychain: KeychainService, gitHubClient: GitHubClientProtocol, tokenCache: TokenCache, gitDirectoriesStore: GitDirectoriesStore, localRepositoryService: LocalRepositoryService) {
+    init(keychain: KeychainService, gitHubClient: GitHubClientProtocol, tokenCache: TokenCache, gitDirectoriesStore: GitDirectoriesStore, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard) {
         self.keychain = keychain
         self.gitHubClient = gitHubClient
         self.tokenCache = tokenCache
         self.gitDirectoriesStore = gitDirectoriesStore
         self.localRepositoryService = localRepositoryService
+        self.defaults = defaults
         self.token = tokenCache.token ?? ""
         self.hasSavedToken = tokenCache.token != nil
         self.gitDirectories = gitDirectoriesStore.load()
 
-        let prInterval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
+        let prInterval = defaults.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
         self.prRefreshInterval = prInterval > 0 ? prInterval : Constants.App.defaultPRRefreshInterval
-        let repoInterval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.repoScanInterval)
+        let repoInterval = defaults.double(forKey: Constants.UserDefaultsKeys.repoScanInterval)
         self.repoScanInterval = repoInterval > 0 ? repoInterval : Constants.App.defaultRepoScanInterval
     }
 
@@ -62,19 +66,8 @@ final class SettingsViewModel {
         saveError = nil
         validationState = .validating
 
-        logger.info("Saving GitHub token to Keychain...")
-
-        do {
-            try keychain.save(key: Constants.Keychain.githubToken, value: trimmedToken)
-            tokenCache.set(trimmedToken)
-            hasSavedToken = true
-            logger.info("Token saved to Keychain successfully")
-        } catch {
-            logger.error("Failed to save token to Keychain: \(error, privacy: .public)")
-            saveError = "Could not save token to Keychain. Check that the app has Keychain access."
-            validationState = .idle
-            return
-        }
+        // Temporarily set in cache so the API client can use it for validation
+        tokenCache.set(trimmedToken)
 
         logger.info("Validating token against GitHub API...")
 
@@ -86,10 +79,27 @@ final class SettingsViewModel {
             logger.info("Token validated — authenticated as \(viewer.login, privacy: .private)")
         } catch let error as GitHubClientError {
             logger.error("Token validation failed: \(error.localizedDescription, privacy: .public)")
+            tokenCache.invalidate()
             validationState = .invalid(userMessage(for: error))
+            return
         } catch {
             logger.error("Unexpected error during token validation: \(error, privacy: .public)")
+            tokenCache.invalidate()
             validationState = .invalid("Something went wrong. Check the logs for details.")
+            return
+        }
+
+        // Validation succeeded — persist to Keychain
+        logger.info("Saving GitHub token to Keychain...")
+
+        do {
+            try keychain.save(key: Constants.Keychain.githubToken, value: trimmedToken)
+            hasSavedToken = true
+            logger.info("Token saved to Keychain successfully")
+        } catch {
+            logger.error("Failed to save token to Keychain: \(error, privacy: .public)")
+            saveError = "Could not save token to Keychain. Check that the app has Keychain access."
+            validationState = .idle
         }
     }
 
@@ -113,6 +123,7 @@ final class SettingsViewModel {
     var launchAtLogin: Bool {
         get { SMAppService.mainApp.status == .enabled }
         set {
+            launchAtLoginError = nil
             do {
                 if newValue {
                     try SMAppService.mainApp.register()
@@ -121,6 +132,7 @@ final class SettingsViewModel {
                 }
             } catch {
                 logger.error("Failed to update launch at login: \(error, privacy: .public)")
+                launchAtLoginError = "Could not update launch at login setting."
             }
         }
     }
@@ -129,14 +141,14 @@ final class SettingsViewModel {
 
     var prRefreshInterval: TimeInterval {
         didSet {
-            UserDefaults.standard.set(prRefreshInterval, forKey: Constants.UserDefaultsKeys.prRefreshInterval)
+            defaults.set(prRefreshInterval, forKey: Constants.UserDefaultsKeys.prRefreshInterval)
             NotificationCenter.default.post(name: Constants.Notifications.prRefreshIntervalChanged, object: nil)
         }
     }
 
     var repoScanInterval: TimeInterval {
         didSet {
-            UserDefaults.standard.set(repoScanInterval, forKey: Constants.UserDefaultsKeys.repoScanInterval)
+            defaults.set(repoScanInterval, forKey: Constants.UserDefaultsKeys.repoScanInterval)
             restartRepoScan()
         }
     }
