@@ -26,7 +26,7 @@ struct ReviewQueueView: View {
                     .frame(minWidth: 350)
                 if prDetailViewModel.selectedPR != nil {
                     PRDetailView(viewModel: prDetailViewModel)
-                        .frame(minWidth: 400, idealWidth: detailPanelWidth, maxWidth: 800)
+                        .frame(minWidth: 400, maxWidth: 800)
                         .background {
                             GeometryReader { geo in
                                 Color.clear
@@ -34,6 +34,9 @@ struct ReviewQueueView: View {
                                         detailPanelWidth = newWidth
                                     }
                             }
+                        }
+                        .background {
+                            SplitDividerRestorer(detailWidth: detailPanelWidth)
                         }
                 }
             }
@@ -690,6 +693,40 @@ struct ReviewQueueView: View {
         }
     }
 
+}
+
+// MARK: - Split Divider Restoration
+
+/// Restores the NSSplitView divider position when the detail panel appears,
+/// using the previously persisted width from @AppStorage.
+private struct SplitDividerRestorer: NSViewRepresentable {
+    let detailWidth: Double
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        let width = detailWidth
+        DispatchQueue.main.async {
+            guard let splitView = Self.findSplitView(from: view),
+                  splitView.bounds.width > 0 else { return }
+            let clamped = min(max(width, 400), 800)
+            let position = splitView.bounds.width - clamped
+            splitView.setPosition(max(0, position), ofDividerAt: 0)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private static func findSplitView(from view: NSView) -> NSSplitView? {
+        var current: NSView? = view
+        while let candidate = current {
+            if let splitView = candidate as? NSSplitView {
+                return splitView
+            }
+            current = candidate.superview
+        }
+        return nil
+    }
 }
 
 // MARK: - Tab Drag & Drop
