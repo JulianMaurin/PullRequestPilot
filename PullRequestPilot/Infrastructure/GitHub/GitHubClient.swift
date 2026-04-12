@@ -23,8 +23,8 @@ struct ChecksPage: Sendable {
 
 protocol GitHubClientProtocol: Sendable {
     func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage
-    func fetchTimeline(nodeID: String, cursor: String?) async throws -> TimelinePage
-    func fetchChecks(nodeID: String, cursor: String) async throws -> ChecksPage
+    func fetchTimeline(nodeID: String, cursor: String?, eventPageOffset: Int, checksPageOffset: Int) async throws -> TimelinePage
+    func fetchChecks(nodeID: String, cursor: String, checksPageOffset: Int) async throws -> ChecksPage
     func fetchViewer() async throws -> (login: String, avatarURL: URL?)
 }
 
@@ -109,7 +109,7 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         return PullRequestPage(pullRequests: prs, nextCursor: nextCursor)
     }
 
-    func fetchTimeline(nodeID: String, cursor: String? = nil) async throws -> TimelinePage {
+    func fetchTimeline(nodeID: String, cursor: String? = nil, eventPageOffset: Int = 0, checksPageOffset: Int = 0) async throws -> TimelinePage {
         let query = GitHubGraphQL.timelineQuery(nodeID: nodeID, cursor: cursor)
         let response: GraphQLResponse<TimelineNodeData> = try await execute(query: query)
 
@@ -122,8 +122,8 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             return TimelinePage(events: [], checkRuns: [], reviewers: [], nextCursor: nil, checksNextCursor: nil)
         }
 
-        let events = prNode.timelineItems?.toDomain(pageOffset: 0) ?? []
-        let checkRuns = prNode.commits?.toDomain(pageOffset: 0) ?? []
+        let events = prNode.timelineItems?.toDomain(pageOffset: eventPageOffset) ?? []
+        let checkRuns = prNode.commits?.toDomain(pageOffset: checksPageOffset) ?? []
         let reviewers = prNode.toReviewers()
         let rawTimelineCursor = prNode.timelineItems?.pageInfo.hasNextPage == true
             ? prNode.timelineItems?.pageInfo.endCursor : nil
@@ -134,7 +134,7 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         return TimelinePage(events: events, checkRuns: checkRuns, reviewers: reviewers, nextCursor: nextCursor, checksNextCursor: checksNextCursor)
     }
 
-    func fetchChecks(nodeID: String, cursor: String) async throws -> ChecksPage {
+    func fetchChecks(nodeID: String, cursor: String, checksPageOffset: Int = 0) async throws -> ChecksPage {
         let query = GitHubGraphQL.checksQuery(nodeID: nodeID, cursor: cursor)
         let response: GraphQLResponse<TimelineNodeData> = try await execute(query: query)
 
@@ -143,7 +143,7 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             throw GitHubClientError.graphQLErrors(messages)
         }
 
-        let checkRuns = data.node?.commits?.toDomain() ?? []
+        let checkRuns = data.node?.commits?.toDomain(pageOffset: checksPageOffset) ?? []
         let pageInfo = data.node?.commits?.nodes.first?.commit.statusCheckRollup?.contexts.pageInfo
         let rawCheckCursor = pageInfo?.hasNextPage == true ? pageInfo?.endCursor : nil
         let nextCursor = rawCheckCursor?.isEmpty == false ? rawCheckCursor : nil

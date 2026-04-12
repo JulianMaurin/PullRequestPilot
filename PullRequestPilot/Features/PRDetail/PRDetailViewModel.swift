@@ -34,6 +34,11 @@ final class PRDetailViewModel {
         fetchTimeline()
     }
 
+    func updateSelectedPR(_ pr: PullRequest) {
+        guard pr.id == selectedPR?.id else { return }
+        selectedPR = pr
+    }
+
     func deselect() {
         selectedPR = nil
         fetchTask?.cancel()
@@ -46,6 +51,22 @@ final class PRDetailViewModel {
     }
 
     // MARK: - Private
+
+    private func deduplicateCheckRuns(_ runs: [CheckRun]) -> [CheckRun] {
+        var bestByName: [String: CheckRun] = [:]
+        var nameOrder: [String] = []
+        for run in runs {
+            if let existing = bestByName[run.name] {
+                if run.conclusionPriority > existing.conclusionPriority {
+                    bestByName[run.name] = run
+                }
+            } else {
+                nameOrder.append(run.name)
+                bestByName[run.name] = run
+            }
+        }
+        return nameOrder.compactMap { bestByName[$0] }
+    }
 
     private func fetchTimeline() {
         guard let pr = selectedPR else { return }
@@ -63,13 +84,21 @@ final class PRDetailViewModel {
                 var cursor: String?
                 var checksCursor: String?
                 var eventPageOffset = 0
+                var checksPageOffset = 0
                 repeat {
-                    let page = try await gitHubClient.fetchTimeline(nodeID: pr.id, cursor: cursor)
+                    let page = try await gitHubClient.fetchTimeline(
+                        nodeID: pr.id,
+                        cursor: cursor,
+                        eventPageOffset: eventPageOffset,
+                        checksPageOffset: checksPageOffset
+                    )
                     allEvents.append(contentsOf: page.events)
                     eventPageOffset += page.events.count
                     allCheckRuns.append(contentsOf: page.checkRuns)
-                    if checksCursor == nil {
-                        checksCursor = page.checksNextCursor
+                    checksPageOffset += page.checkRuns.count
+                    // Always capture the latest checksNextCursor — the first page may not have one
+                    if let pageChecksCursor = page.checksNextCursor {
+                        checksCursor = pageChecksCursor
                     }
                     fetchedReviewers.append(contentsOf: page.reviewers)
                     cursor = page.nextCursor
@@ -77,10 +106,18 @@ final class PRDetailViewModel {
 
                 // Paginate remaining check runs
                 while let nextChecksCursor = checksCursor {
-                    let checksPage = try await gitHubClient.fetchChecks(nodeID: pr.id, cursor: nextChecksCursor)
+                    let checksPage = try await gitHubClient.fetchChecks(
+                        nodeID: pr.id,
+                        cursor: nextChecksCursor,
+                        checksPageOffset: checksPageOffset
+                    )
                     allCheckRuns.append(contentsOf: checksPage.checkRuns)
+                    checksPageOffset += checksPage.checkRuns.count
                     checksCursor = checksPage.nextCursor
                 }
+
+                // Deduplicate check runs across pages by name, keeping the best conclusion
+                let deduplicatedCheckRuns = deduplicateCheckRuns(allCheckRuns)
 
                 // Deduplicate reviewers across pages, keeping last occurrence (latest state)
                 var seenReviewerIDs = Set<String>()
@@ -88,7 +125,7 @@ final class PRDetailViewModel {
 
                 guard !Task.isCancelled else { return }
                 timelineEvents = allEvents
-                checkRuns = allCheckRuns
+                checkRuns = deduplicatedCheckRuns
                 reviewers = Array(deduplicatedReviewers)
             } catch is CancellationError {
                 return

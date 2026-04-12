@@ -29,13 +29,13 @@ final class MockGitHubClient: GitHubClientProtocol, @unchecked Sendable {
 
     var checkRunsToReturn: [CheckRun] = []
 
-    func fetchTimeline(nodeID: String, cursor: String?) async throws -> TimelinePage {
+    func fetchTimeline(nodeID: String, cursor: String?, eventPageOffset: Int, checksPageOffset: Int) async throws -> TimelinePage {
         fetchTimelineCallCount += 1
         if let error = errorToThrow { throw error }
         return TimelinePage(events: timelineEventsToReturn, checkRuns: checkRunsToReturn, reviewers: reviewersToReturn, nextCursor: timelineNextCursorToReturn, checksNextCursor: checksNextCursorToReturn)
     }
 
-    func fetchChecks(nodeID: String, cursor: String) async throws -> ChecksPage {
+    func fetchChecks(nodeID: String, cursor: String, checksPageOffset: Int) async throws -> ChecksPage {
         fetchChecksCallCount += 1
         if let error = errorToThrow { throw error }
         if let page = checksPageToReturn { return page }
