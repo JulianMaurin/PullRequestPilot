@@ -32,7 +32,11 @@ struct CachedAvatarView: View {
         .frame(width: size, height: size)
         .clipShape(shapeView)
         .task(id: url) {
-            guard let url else { return }
+            guard let url else {
+                image = nil
+                return
+            }
+            image = nil
             image = await AvatarCache.shared.image(for: url)
         }
     }
