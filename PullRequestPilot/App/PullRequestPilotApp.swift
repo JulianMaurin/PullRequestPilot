@@ -83,6 +83,7 @@ extension PullRequestPilotApp {
                let uuid = UUID(uuidString: viewID)
             {
                 appState?.dashboardViewModel.selectedViewID = uuid
+                appDelegate.showWindow()
             }
         default:
             break

@@ -112,7 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     // MARK: - Status Bar Badge
 
-    func updateStatusBarBadge(_ count: Int) {
+    private func updateStatusBarBadge(_ count: Int) {
         guard let button = statusItem?.button else { return }
         if count > 0 {
             let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .medium)
