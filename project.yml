@@ -71,8 +71,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pullrequestpilot.app.widget
         CODE_SIGN_ENTITLEMENTS: PullRequestPilotWidget/PullRequestPilotWidget.entitlements
-        CURRENT_PROJECT_VERSION: "3"
-        MARKETING_VERSION: "1.1.0"
+        CURRENT_PROJECT_VERSION: "5"
+        MARKETING_VERSION: "1.2.1"
         SWIFT_STRICT_CONCURRENCY: complete
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
