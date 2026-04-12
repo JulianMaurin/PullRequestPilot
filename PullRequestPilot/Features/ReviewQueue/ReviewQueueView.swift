@@ -650,12 +650,14 @@ struct ReviewQueueView: View {
                 .padding(.horizontal, 8)
         )
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) {
-            viewModel.openInBrowser(pr)
-        }
-        .onTapGesture(count: 1) {
+        .onTapGesture {
             prDetailViewModel.selectPR(pr)
         }
+        .simultaneousGesture(
+            TapGesture(count: 2).onEnded {
+                viewModel.openInBrowser(pr)
+            }
+        )
         .onAppear {
             if isLast, viewModel.selectedViewState.canLoadMore {
                 Task {

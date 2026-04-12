@@ -124,7 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     // MARK: - Window
 
     func showWindow() {
-        if let window = NSApplication.shared.windows.first(where: { $0.canBecomeKey }) {
+        if let window = NSApplication.shared.windows.first(where: { $0.identifier?.rawValue == "main" || ($0.canBecomeKey && $0.title == "Pull Request Pilot") }) ?? NSApplication.shared.windows.first(where: { $0.canBecomeKey }) {
             window.collectionBehavior.insert(.moveToActiveSpace)
             window.makeKeyAndOrderFront(nil)
         }
