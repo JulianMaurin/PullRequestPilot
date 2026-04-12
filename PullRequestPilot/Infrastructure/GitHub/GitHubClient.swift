@@ -32,7 +32,7 @@ protocol GitHubClientProtocol: Sendable {
 
 enum GitHubClientError: LocalizedError {
     case unauthorized
-    case rateLimited
+    case rateLimited(retryAfter: TimeInterval?)
     case serverError(statusCode: Int)
     case graphQLErrors([String])
     case networkError(Error)
@@ -188,7 +188,17 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             case 401:
                 throw GitHubClientError.unauthorized
             case 403:
-                throw GitHubClientError.rateLimited
+                let retryAfter: TimeInterval?
+                if let retryStr = httpResponse.value(forHTTPHeaderField: "Retry-After"),
+                   let seconds = TimeInterval(retryStr) {
+                    retryAfter = seconds
+                } else if let resetStr = httpResponse.value(forHTTPHeaderField: "X-RateLimit-Reset"),
+                          let resetTimestamp = TimeInterval(resetStr) {
+                    retryAfter = max(0, resetTimestamp - Date().timeIntervalSince1970)
+                } else {
+                    retryAfter = nil
+                }
+                throw GitHubClientError.rateLimited(retryAfter: retryAfter)
             case 400...499:
                 throw GitHubClientError.serverError(statusCode: httpResponse.statusCode)
             case 500...599:

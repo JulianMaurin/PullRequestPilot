@@ -160,7 +160,7 @@ struct GitHubClientHTTPErrorTests {
 
     @Test("rateLimited error has user-friendly description")
     func rateLimitedDescription() {
-        let error = GitHubClientError.rateLimited
+        let error = GitHubClientError.rateLimited(retryAfter: nil)
         #expect(error.errorDescription?.contains("rate limit") == true)
     }
 

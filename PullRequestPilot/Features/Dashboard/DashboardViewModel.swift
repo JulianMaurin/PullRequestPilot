@@ -12,6 +12,7 @@ struct ViewState {
     var error: String?
     var isNetworkError = false
     var nextCursor: String?
+    var rateLimitRetryAfter: TimeInterval?
     var reachedLimit = false
 
     var isEmpty: Bool { pullRequests.isEmpty && !isLoading }
@@ -100,6 +101,7 @@ final class DashboardViewModel {
         viewStates[viewID]?.isLoading = true
         viewStates[viewID]?.error = nil
         viewStates[viewID]?.isNetworkError = false
+        viewStates[viewID]?.rateLimitRetryAfter = nil
 
         if view.hideReviewed {
             await fetchViewerLoginIfNeeded()
@@ -122,12 +124,13 @@ final class DashboardViewModel {
             logger.info("Fetched \(uniquePRs.count, privacy: .public) PR(s) for '\(view.title, privacy: .public)'")
         } catch is CancellationError {
             return
-        } catch let error as URLError where error.code == .cancelled {
-            return
         } catch {
             logger.error("Failed to fetch PRs for '\(view.title, privacy: .public)': \(error, privacy: .public)")
             viewStates[viewID]?.isNetworkError = error.isNetworkError
             viewStates[viewID]?.error = error.localizedDescription
+            if let clientError = error as? GitHubClientError, case .rateLimited(let retryAfter) = clientError {
+                viewStates[viewID]?.rateLimitRetryAfter = retryAfter
+            }
         }
 
         viewStates[viewID]?.isLoading = false
@@ -141,6 +144,7 @@ final class DashboardViewModel {
         viewStates[viewID]?.isLoadingMore = true
         viewStates[viewID]?.error = nil
         viewStates[viewID]?.isNetworkError = false
+        viewStates[viewID]?.rateLimitRetryAfter = nil
 
         do {
             let page = try await gitHubClient.fetchPullRequests(query: view.query, cursor: state.nextCursor)
@@ -154,12 +158,13 @@ final class DashboardViewModel {
             logger.info("Loaded \(newPRs.count, privacy: .public) more PR(s) for '\(view.title, privacy: .public)' (total: \(totalCount, privacy: .public))")
         } catch is CancellationError {
             return
-        } catch let error as URLError where error.code == .cancelled {
-            return
         } catch {
             logger.error("Failed to load more PRs for '\(view.title, privacy: .public)': \(error, privacy: .public)")
             viewStates[viewID]?.isNetworkError = error.isNetworkError
             viewStates[viewID]?.error = error.localizedDescription
+            if let clientError = error as? GitHubClientError, case .rateLimited(let retryAfter) = clientError {
+                viewStates[viewID]?.rateLimitRetryAfter = retryAfter
+            }
         }
 
         viewStates[viewID]?.isLoadingMore = false
@@ -242,9 +247,14 @@ final class DashboardViewModel {
                     let interval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
                     seconds = interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
                 } else if hasAnyError {
-                    // Exponential backoff on errors: 10s, 20s, 40s, capped at 60s
-                    consecutiveEmptyFetches += 1
-                    seconds = min(10 * pow(2.0, Double(consecutiveEmptyFetches - 1)), 60)
+                    let rateLimitWait = self?.viewStates.values.compactMap(\.rateLimitRetryAfter).max()
+                    if let wait = rateLimitWait, wait > 60 {
+                        seconds = min(wait, 3600) // Cap at 1 hour
+                    } else {
+                        // Exponential backoff on errors: 10s, 20s, 40s, capped at 60s
+                        consecutiveEmptyFetches += 1
+                        seconds = min(10 * pow(2.0, Double(consecutiveEmptyFetches - 1)), 60)
+                    }
                 } else {
                     // No data yet, no errors — initial load, retry quickly
                     seconds = 5

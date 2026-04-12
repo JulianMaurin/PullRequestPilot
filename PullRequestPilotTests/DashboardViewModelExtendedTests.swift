@@ -605,13 +605,13 @@ struct DashboardViewModelExtendedTests {
         #expect(!viewModel.viewStates[viewID]!.canLoadMore)
     }
 
-    // MARK: - refresh URLError.cancelled handling
+    // MARK: - refresh CancellationError handling
 
-    @Test("refresh ignores URLError.cancelled")
-    func refreshIgnoresURLErrorCancelled() async {
-        mockClient.errorToThrow = URLError(.cancelled)
+    @Test("refresh ignores CancellationError")
+    func refreshIgnoresCancellationError() async {
+        mockClient.errorToThrow = CancellationError()
 
-        let viewModel = makeViewModel(suiteName: "URLCancelRefresh")
+        let viewModel = makeViewModel(suiteName: "CancelRefresh")
         let viewID = viewModel.views.first!.id
         await viewModel.refresh(viewID: viewID)
 
@@ -619,19 +619,19 @@ struct DashboardViewModelExtendedTests {
         #expect(state.error == nil)
     }
 
-    // MARK: - loadMore URLError.cancelled handling
+    // MARK: - loadMore CancellationError handling
 
-    @Test("loadMore ignores URLError.cancelled")
-    func loadMoreIgnoresURLErrorCancelled() async {
+    @Test("loadMore ignores CancellationError")
+    func loadMoreIgnoresCancellationError() async {
         let pr = TestPullRequestFactory.make(id: "PR_1", title: "PR 1")
         mockClient.pullRequestsToReturn = [pr]
         mockClient.nextCursorToReturn = "cursor_1"
 
-        let viewModel = makeViewModel(suiteName: "LoadMoreURLCancel")
+        let viewModel = makeViewModel(suiteName: "LoadMoreCancel")
         let viewID = viewModel.views.first!.id
         await viewModel.refresh(viewID: viewID)
 
-        mockClient.errorToThrow = URLError(.cancelled)
+        mockClient.errorToThrow = CancellationError()
         await viewModel.loadMore(viewID: viewID)
 
         let state = viewModel.viewStates[viewID]!
