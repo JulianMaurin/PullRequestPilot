@@ -82,6 +82,11 @@ final class SettingsViewModel {
             viewerAvatarURL = viewer.avatarURL
             validationState = .valid
             logger.info("Token validated — authenticated as \(viewer.login, privacy: .private)")
+        } catch is CancellationError {
+            // View disappeared during validation — restore cache to previous state
+            tokenCache.invalidate()
+            validationState = .idle
+            return
         } catch let error as GitHubClientError {
             logger.error("Token validation failed: \(error.localizedDescription, privacy: .public)")
             tokenCache.invalidate()
