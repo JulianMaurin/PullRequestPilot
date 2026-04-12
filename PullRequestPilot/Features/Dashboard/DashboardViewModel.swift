@@ -187,6 +187,12 @@ final class DashboardViewModel {
         updateWidgetData()
     }
 
+    /// Clears the cached viewer login so the next refresh re-fetches it from the API.
+    /// Must be called when the GitHub token changes (e.g. after saving a new token in Settings).
+    func resetViewerLogin() {
+        viewerLogin = nil
+    }
+
     private func fetchViewerLoginIfNeeded() async {
         guard viewerLogin == nil, !isFetchingViewer else { return }
         isFetchingViewer = true

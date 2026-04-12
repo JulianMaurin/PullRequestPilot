@@ -49,7 +49,11 @@ struct ContentView: View {
             }
         }
         .onChange(of: settingsViewModel.hasSavedToken) { _, hasSaved in
-            if !hasSaved {
+            if hasSaved {
+                // Token changed — clear cached viewer login so the next refresh
+                // re-fetches the authenticated user for "hide reviewed" filtering.
+                dashboardViewModel.resetViewerLogin()
+            } else {
                 needsInitialSetup = true
                 dashboardViewModel.showingSettings = false
             }

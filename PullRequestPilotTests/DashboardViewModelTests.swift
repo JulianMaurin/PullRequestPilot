@@ -407,6 +407,35 @@ struct DashboardViewModelTests {
         #expect(!viewModel.isBadgeEnabled(for: view1.id))
     }
 
+    @Test("resetViewerLogin clears cached login for re-fetch on next refresh")
+    func resetViewerLogin() async {
+        let defaults = UserDefaults(suiteName: "ResetViewer")!
+        defaults.removePersistentDomain(forName: "ResetViewer")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let testView = DashboardView(id: UUID(), title: "Review", query: "is:pr", hideReviewed: true)
+        viewModel.addView(testView)
+
+        // First refresh fetches viewer login "testuser"
+        mockClient.viewerLoginToReturn = "testuser"
+        let approvedPR = makePullRequest(number: 1, title: "Approved", reviews: [
+            UserReview(login: "testuser", state: .approved)
+        ])
+        mockClient.pullRequestsToReturn = [approvedPR]
+        await viewModel.refresh(viewID: testView.id)
+        // PR should be filtered out (testuser approved it)
+        #expect(viewModel.viewStates[testView.id]?.pullRequests.isEmpty == true)
+
+        // Reset viewer login (simulates token change)
+        viewModel.resetViewerLogin()
+
+        // Next refresh will re-fetch viewer — now "otheruser"
+        mockClient.viewerLoginToReturn = "otheruser"
+        await viewModel.refresh(viewID: testView.id)
+        // PR should now be visible (otheruser didn't review it)
+        #expect(viewModel.viewStates[testView.id]?.pullRequests.count == 1)
+    }
+
     // MARK: - View Navigation
 
     @Test("selectNextView cycles to next view")
