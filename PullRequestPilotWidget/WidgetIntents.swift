@@ -55,7 +55,8 @@ struct OpenAllPRsIntent: AppIntent {
             return .result()
         }
 
-        for pr in view.pullRequests {
+        // Cap at 10 to avoid overwhelming the browser
+        for pr in view.pullRequests.prefix(10) {
             NSWorkspace.shared.open(pr.url)
         }
 
