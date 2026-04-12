@@ -8,85 +8,76 @@ struct QueryEditTests {
     private let mockClient = MockGitHubClient()
     private let localRepoService = LocalRepositoryService()
 
-    private func makeViewModel(suiteName: String) -> DashboardViewModel {
+    private func makeViewModel(suiteName: String) -> (vm: DashboardViewModel, viewID: UUID) {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         let store = ViewsStore(defaults: defaults)
         let vm = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let view = DashboardView(id: UUID(), title: "Test", query: "is:pr is:open")
         vm.addView(view)
-        return vm
+        return (vm, view.id)
     }
 
     // MARK: - commitQueryEdit
 
     @Test("commitQueryEdit updates query when trimmed value differs")
     func commitQueryEditUpdates() {
-        let vm = makeViewModel(suiteName: "QEditUpdates")
-        let viewID = vm.views.first!.id
+        let (vm, viewID) = makeViewModel(suiteName: "QEditUpdates")
         vm.commitQueryEdit(viewID: viewID, newQuery: "is:pr author:@me")
-        #expect(vm.views.first!.query == "is:pr author:@me")
+        #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr author:@me")
     }
 
     @Test("commitQueryEdit trims whitespace")
     func commitQueryEditTrims() {
-        let vm = makeViewModel(suiteName: "QEditTrims")
-        let viewID = vm.views.first!.id
+        let (vm, viewID) = makeViewModel(suiteName: "QEditTrims")
         vm.commitQueryEdit(viewID: viewID, newQuery: "  is:pr author:@me  \n")
-        #expect(vm.views.first!.query == "is:pr author:@me")
+        #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr author:@me")
     }
 
     @Test("commitQueryEdit is no-op when empty after trim")
     func commitQueryEditIgnoresEmpty() {
-        let vm = makeViewModel(suiteName: "QEditEmpty")
-        let viewID = vm.views.first!.id
-        let original = vm.views.first!.query
+        let (vm, viewID) = makeViewModel(suiteName: "QEditEmpty")
+        let original = vm.views.first(where: { $0.id == viewID })?.query
         vm.commitQueryEdit(viewID: viewID, newQuery: "   ")
-        #expect(vm.views.first!.query == original)
+        #expect(vm.views.first(where: { $0.id == viewID })?.query == original)
     }
 
     @Test("commitQueryEdit is no-op when query unchanged")
     func commitQueryEditIgnoresSame() {
-        let vm = makeViewModel(suiteName: "QEditSame")
-        let viewID = vm.views.first!.id
-        let original = vm.views.first!.query
+        let (vm, viewID) = makeViewModel(suiteName: "QEditSame")
+        let original = vm.views.first(where: { $0.id == viewID })?.query ?? ""
         mockClient.fetchPullRequestsCallCount = 0
         vm.commitQueryEdit(viewID: viewID, newQuery: original)
-        // No refresh should be triggered since query didn't change
-        #expect(vm.views.first!.query == original)
+        #expect(vm.views.first(where: { $0.id == viewID })?.query == original)
     }
 
     @Test("commitQueryEdit is no-op for invalid viewID")
     func commitQueryEditInvalidView() {
-        let vm = makeViewModel(suiteName: "QEditInvalid")
+        let (vm, viewID) = makeViewModel(suiteName: "QEditInvalid")
         vm.commitQueryEdit(viewID: UUID(), newQuery: "is:pr")
-        // Should not crash or modify any view
-        #expect(vm.views.first!.query == "is:pr is:open")
+        #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr is:open")
     }
 
     // MARK: - appendFilter
 
     @Test("appendFilter appends qualifier to query")
     func appendFilterAppends() {
-        let vm = makeViewModel(suiteName: "FilterAppend")
-        let viewID = vm.views.first!.id
+        let (vm, viewID) = makeViewModel(suiteName: "FilterAppend")
         vm.appendFilter(viewID: viewID, qualifier: "org:acme")
-        #expect(vm.views.first!.query == "is:pr is:open org:acme")
+        #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr is:open org:acme")
     }
 
     @Test("appendFilter skips if qualifier already present")
     func appendFilterSkipsDuplicate() {
-        let vm = makeViewModel(suiteName: "FilterDup")
-        let viewID = vm.views.first!.id
+        let (vm, viewID) = makeViewModel(suiteName: "FilterDup")
         vm.appendFilter(viewID: viewID, qualifier: "is:pr")
-        // "is:pr" is already in the query, should not be added again
-        #expect(vm.views.first!.query == "is:pr is:open")
+        #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr is:open")
     }
 
     @Test("appendFilter is no-op for invalid viewID")
     func appendFilterInvalidView() {
-        let vm = makeViewModel(suiteName: "FilterInvalid")
+        let (vm, viewID) = makeViewModel(suiteName: "FilterInvalid")
         vm.appendFilter(viewID: UUID(), qualifier: "org:acme")
-        #expect(vm.views.first!.query == "is:pr is:open")
+        #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr is:open")
     }
 }

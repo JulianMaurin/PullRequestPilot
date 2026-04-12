@@ -8,14 +8,14 @@ struct DashboardViewModelExtendedTests {
     let mockClient = MockGitHubClient()
     let localRepoService = LocalRepositoryService()
 
-    private func makeViewModel(suiteName: String = "DashboardViewModelExtended") -> DashboardViewModel {
+    private func makeViewModel(suiteName: String = "DashboardViewModelExtended") -> (viewModel: DashboardViewModel, viewID: UUID) {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Test View", query: "is:pr is:open")
         viewModel.addView(testView)
-        return viewModel
+        return (viewModel, testView.id)
     }
 
     // MARK: - ViewState
@@ -66,20 +66,19 @@ struct DashboardViewModelExtendedTests {
         mockClient.pullRequestsToReturn = [pr1]
         mockClient.nextCursorToReturn = "cursor_1"
 
-        let viewModel = makeViewModel(suiteName: "LoadMore")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "LoadMore")
         await viewModel.refresh(viewID: viewID)
 
-        #expect(viewModel.viewStates[viewID]!.pullRequests.count == 1)
-        #expect(viewModel.viewStates[viewID]!.canLoadMore)
+        #expect(viewModel.viewStates[viewID]?.pullRequests.count == 1)
+        #expect(viewModel.viewStates[viewID]?.canLoadMore == true)
 
         mockClient.pullRequestsToReturn = [pr2]
         mockClient.nextCursorToReturn = nil
 
         await viewModel.loadMore(viewID: viewID)
 
-        #expect(viewModel.viewStates[viewID]!.pullRequests.count == 2)
-        #expect(viewModel.viewStates[viewID]!.pullRequests[1].title == "Second")
+        #expect(viewModel.viewStates[viewID]?.pullRequests.count == 2)
+        #expect(viewModel.viewStates[viewID]?.pullRequests[1].title == "Second")
     }
 
     @Test("loadMore deduplicates PRs")
@@ -89,8 +88,7 @@ struct DashboardViewModelExtendedTests {
         mockClient.pullRequestsToReturn = [pr1]
         mockClient.nextCursorToReturn = "cursor_1"
 
-        let viewModel = makeViewModel(suiteName: "LoadMoreDedup")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "LoadMoreDedup")
         await viewModel.refresh(viewID: viewID)
 
         // Return the same PR again
@@ -99,26 +97,26 @@ struct DashboardViewModelExtendedTests {
 
         await viewModel.loadMore(viewID: viewID)
 
-        #expect(viewModel.viewStates[viewID]!.pullRequests.count == 1)
+        #expect(viewModel.viewStates[viewID]?.pullRequests.count == 1)
     }
 
     // MARK: - updateView
 
     @Test("updateView modifies existing view")
-    func updateViewModifiesView() {
-        let viewModel = makeViewModel(suiteName: "UpdateView")
-        var view = viewModel.views.first!
+    func updateViewModifiesView() throws {
+        let (viewModel, viewID) = makeViewModel(suiteName: "UpdateView")
+        var view = try #require(viewModel.views.first(where: { $0.id == viewID }))
         let originalTitle = view.title
         view.title = "Updated Title"
         viewModel.updateView(view)
 
-        #expect(viewModel.views.first!.title == "Updated Title")
-        #expect(viewModel.views.first!.title != originalTitle)
+        #expect(viewModel.views.first(where: { $0.id == viewID })?.title == "Updated Title")
+        #expect(viewModel.views.first(where: { $0.id == viewID })?.title != originalTitle)
     }
 
     @Test("updateView ignores unknown view")
     func updateViewIgnoresUnknown() {
-        let viewModel = makeViewModel(suiteName: "UpdateViewUnknown")
+        let (viewModel, _) = makeViewModel(suiteName: "UpdateViewUnknown")
         let unknownView = DashboardView(id: UUID(), title: "Unknown", query: "test")
         let countBefore = viewModel.views.count
         viewModel.updateView(unknownView)
@@ -129,7 +127,7 @@ struct DashboardViewModelExtendedTests {
 
     @Test("deleteView updates selection to next available view")
     func deleteViewUpdatesSelection() {
-        let viewModel = makeViewModel(suiteName: "DeleteViewSelection")
+        let (viewModel, _) = makeViewModel(suiteName: "DeleteViewSelection")
         let view1 = DashboardView(id: UUID(), title: "View 1", query: "q1")
         let view2 = DashboardView(id: UUID(), title: "View 2", query: "q2")
         viewModel.addView(view1)
@@ -166,7 +164,7 @@ struct DashboardViewModelExtendedTests {
 
     @Test("selectedViewState returns empty state when no selection")
     func selectedViewStateNoSelection() {
-        let viewModel = makeViewModel(suiteName: "SelectedViewState")
+        let (viewModel, _) = makeViewModel(suiteName: "SelectedViewState")
         viewModel.selectedViewID = nil
         let state = viewModel.selectedViewState
         #expect(state.isEmpty)
@@ -198,7 +196,7 @@ struct DashboardViewModelExtendedTests {
 
     @Test("startAutoRefresh is idempotent")
     func startAutoRefreshIdempotent() {
-        let viewModel = makeViewModel(suiteName: "AutoRefreshIdem")
+        let (viewModel, _) = makeViewModel(suiteName: "AutoRefreshIdem")
         viewModel.startAutoRefresh()
         viewModel.startAutoRefresh()
         // Should not create multiple tasks — just verify no crash
@@ -211,8 +209,7 @@ struct DashboardViewModelExtendedTests {
     func refreshIgnoresCancellation() async {
         mockClient.errorToThrow = CancellationError()
 
-        let viewModel = makeViewModel(suiteName: "CancelRefresh")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "CancelRefresh")
         await viewModel.refresh(viewID: viewID)
 
         let state = viewModel.viewStates[viewID]!
@@ -223,7 +220,7 @@ struct DashboardViewModelExtendedTests {
 
     @Test("refresh with unknown viewID is a no-op")
     func refreshUnknownViewID() async {
-        let viewModel = makeViewModel(suiteName: "UnknownViewID")
+        let (viewModel, _) = makeViewModel(suiteName: "UnknownViewID")
         await viewModel.refresh(viewID: UUID())
         #expect(mockClient.fetchPullRequestsCallCount == 0)
     }
@@ -232,7 +229,7 @@ struct DashboardViewModelExtendedTests {
 
     @Test("addView sets selectedViewID when it was nil")
     func addViewSetsSelectionWhenNil() {
-        let viewModel = makeViewModel(suiteName: "AddViewSelection")
+        let (viewModel, _) = makeViewModel(suiteName: "AddViewSelection")
         // Delete all existing views
         let viewIDs = viewModel.views.map(\.id)
         for id in viewIDs {
@@ -253,7 +250,7 @@ struct DashboardViewModelExtendedTests {
         mockClient.pullRequestsToReturn = [pr]
         mockClient.viewerLoginToReturn = "testuser"
 
-        let viewModel = makeViewModel(suiteName: "RefreshAll")
+        let (viewModel, _) = makeViewModel(suiteName: "RefreshAll")
         let view2 = DashboardView(id: UUID(), title: "My PRs", query: "author:@me")
         viewModel.addView(view2)
 
@@ -300,8 +297,7 @@ struct DashboardViewModelExtendedTests {
         mockClient.pullRequestsToReturn = [pr]
         mockClient.nextCursorToReturn = "cursor_1"
 
-        let viewModel = makeViewModel(suiteName: "LoadMoreError")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "LoadMoreError")
         await viewModel.refresh(viewID: viewID)
 
         mockClient.errorToThrow = GitHubClientError.networkError(URLError(.timedOut))
@@ -319,8 +315,7 @@ struct DashboardViewModelExtendedTests {
         mockClient.pullRequestsToReturn = [pr]
         mockClient.nextCursorToReturn = "cursor_1"
 
-        let viewModel = makeViewModel(suiteName: "LoadMoreCancel")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "LoadMoreCancel")
         await viewModel.refresh(viewID: viewID)
 
         mockClient.errorToThrow = CancellationError()
@@ -333,8 +328,7 @@ struct DashboardViewModelExtendedTests {
     @Test("loadMore is no-op when canLoadMore is false")
     func loadMoreNoOpWhenCannotLoad() async {
         mockClient.pullRequestsToReturn = []
-        let viewModel = makeViewModel(suiteName: "LoadMoreNoOp")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "LoadMoreNoOp")
         await viewModel.refresh(viewID: viewID)
 
         let callsBefore = mockClient.fetchPullRequestsCallCount
@@ -384,8 +378,7 @@ struct DashboardViewModelExtendedTests {
         let pr = TestPullRequestFactory.make(id: "PR_1", title: "Test")
         mockClient.pullRequestsToReturn = [pr]
 
-        let viewModel = makeViewModel(suiteName: "SelectedViewStateValid")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "SelectedViewStateValid")
         viewModel.selectedViewID = viewID
         await viewModel.refresh(viewID: viewID)
 
@@ -422,14 +415,14 @@ struct DashboardViewModelExtendedTests {
 
         // We can't easily assert the notification was sent, but we can verify
         // the flow didn't crash and PRs are loaded
-        #expect(viewModel.viewStates[viewID]!.pullRequests.count == 2)
+        #expect(viewModel.viewStates[viewID]?.pullRequests.count == 2)
     }
 
     // MARK: - localMatch
 
     @Test("localMatch returns nil when no local repo match")
     func localMatchReturnsNil() {
-        let viewModel = makeViewModel(suiteName: "LocalMatch")
+        let (viewModel, _) = makeViewModel(suiteName: "LocalMatch")
         let pr = TestPullRequestFactory.make()
         #expect(viewModel.localMatch(for: pr) == nil)
     }
@@ -461,8 +454,7 @@ struct DashboardViewModelExtendedTests {
 
     @Test("moveView is no-op when source equals target")
     func moveViewSamePosition() {
-        let viewModel = makeViewModel(suiteName: "MoveViewSame")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "MoveViewSame")
         let titlesBefore = viewModel.views.map(\.title)
         viewModel.moveView(from: viewID, to: viewID)
         #expect(viewModel.views.map(\.title) == titlesBefore)
@@ -470,8 +462,7 @@ struct DashboardViewModelExtendedTests {
 
     @Test("moveView is no-op for unknown source")
     func moveViewUnknownSource() {
-        let viewModel = makeViewModel(suiteName: "MoveViewUnknown")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "MoveViewUnknown")
         let countBefore = viewModel.views.count
         viewModel.moveView(from: UUID(), to: viewID)
         #expect(viewModel.views.count == countBefore)
@@ -577,11 +568,10 @@ struct DashboardViewModelExtendedTests {
         // Return the same PR twice
         mockClient.pullRequestsToReturn = [pr, pr]
 
-        let viewModel = makeViewModel(suiteName: "RefreshDedup")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "RefreshDedup")
         await viewModel.refresh(viewID: viewID)
 
-        #expect(viewModel.viewStates[viewID]!.pullRequests.count == 1)
+        #expect(viewModel.viewStates[viewID]?.pullRequests.count == 1)
     }
 
     // MARK: - refresh reachedLimit
@@ -596,12 +586,11 @@ struct DashboardViewModelExtendedTests {
         mockClient.pullRequestsToReturn = prs
         mockClient.nextCursorToReturn = "cursor"
 
-        let viewModel = makeViewModel(suiteName: "ReachedLimit")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "ReachedLimit")
         await viewModel.refresh(viewID: viewID)
 
-        #expect(viewModel.viewStates[viewID]!.reachedLimit)
-        #expect(!viewModel.viewStates[viewID]!.canLoadMore)
+        #expect(viewModel.viewStates[viewID]?.reachedLimit == true)
+        #expect(viewModel.viewStates[viewID]?.canLoadMore != true)
     }
 
     // MARK: - refresh CancellationError handling
@@ -610,8 +599,7 @@ struct DashboardViewModelExtendedTests {
     func refreshIgnoresCancellationError() async {
         mockClient.errorToThrow = CancellationError()
 
-        let viewModel = makeViewModel(suiteName: "CancelRefresh")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "CancelRefresh")
         await viewModel.refresh(viewID: viewID)
 
         let state = viewModel.viewStates[viewID]!
@@ -626,8 +614,7 @@ struct DashboardViewModelExtendedTests {
         mockClient.pullRequestsToReturn = [pr]
         mockClient.nextCursorToReturn = "cursor_1"
 
-        let viewModel = makeViewModel(suiteName: "LoadMoreCancel")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "LoadMoreCancel")
         await viewModel.refresh(viewID: viewID)
 
         mockClient.errorToThrow = CancellationError()
@@ -641,7 +628,7 @@ struct DashboardViewModelExtendedTests {
 
     @Test("loadMore with unknown viewID is a no-op")
     func loadMoreUnknownViewID() async {
-        let viewModel = makeViewModel(suiteName: "LoadMoreUnknown")
+        let (viewModel, _) = makeViewModel(suiteName: "LoadMoreUnknown")
         let callsBefore = mockClient.fetchPullRequestsCallCount
         await viewModel.loadMore(viewID: UUID())
         #expect(mockClient.fetchPullRequestsCallCount == callsBefore)
@@ -660,8 +647,7 @@ struct DashboardViewModelExtendedTests {
         mockClient.pullRequestsToReturn = initialPRs
         mockClient.nextCursorToReturn = "cursor_1"
 
-        let viewModel = makeViewModel(suiteName: "LoadMoreLimit")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "LoadMoreLimit")
         await viewModel.refresh(viewID: viewID)
 
         // Load one more to hit the limit
@@ -672,7 +658,7 @@ struct DashboardViewModelExtendedTests {
 
         await viewModel.loadMore(viewID: viewID)
 
-        #expect(viewModel.viewStates[viewID]!.reachedLimit)
+        #expect(viewModel.viewStates[viewID]?.reachedLimit == true)
     }
 
     // MARK: - loadMore filters reviewed PRs
@@ -704,7 +690,7 @@ struct DashboardViewModelExtendedTests {
 
         await viewModel.loadMore(viewID: viewID)
 
-        let titles = viewModel.viewStates[viewID]!.pullRequests.map(\.title)
+        let titles = viewModel.viewStates[viewID]?.pullRequests.map(\.title) ?? []
         #expect(!titles.contains("Reviewed"))
         #expect(titles.contains("Unreviewed"))
     }
@@ -732,7 +718,7 @@ struct DashboardViewModelExtendedTests {
 
     @Test("stopAutoRefresh removes notification observer")
     func stopAutoRefreshCleansUp() {
-        let viewModel = makeViewModel(suiteName: "StopAutoRefresh")
+        let (viewModel, _) = makeViewModel(suiteName: "StopAutoRefresh")
         viewModel.startAutoRefresh()
         viewModel.stopAutoRefresh()
         // Calling stop twice should be safe
@@ -743,7 +729,7 @@ struct DashboardViewModelExtendedTests {
 
     @Test("openInEditor is no-op when no local match")
     func openInEditorNoMatch() {
-        let viewModel = makeViewModel(suiteName: "OpenEditorNoMatch")
+        let (viewModel, _) = makeViewModel(suiteName: "OpenEditorNoMatch")
         let pr = TestPullRequestFactory.make()
         // Should not crash
         viewModel.openInEditor(pr)
@@ -751,7 +737,7 @@ struct DashboardViewModelExtendedTests {
 
     @Test("openInTerminal is no-op when no local match")
     func openInTerminalNoMatch() {
-        let viewModel = makeViewModel(suiteName: "OpenTerminalNoMatch")
+        let (viewModel, _) = makeViewModel(suiteName: "OpenTerminalNoMatch")
         let pr = TestPullRequestFactory.make()
         // Should not crash
         viewModel.openInTerminal(pr)
@@ -767,7 +753,7 @@ struct DashboardViewModelExtendedTests {
         let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Test View", query: "is:pr is:open")
         viewModel.addView(testView)
-        let viewID = viewModel.views.first!.id
+        let viewID = testView.id
 
         viewModel.setNotification(for: viewID, enabled: true)
         #expect(viewModel.isNotificationEnabled(for: viewID))
@@ -848,7 +834,7 @@ struct DashboardViewModelExtendedTests {
 
     @Test("selectedViewState returns empty state for stale selection")
     func selectedViewStateStaleSelection() {
-        let viewModel = makeViewModel(suiteName: "StaleSelection")
+        let (viewModel, _) = makeViewModel(suiteName: "StaleSelection")
         viewModel.selectedViewID = UUID() // non-existent view ID
         let state = viewModel.selectedViewState
         #expect(state.isEmpty)
@@ -915,7 +901,7 @@ struct DashboardViewModelExtendedTests {
 
     @Test("refresh interval change notification restarts auto-refresh")
     func restartAutoRefreshViaNotification() async {
-        let viewModel = makeViewModel(suiteName: "RestartAutoRefresh")
+        let (viewModel, _) = makeViewModel(suiteName: "RestartAutoRefresh")
         viewModel.startAutoRefresh()
 
         // Trigger restart via notification (same mechanism as restartAutoRefresh)
@@ -1032,13 +1018,13 @@ struct DashboardViewModelExtendedTests {
 
     @Test("isVSCodeAvailable delegates to localRepositoryService")
     func isVSCodeAvailableDelegation() {
-        let viewModel = makeViewModel(suiteName: "VSCodeAvail")
+        let (viewModel, _) = makeViewModel(suiteName: "VSCodeAvail")
         #expect(viewModel.isVSCodeAvailable == localRepoService.isVSCodeAvailable)
     }
 
     @Test("isITermAvailable delegates to localRepositoryService")
     func isITermAvailableDelegation() {
-        let viewModel = makeViewModel(suiteName: "ITermAvail")
+        let (viewModel, _) = makeViewModel(suiteName: "ITermAvail")
         #expect(viewModel.isITermAvailable == localRepoService.isITermAvailable)
     }
 }

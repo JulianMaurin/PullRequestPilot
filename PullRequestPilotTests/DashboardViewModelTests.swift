@@ -10,26 +10,25 @@ struct DashboardViewModelTests {
     let mockClient = MockGitHubClient()
     let localRepoService = LocalRepositoryService()
 
-    private func makeViewModel(suiteName: String = "DashboardViewModelTests") -> DashboardViewModel {
+    private func makeViewModel(suiteName: String = "DashboardViewModelTests") -> (viewModel: DashboardViewModel, viewID: UUID) {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Test View", query: "is:pr is:open")
         viewModel.addView(testView)
-        return viewModel
+        return (viewModel, testView.id)
     }
 
     @Test("loads pull requests for a view on refresh")
-    func loadsPullRequests() async {
+    func loadsPullRequests() async throws {
         let pr = makePullRequest(number: 1, title: "Fix bug")
         mockClient.pullRequestsToReturn = [pr]
 
-        let viewModel = makeViewModel(suiteName: "LoadsPRs")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "LoadsPRs")
         await viewModel.refresh(viewID: viewID)
 
-        let state = viewModel.viewStates[viewID]!
+        let state = try #require(viewModel.viewStates[viewID])
         #expect(state.pullRequests.count == 1)
         #expect(state.pullRequests.first?.title == "Fix bug")
         #expect(state.error == nil)
@@ -37,41 +36,40 @@ struct DashboardViewModelTests {
     }
 
     @Test("surfaces error message on failure")
-    func handlesError() async {
+    func handlesError() async throws {
         mockClient.errorToThrow = GitHubClientError.unauthorized
 
-        let viewModel = makeViewModel(suiteName: "HandlesError")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "HandlesError")
         await viewModel.refresh(viewID: viewID)
 
-        let state = viewModel.viewStates[viewID]!
+        let state = try #require(viewModel.viewStates[viewID])
         #expect(state.pullRequests.isEmpty)
         #expect(state.error != nil)
     }
 
     @Test("isEmpty is true when no PRs and not loading")
-    func isEmpty() async {
+    func isEmpty() async throws {
         mockClient.pullRequestsToReturn = []
 
-        let viewModel = makeViewModel(suiteName: "IsEmpty")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "IsEmpty")
         await viewModel.refresh(viewID: viewID)
 
-        #expect(viewModel.viewStates[viewID]!.isEmpty)
+        let state = try #require(viewModel.viewStates[viewID])
+        #expect(state.isEmpty)
     }
 
     @Test("passes the view query to the client")
     func passesQueryToClient() async {
-        let viewModel = makeViewModel(suiteName: "PassesQuery")
-        let view = viewModel.views.first!
-        await viewModel.refresh(viewID: view.id)
+        let (viewModel, viewID) = makeViewModel(suiteName: "PassesQuery")
+        let view = viewModel.views.first(where: { $0.id == viewID })
+        await viewModel.refresh(viewID: viewID)
 
-        #expect(mockClient.receivedQueries.last == view.query)
+        #expect(mockClient.receivedQueries.last == view?.query)
     }
 
     @Test("add and delete views")
     func addAndDeleteViews() {
-        let viewModel = makeViewModel(suiteName: "AddDeleteViews")
+        let (viewModel, _) = makeViewModel(suiteName: "AddDeleteViews")
         let initialCount = viewModel.views.count
 
         let newView = DashboardView(id: UUID(), title: "My PRs", query: "is:pr author:@me")
@@ -107,8 +105,8 @@ struct DashboardViewModelTests {
         #expect(viewModel.views.first(where: { $0.id == viewID })?.hideReviewed == true)
         await viewModel.refresh(viewID: viewID)
 
-        let state = viewModel.viewStates[viewID]!
-        let titles = state.pullRequests.map(\.title)
+        let state = viewModel.viewStates[viewID]
+        let titles = state?.pullRequests.map(\.title) ?? []
         #expect(titles.contains("Dismissed"))
         #expect(titles.contains("Unreviewed"))
         #expect(titles.contains("Other reviewed"))
@@ -118,45 +116,42 @@ struct DashboardViewModelTests {
     // MARK: - Network Error State
 
     @Test("refresh sets isNetworkError on network failure")
-    func refreshSetsNetworkError() async {
+    func refreshSetsNetworkError() async throws {
         mockClient.errorToThrow = GitHubClientError.networkError(URLError(.notConnectedToInternet))
 
-        let viewModel = makeViewModel(suiteName: "NetworkError")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "NetworkError")
         await viewModel.refresh(viewID: viewID)
 
-        let state = viewModel.viewStates[viewID]!
+        let state = try #require(viewModel.viewStates[viewID])
         #expect(state.isNetworkError)
         #expect(state.error != nil)
     }
 
     @Test("refresh clears isNetworkError on success after previous network error")
-    func refreshClearsNetworkError() async {
+    func refreshClearsNetworkError() async throws {
         mockClient.errorToThrow = GitHubClientError.networkError(URLError(.notConnectedToInternet))
 
-        let viewModel = makeViewModel(suiteName: "ClearsNetworkError")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "ClearsNetworkError")
         await viewModel.refresh(viewID: viewID)
-        #expect(viewModel.viewStates[viewID]!.isNetworkError)
+        #expect(viewModel.viewStates[viewID]?.isNetworkError == true)
 
         mockClient.errorToThrow = nil
         mockClient.pullRequestsToReturn = [makePullRequest(number: 1, title: "OK")]
         await viewModel.refresh(viewID: viewID)
 
-        let state = viewModel.viewStates[viewID]!
+        let state = try #require(viewModel.viewStates[viewID])
         #expect(!state.isNetworkError)
         #expect(state.error == nil)
     }
 
     @Test("isNetworkError is false for non-network errors")
-    func nonNetworkErrorDoesNotSetFlag() async {
+    func nonNetworkErrorDoesNotSetFlag() async throws {
         mockClient.errorToThrow = GitHubClientError.unauthorized
 
-        let viewModel = makeViewModel(suiteName: "NonNetworkError")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "NonNetworkError")
         await viewModel.refresh(viewID: viewID)
 
-        let state = viewModel.viewStates[viewID]!
+        let state = try #require(viewModel.viewStates[viewID])
         #expect(!state.isNetworkError)
         #expect(state.error != nil)
     }
@@ -165,13 +160,13 @@ struct DashboardViewModelTests {
 
     @Test("showingSettings defaults to false")
     func showingSettingsDefault() {
-        let viewModel = makeViewModel(suiteName: "SettingsDefault")
+        let (viewModel, _) = makeViewModel(suiteName: "SettingsDefault")
         #expect(!viewModel.showingSettings)
     }
 
     @Test("showingSettings can be toggled")
     func showingSettingsToggle() {
-        let viewModel = makeViewModel(suiteName: "SettingsToggle")
+        let (viewModel, _) = makeViewModel(suiteName: "SettingsToggle")
         viewModel.showingSettings = true
         #expect(viewModel.showingSettings)
         viewModel.showingSettings = false
@@ -271,8 +266,7 @@ struct DashboardViewModelTests {
     @Test("badgeCount returns 0 when no views have badge enabled")
     func badgeCountZeroWhenNoneEnabled() async {
         mockClient.pullRequestsToReturn = [makePullRequest(number: 1, title: "PR 1")]
-        let viewModel = makeViewModel(suiteName: "BadgeCountNone")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "BadgeCountNone")
         await viewModel.refresh(viewID: viewID)
 
         #expect(viewModel.badgeCount == 0)
@@ -303,8 +297,7 @@ struct DashboardViewModelTests {
 
     @Test("isBadgeEnabled and setBadge toggle correctly")
     func badgeToggle() {
-        let viewModel = makeViewModel(suiteName: "BadgeToggle")
-        let viewID = viewModel.views.first!.id
+        let (viewModel, viewID) = makeViewModel(suiteName: "BadgeToggle")
 
         #expect(!viewModel.isBadgeEnabled(for: viewID))
         viewModel.setBadge(for: viewID, enabled: true)
