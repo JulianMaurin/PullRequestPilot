@@ -12,12 +12,9 @@ struct ViewDetailEntry: TimelineEntry {
 // MARK: - Timeline Provider
 
 struct ViewDetailProvider: AppIntentTimelineProvider {
-    private static let placeholderURL: URL = {
-        guard let url = URL(string: "https://github.com") else {
-            preconditionFailure("Invalid static URL: placeholder")
-        }
-        return url
-    }()
+    private static let placeholderURL: URL =
+        URL(string: "https://github.com")
+        ?? URL(fileURLWithPath: "/")
 
     func placeholder(in _: Context) -> ViewDetailEntry {
         ViewDetailEntry(date: .now, viewData: WidgetViewData(
@@ -336,12 +333,9 @@ private struct ReviewSummaryPills: View {
 
 // MARK: - Previews
 
-private let sampleURL: URL = {
-    guard let url = URL(string: "https://github.com") else {
-        preconditionFailure("Invalid static URL: sample")
-    }
-    return url
-}()
+private let sampleURL: URL =
+    URL(string: "https://github.com")
+    ?? URL(fileURLWithPath: "/")
 
 private let samplePRs: [WidgetPullRequest] = [
     WidgetPullRequest(

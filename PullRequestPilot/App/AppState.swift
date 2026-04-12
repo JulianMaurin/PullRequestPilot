@@ -19,7 +19,7 @@ final class AppState {
         let tokenCache = TokenCache(keychain: keychain)
         let gitHubClient = GitHubClient(
             tokenProvider: { tokenCache.token },
-            onUnauthorized: { tokenCache.invalidate() }
+            onUnauthorized: { staleToken in tokenCache.invalidateIfCurrent(staleToken) }
         )
         let viewsStore = ViewsStore(defaults: defaults)
         let gitDirectoriesStore = GitDirectoriesStore()

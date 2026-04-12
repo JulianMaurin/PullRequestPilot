@@ -68,4 +68,15 @@ final class TokenCache: @unchecked Sendable {
         hasLoaded = false
         generation &+= 1
     }
+
+    /// Invalidates only if the given token matches the currently cached value.
+    /// Prevents stale 401 responses from clearing a freshly-saved valid token.
+    func invalidateIfCurrent(_ token: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard cachedToken == token else { return }
+        cachedToken = nil
+        hasLoaded = false
+        generation &+= 1
+    }
 }

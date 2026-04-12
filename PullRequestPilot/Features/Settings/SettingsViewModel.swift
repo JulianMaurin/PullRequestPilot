@@ -236,6 +236,8 @@ final class SettingsViewModel {
             "Token is invalid or expired. Generate a new one at github.com/settings/tokens."
         case .rateLimited:
             "GitHub API rate limit exceeded. Wait a few minutes and try again."
+        case .clientError:
+            "GitHub rejected the request. Check your query or token permissions."
         case .serverError:
             "GitHub is experiencing issues. Try again later."
         case .graphQLErrors:

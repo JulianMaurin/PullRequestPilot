@@ -102,8 +102,8 @@ struct GitHubClientHTTPErrorTests {
 
     // MARK: - HTTP 4xx (other)
 
-    @Test("throws serverError on HTTP 400 response")
-    func http400ThrowsServerError() async {
+    @Test("throws clientError on HTTP 400 response")
+    func http400ThrowsClientError() async {
         let client = makeClient()
         MockURLProtocol.requestHandler = { request in
             let response = HTTPURLResponse(
@@ -119,18 +119,18 @@ struct GitHubClientHTTPErrorTests {
             _ = try await client.fetchPullRequests(query: "is:pr", cursor: nil)
             Issue.record("Should have thrown")
         } catch let error as GitHubClientError {
-            if case .serverError(let code) = error {
+            if case .clientError(let code) = error {
                 #expect(code == 400)
             } else {
-                Issue.record("Expected serverError, got \(error)")
+                Issue.record("Expected clientError, got \(error)")
             }
         } catch {
             Issue.record("Unexpected error: \(error)")
         }
     }
 
-    @Test("throws serverError on HTTP 422 response")
-    func http422ThrowsServerError() async {
+    @Test("throws clientError on HTTP 422 response")
+    func http422ThrowsClientError() async {
         let client = makeClient()
         MockURLProtocol.requestHandler = { request in
             let response = HTTPURLResponse(
@@ -146,10 +146,10 @@ struct GitHubClientHTTPErrorTests {
             _ = try await client.fetchPullRequests(query: "is:pr", cursor: nil)
             Issue.record("Should have thrown")
         } catch let error as GitHubClientError {
-            if case .serverError(let code) = error {
+            if case .clientError(let code) = error {
                 #expect(code == 422)
             } else {
-                Issue.record("Expected serverError, got \(error)")
+                Issue.record("Expected clientError, got \(error)")
             }
         } catch {
             Issue.record("Unexpected error: \(error)")
@@ -162,6 +162,12 @@ struct GitHubClientHTTPErrorTests {
     func rateLimitedDescription() {
         let error = GitHubClientError.rateLimited(retryAfter: nil)
         #expect(error.errorDescription?.contains("rate limit") == true)
+    }
+
+    @Test("clientError includes status code")
+    func clientErrorDescription() {
+        let error = GitHubClientError.clientError(statusCode: 400)
+        #expect(error.errorDescription?.contains("400") == true)
     }
 
     @Test("serverError includes status code")

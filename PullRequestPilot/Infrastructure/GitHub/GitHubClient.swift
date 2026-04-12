@@ -33,6 +33,7 @@ protocol GitHubClientProtocol: Sendable {
 enum GitHubClientError: LocalizedError {
     case unauthorized
     case rateLimited(retryAfter: TimeInterval?)
+    case clientError(statusCode: Int)
     case serverError(statusCode: Int)
     case graphQLErrors([String])
     case networkError(Error)
@@ -44,6 +45,8 @@ enum GitHubClientError: LocalizedError {
             "Invalid or missing GitHub token. Check your token in Settings."
         case .rateLimited:
             "GitHub API rate limit exceeded. Wait a few minutes and try again."
+        case .clientError(let statusCode):
+            "Request error (HTTP \(statusCode)). Check that your query uses valid GitHub search syntax."
         case .serverError(let statusCode):
             "GitHub is experiencing issues (HTTP \(statusCode)). Try again later."
         case .graphQLErrors(let messages):
@@ -75,16 +78,13 @@ extension Error {
 
 final class GitHubClient: GitHubClientProtocol, Sendable {
     private let tokenProvider: @Sendable () -> String?
-    private let onUnauthorized: @Sendable () -> Void
+    private let onUnauthorized: @Sendable (String) -> Void
     private let session: URLSession
     private let logger = Logger(subsystem: "PullRequestPilot", category: "GitHubClient")
 
-    private static let endpoint: URL = {
-        guard let url = URL(string: "https://api.github.com/graphql") else {
-            preconditionFailure("Invalid static URL: GitHub GraphQL endpoint")
-        }
-        return url
-    }()
+    private static let endpoint: URL =
+        URL(string: "https://api.github.com/graphql")
+        ?? URL(fileURLWithPath: "/")
 
     private static let defaultSession: URLSession = {
         let config = URLSessionConfiguration.default
@@ -93,7 +93,7 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         return URLSession(configuration: config)
     }()
 
-    init(tokenProvider: @escaping @Sendable () -> String?, onUnauthorized: @escaping @Sendable () -> Void = {}, session: URLSession? = nil) {
+    init(tokenProvider: @escaping @Sendable () -> String?, onUnauthorized: @escaping @Sendable (String) -> Void = { _ in }, session: URLSession? = nil) {
         self.tokenProvider = tokenProvider
         self.onUnauthorized = onUnauthorized
         self.session = session ?? Self.defaultSession
@@ -199,12 +199,12 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             case 200...299:
                 break
             case 401:
-                onUnauthorized()
+                onUnauthorized(token)
                 throw GitHubClientError.unauthorized
             case 403, 429:
                 throw GitHubClientError.rateLimited(retryAfter: Self.parseRetryAfter(from: httpResponse))
             case 400...499:
-                throw GitHubClientError.serverError(statusCode: httpResponse.statusCode)
+                throw GitHubClientError.clientError(statusCode: httpResponse.statusCode)
             case 500...599:
                 throw GitHubClientError.serverError(statusCode: httpResponse.statusCode)
             default:
