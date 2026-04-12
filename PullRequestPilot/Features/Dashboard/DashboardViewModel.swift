@@ -46,6 +46,7 @@ final class DashboardViewModel {
     private var refreshIntervalObserver: (any NSObjectProtocol)?
     private var previousPRIDs: [UUID: Set<String>] = [:]
     private var hasCompletedInitialLoad: Set<UUID> = []
+    private var refreshingViewIDs: Set<UUID> = []
     private var viewerLogin: String?
     private var isFetchingViewer = false
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Dashboard")
@@ -95,6 +96,8 @@ final class DashboardViewModel {
 
     func refresh(viewID: UUID) async {
         guard let view = views.first(where: { $0.id == viewID }) else { return }
+        guard refreshingViewIDs.insert(viewID).inserted else { return }
+        defer { refreshingViewIDs.remove(viewID) }
 
         if viewStates[viewID] == nil {
             viewStates[viewID] = ViewState()
@@ -247,7 +250,7 @@ final class DashboardViewModel {
                 let hasAnyData = self?.viewStates.values.contains(where: \.hasData) ?? false
                 let hasAnyError = self?.viewStates.values.contains(where: { $0.error != nil }) ?? false
                 let seconds: Double
-                if hasAnyData {
+                if hasAnyData && !hasAnyError {
                     consecutiveEmptyFetches = 0
                     let interval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
                     seconds = interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
