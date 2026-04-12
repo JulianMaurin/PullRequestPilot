@@ -79,8 +79,8 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .task {
-                if viewModel.hasSavedToken, viewModel.viewerLogin == nil {
+            .task(id: "token-validation") {
+                if viewModel.hasSavedToken, viewModel.viewerLogin == nil, viewModel.validationState == .idle {
                     await viewModel.save()
                     if viewModel.validationState == .valid {
                         dashboardViewModel.startAutoRefresh()

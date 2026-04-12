@@ -52,11 +52,8 @@ final class AppState {
         // even when the window is hidden (menu bar app).
         dashboardViewModel.startAutoRefresh()
 
-        // Initial scan + periodic refresh of local repo index
+        // Periodic refresh of local repo index (first tick scans immediately)
         let store = gitDirectoriesStore
-        Task {
-            await localRepositoryService.scan(directories: initialDirectories)
-        }
         let scanInterval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.repoScanInterval)
         localRepositoryService.startPeriodicRefresh(
             directories: {
