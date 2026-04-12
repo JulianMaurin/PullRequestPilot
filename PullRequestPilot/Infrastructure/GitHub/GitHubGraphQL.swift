@@ -2,7 +2,11 @@ import Foundation
 
 enum GitHubGraphQL {
     private static func escapeGraphQL(_ value: String) -> String {
-        value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
     }
 
     static func searchQuery(query: String, cursor: String? = nil) -> String {

@@ -6,7 +6,6 @@ import os
 struct PullRequestPage: Sendable {
     let pullRequests: [PullRequest]
     let nextCursor: String?
-    var hasNextPage: Bool { nextCursor != nil }
 }
 
 struct TimelinePage: Sendable {
@@ -79,7 +78,6 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
     private let session: URLSession
     private let logger = Logger(subsystem: "PullRequestPilot", category: "GitHubClient")
 
-    // swiftlint:disable:next force_unwrapping
     private static let endpoint: URL = {
         guard let url = URL(string: "https://api.github.com/graphql") else {
             preconditionFailure("Invalid hardcoded GitHub API endpoint URL")
@@ -191,6 +189,8 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
                 throw GitHubClientError.unauthorized
             case 403:
                 throw GitHubClientError.rateLimited
+            case 400...499:
+                throw GitHubClientError.serverError(statusCode: httpResponse.statusCode)
             case 500...599:
                 throw GitHubClientError.serverError(statusCode: httpResponse.statusCode)
             default:
