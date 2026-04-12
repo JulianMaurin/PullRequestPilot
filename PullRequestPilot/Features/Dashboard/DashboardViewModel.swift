@@ -114,7 +114,7 @@ final class DashboardViewModel {
             let uniquePRs = prs.filter { seenIDs.insert($0.id).inserted }
             let filteredPRs = filterReviewedPRs(uniquePRs, for: view)
 
-            checkAndNotify(viewID: viewID, newPRs: filteredPRs)
+            await checkAndNotify(viewID: viewID, newPRs: filteredPRs)
             viewStates[viewID]?.pullRequests = filteredPRs
             viewStates[viewID]?.seenIDs = seenIDs
             viewStates[viewID]?.nextCursor = page.nextCursor
@@ -172,6 +172,7 @@ final class DashboardViewModel {
                 group.addTask { await self.refresh(viewID: view.id) }
             }
         }
+        pruneUnseenBadgePRIDs()
         updateWidgetData()
     }
 
@@ -230,14 +231,22 @@ final class DashboardViewModel {
     func startAutoRefresh() {
         guard refreshTask == nil else { return }
         refreshTask = Task { [weak self] in
+            var consecutiveEmptyFetches = 0
             while !Task.isCancelled {
                 await self?.refreshAll()
                 let hasAnyData = self?.viewStates.values.contains(where: \.hasData) ?? false
+                let hasAnyError = self?.viewStates.values.contains(where: { $0.error != nil }) ?? false
                 let seconds: Double
                 if hasAnyData {
+                    consecutiveEmptyFetches = 0
                     let interval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
                     seconds = interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
+                } else if hasAnyError {
+                    // Exponential backoff on errors: 10s, 20s, 40s, capped at 60s
+                    consecutiveEmptyFetches += 1
+                    seconds = min(10 * pow(2.0, Double(consecutiveEmptyFetches - 1)), 60)
                 } else {
+                    // No data yet, no errors — initial load, retry quickly
                     seconds = 5
                 }
                 try? await Task.sleep(for: .seconds(seconds))
@@ -271,7 +280,6 @@ final class DashboardViewModel {
             }
         }
     }
-
 
     // MARK: - Sign Out
 
@@ -419,7 +427,7 @@ final class DashboardViewModel {
 
     // MARK: - Badge Count
 
-    var badgeViewIDs: Set<String> = [] {
+    private(set) var badgeViewIDs: Set<String> = [] {
         didSet {
             defaults.set(Array(badgeViewIDs), forKey: Constants.UserDefaultsKeys.badgeViewIDs)
             notifyBadgeCount()
@@ -446,6 +454,8 @@ final class DashboardViewModel {
             }
         } else {
             ids.remove(viewID.uuidString)
+            previousPRIDs.removeValue(forKey: viewID)
+            hasCompletedInitialLoad.remove(viewID)
         }
         badgeViewIDs = ids
     }
@@ -456,13 +466,29 @@ final class DashboardViewModel {
         notifyBadgeCount()
     }
 
+    /// Remove IDs from `unseenBadgePRIDs` that no longer appear in any badge-enabled view.
+    private func pruneUnseenBadgePRIDs() {
+        guard !unseenBadgePRIDs.isEmpty else { return }
+        var allCurrentIDs = Set<String>()
+        for viewIDString in badgeViewIDs {
+            guard let uuid = UUID(uuidString: viewIDString) else { continue }
+            let prs = viewStates[uuid]?.pullRequests ?? []
+            allCurrentIDs.formUnion(prs.map(\.id))
+        }
+        let pruned = unseenBadgePRIDs.intersection(allCurrentIDs)
+        if pruned.count != unseenBadgePRIDs.count {
+            unseenBadgePRIDs = pruned
+            notifyBadgeCount()
+        }
+    }
+
     private func notifyBadgeCount() {
         onBadgeCountChanged?(badgeCount)
     }
 
     // MARK: - Notifications
 
-    var notifiedViewIDs: Set<String> = [] {
+    private(set) var notifiedViewIDs: Set<String> = [] {
         didSet {
             defaults.set(Array(notifiedViewIDs), forKey: Constants.UserDefaultsKeys.notifiedViewIDs)
         }
@@ -533,7 +559,7 @@ final class DashboardViewModel {
         }
     }
 
-    private func checkAndNotify(viewID: UUID, newPRs: [PullRequest]) {
+    private func checkAndNotify(viewID: UUID, newPRs: [PullRequest]) async {
         let notifyEnabled = isNotificationEnabled(for: viewID)
         let badgeEnabled = isBadgeEnabled(for: viewID)
         guard notifyEnabled || badgeEnabled else { return }
@@ -588,10 +614,10 @@ final class DashboardViewModel {
             trigger: nil
         )
 
-        UNUserNotificationCenter.current().add(request) { [weak self] error in
-            if let error {
-                self?.logger.error("Failed to deliver notification: \(error, privacy: .public)")
-            }
+        do {
+            try await UNUserNotificationCenter.current().add(request)
+        } catch {
+            logger.error("Failed to deliver notification: \(error, privacy: .public)")
         }
     }
 
