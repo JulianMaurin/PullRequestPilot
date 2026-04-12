@@ -93,9 +93,7 @@ struct PRDetailView: View {
                         .multilineTextAlignment(.center)
                 }
                 Button("Retry") {
-                    if let pr = viewModel.selectedPR {
-                        viewModel.selectPR(pr)
-                    }
+                    viewModel.retry()
                 }
                 Spacer()
             }

@@ -28,6 +28,12 @@ final class PRDetailViewModel {
         fetchTimeline()
     }
 
+    func retry() {
+        guard selectedPR != nil else { return }
+        fetchTask?.cancel()
+        fetchTimeline()
+    }
+
     func deselect() {
         selectedPR = nil
         fetchTask?.cancel()
