@@ -25,8 +25,22 @@ final class GitDirectoriesStore: @unchecked Sendable {
     }
 
     func save(_ directories: [URL]) {
-        let bookmarks = directories.compactMap { createBookmark(for: $0) }
-        defaults.set(bookmarks, forKey: Self.key)
+        // Build a map of existing bookmarks keyed by resolved path so we can
+        // preserve the original bookmark data (with its security scope) instead
+        // of recreating bookmarks, which may fail if security-scoped access expired.
+        let existingBookmarks = defaults.array(forKey: Self.key) as? [Data] ?? []
+        var bookmarkByPath: [String: Data] = [:]
+        for data in existingBookmarks {
+            if let url = resolveBookmark(data) {
+                bookmarkByPath[url.path] = data
+            }
+        }
+
+        let result = directories.compactMap { url -> Data? in
+            // Prefer the existing bookmark; fall back to creating a new one
+            bookmarkByPath[url.path] ?? createBookmark(for: url)
+        }
+        defaults.set(result, forKey: Self.key)
     }
 
     func saveFromPanel(_ url: URL) -> URL? {
