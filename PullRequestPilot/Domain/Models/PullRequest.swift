@@ -143,7 +143,8 @@ extension Date {
     func relativeTimestampText(relativeTo now: Date) -> String {
         let calendar = Calendar.current
         let timeFormatter = DateFormatter()
-        timeFormatter.dateFormat = "HH:mm"
+        timeFormatter.dateStyle = .none
+        timeFormatter.timeStyle = .short
         let time = timeFormatter.string(from: self)
 
         let startOfToday = calendar.startOfDay(for: now)
@@ -156,7 +157,7 @@ extension Date {
             return "yesterday at \(time)"
         } else {
             let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "MMM d"
+            dateFormatter.setLocalizedDateFormatFromTemplate("MMM d")
             return "\(dateFormatter.string(from: self)) at \(time)"
         }
     }
