@@ -33,6 +33,8 @@ protocol GitHubClientProtocol: Sendable {
 
 enum GitHubClientError: LocalizedError {
     case unauthorized
+    case rateLimited
+    case serverError(statusCode: Int)
     case graphQLErrors([String])
     case networkError(Error)
     case decodingError(Error)
@@ -41,6 +43,10 @@ enum GitHubClientError: LocalizedError {
         switch self {
         case .unauthorized:
             "Invalid or missing GitHub token. Check your token in Settings."
+        case .rateLimited:
+            "GitHub API rate limit exceeded. Wait a few minutes and try again."
+        case .serverError(let statusCode):
+            "GitHub is experiencing issues (HTTP \(statusCode)). Try again later."
         case .graphQLErrors(let messages):
             "GitHub API error: \(messages.joined(separator: "; "))"
         case .networkError(let error):
@@ -177,8 +183,19 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             throw GitHubClientError.networkError(error)
         }
 
-        if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 401 {
-            throw GitHubClientError.unauthorized
+        if let httpResponse = response as? HTTPURLResponse {
+            switch httpResponse.statusCode {
+            case 200...299:
+                break
+            case 401:
+                throw GitHubClientError.unauthorized
+            case 403:
+                throw GitHubClientError.rateLimited
+            case 500...599:
+                throw GitHubClientError.serverError(statusCode: httpResponse.statusCode)
+            default:
+                break
+            }
         }
 
         do {

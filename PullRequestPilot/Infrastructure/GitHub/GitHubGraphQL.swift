@@ -1,9 +1,13 @@
 import Foundation
 
 enum GitHubGraphQL {
+    private static func escapeGraphQL(_ value: String) -> String {
+        value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+    }
+
     static func searchQuery(query: String, cursor: String? = nil) -> String {
-        let escapedQuery = query.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        let after = cursor.map { ", after: \"\($0)\"" } ?? ""
+        let escapedQuery = escapeGraphQL(query)
+        let after = cursor.map { ", after: \"\(escapeGraphQL($0))\"" } ?? ""
         return """
         {
           search(query: "\(escapedQuery)", type: ISSUE, first: 50\(after)) {
@@ -103,10 +107,11 @@ enum GitHubGraphQL {
     }
 
     static func timelineQuery(nodeID: String, cursor: String? = nil) -> String {
-        let after = cursor.map { ", after: \"\($0)\"" } ?? ""
+        let escapedNodeID = escapeGraphQL(nodeID)
+        let after = cursor.map { ", after: \"\(escapeGraphQL($0))\"" } ?? ""
         return """
         {
-          node(id: "\(nodeID)") {
+          node(id: "\(escapedNodeID)") {
             ... on PullRequest {
               timelineItems(first: 100, itemTypes: [
                 ISSUE_COMMENT,
@@ -215,7 +220,7 @@ enum GitHubGraphQL {
                             status
                             conclusion
                             detailsUrl
-                            isRequired(pullRequestId: "\(nodeID)")
+                            isRequired(pullRequestId: "\(escapedNodeID)")
                           }
                           ... on StatusContext {
                             context
@@ -239,15 +244,17 @@ enum GitHubGraphQL {
     }
 
     static func checksQuery(nodeID: String, cursor: String) -> String {
-        """
+        let escapedNodeID = escapeGraphQL(nodeID)
+        let escapedCursor = escapeGraphQL(cursor)
+        return """
         {
-          node(id: "\(nodeID)") {
+          node(id: "\(escapedNodeID)") {
             ... on PullRequest {
               commits(last: 1) {
                 nodes {
                   commit {
                     statusCheckRollup {
-                      contexts(first: 100, after: "\(cursor)") {
+                      contexts(first: 100, after: "\(escapedCursor)") {
                         nodes {
                           __typename
                           ... on CheckRun {
@@ -255,7 +262,7 @@ enum GitHubGraphQL {
                             status
                             conclusion
                             detailsUrl
-                            isRequired(pullRequestId: "\(nodeID)")
+                            isRequired(pullRequestId: "\(escapedNodeID)")
                           }
                           ... on StatusContext {
                             context
