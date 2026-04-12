@@ -1,5 +1,7 @@
 import Foundation
 
+// MARK: - Model
+
 struct Reviewer: Identifiable, Hashable, Sendable {
     let id: String
     let displayName: String
@@ -7,6 +9,8 @@ struct Reviewer: Identifiable, Hashable, Sendable {
     let isTeam: Bool
     let state: ReviewerState
 }
+
+// MARK: - State
 
 enum ReviewerState: Hashable, Sendable {
     case pending

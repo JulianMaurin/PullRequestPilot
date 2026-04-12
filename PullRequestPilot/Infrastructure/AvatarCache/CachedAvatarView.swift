@@ -1,5 +1,7 @@
 import SwiftUI
 
+// MARK: - Cached Avatar View
+
 /// Displays an avatar image from a URL with in-memory + disk caching.
 /// Replaces AsyncImage for avatar use cases to avoid re-downloading
 /// the same user avatars on every refresh.

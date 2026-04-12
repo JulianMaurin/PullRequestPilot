@@ -1,5 +1,7 @@
 import SwiftUI
 
+// MARK: - Content View
+
 struct ContentView: View {
     let dashboardViewModel: DashboardViewModel
     let prDetailViewModel: PRDetailViewModel

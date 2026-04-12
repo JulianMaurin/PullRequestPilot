@@ -14,11 +14,6 @@ final class AppState {
     let prDetailViewModel: PRDetailViewModel
     let settingsViewModel: SettingsViewModel
 
-    func cleanup() {
-        dashboardViewModel.stopAutoRefresh()
-        localRepositoryService.stopPeriodicRefresh()
-    }
-
     init() {
         let keychain = KeychainService()
         let tokenCache = TokenCache(keychain: keychain)
@@ -71,5 +66,12 @@ final class AppState {
             },
             interval: scanInterval > 0 ? scanInterval : Constants.App.defaultRepoScanInterval
         )
+    }
+
+    // MARK: - Lifecycle
+
+    func cleanup() {
+        dashboardViewModel.stopAutoRefresh()
+        localRepositoryService.stopPeriodicRefresh()
     }
 }

@@ -1,10 +1,14 @@
 import Foundation
 
+// MARK: - Model
+
 struct DashboardView: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var title: String
     var query: String
     var hideReviewed: Bool
+
+    // MARK: - Init
 
     init(id: UUID, title: String, query: String, hideReviewed: Bool = false) {
         self.id = id
@@ -20,6 +24,8 @@ struct DashboardView: Identifiable, Codable, Hashable, Sendable {
         query = try container.decode(String.self, forKey: .query)
         hideReviewed = try container.decodeIfPresent(Bool.self, forKey: .hideReviewed) ?? false
     }
+
+    // MARK: - Presets
 
     static let defaultViews: [DashboardView] = []
 
