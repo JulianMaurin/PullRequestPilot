@@ -1,6 +1,8 @@
 import Foundation
 import os
 
+private let searchResultLogger = Logger(subsystem: "PullRequestPilot", category: "SearchResult")
+
 // MARK: - GraphQL Response Envelope
 
 struct GraphQLResponse<T: Decodable>: Decodable {
@@ -40,8 +42,12 @@ struct SearchResult: Decodable {
             if let node = try? nodesContainer.decode(PullRequestNode.self) {
                 decoded.append(node)
             } else {
-                // Skip non-PullRequest nodes (plain Issues) that fail to decode
-                _ = try? nodesContainer.decode(EmptyNode.self)
+                // Advance past the undecodable node
+                let skipped = try? nodesContainer.decode(SkippedNode.self)
+                if skipped?.id != nil {
+                    // Node had an 'id' field — likely a PullRequest that failed to decode
+                    searchResultLogger.warning("Skipped node that had an id (possible PR decode failure)")
+                }
             }
         }
         nodes = decoded
@@ -51,8 +57,10 @@ struct SearchResult: Decodable {
         case nodes, pageInfo
     }
 
-    /// Minimal type that always succeeds decoding, used to advance the container past a skipped node.
-    private struct EmptyNode: Decodable {}
+    /// Lightweight type to advance past a skipped node and detect if it was a PR.
+    private struct SkippedNode: Decodable {
+        let id: String?
+    }
 }
 
 struct PageInfo: Decodable {

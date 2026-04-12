@@ -103,6 +103,10 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         let query = GitHubGraphQL.searchQuery(query: searchQuery, cursor: cursor)
         let response: GraphQLResponse<SearchData> = try await execute(query: query)
 
+        if let errors = response.errors, !errors.isEmpty, response.data != nil {
+            logger.warning("GraphQL partial errors: \(errors.map(\.message).joined(separator: "; "), privacy: .public)")
+        }
+
         guard let data = response.data else {
             let messages = response.errors?.map(\.message) ?? ["Unknown error"]
             throw GitHubClientError.graphQLErrors(messages)
@@ -119,6 +123,10 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
     func fetchTimeline(nodeID: String, cursor: String? = nil, eventPageOffset: Int = 0, checksPageOffset: Int = 0) async throws -> TimelinePage {
         let query = GitHubGraphQL.timelineQuery(nodeID: nodeID, cursor: cursor)
         let response: GraphQLResponse<TimelineNodeData> = try await execute(query: query)
+
+        if let errors = response.errors, !errors.isEmpty, response.data != nil {
+            logger.warning("GraphQL partial errors: \(errors.map(\.message).joined(separator: "; "), privacy: .public)")
+        }
 
         guard let data = response.data else {
             let messages = response.errors?.map(\.message) ?? ["Unknown error"]
@@ -145,6 +153,10 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         let query = GitHubGraphQL.checksQuery(nodeID: nodeID, cursor: cursor)
         let response: GraphQLResponse<TimelineNodeData> = try await execute(query: query)
 
+        if let errors = response.errors, !errors.isEmpty, response.data != nil {
+            logger.warning("GraphQL partial errors: \(errors.map(\.message).joined(separator: "; "), privacy: .public)")
+        }
+
         guard let data = response.data else {
             let messages = response.errors?.map(\.message) ?? ["Unknown error"]
             throw GitHubClientError.graphQLErrors(messages)
@@ -159,6 +171,10 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
 
     func fetchViewer() async throws -> (login: String, avatarURL: URL?) {
         let response: GraphQLResponse<ViewerData> = try await execute(query: GitHubGraphQL.viewerQuery)
+
+        if let errors = response.errors, !errors.isEmpty, response.data != nil {
+            logger.warning("GraphQL partial errors: \(errors.map(\.message).joined(separator: "; "), privacy: .public)")
+        }
 
         guard let data = response.data else {
             let messages = response.errors?.map(\.message) ?? ["Unknown error"]
@@ -227,6 +243,13 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
 
     // MARK: - Retry-After Parsing
 
+    private static let retryAfterFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        return formatter
+    }()
+
     static func parseRetryAfter(from response: HTTPURLResponse) -> TimeInterval? {
         if let retryStr = response.value(forHTTPHeaderField: "Retry-After") {
             // Try seconds first (most common for GitHub)
@@ -234,10 +257,7 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
                 return seconds
             }
             // Try HTTP-date format (e.g. "Fri, 22 Apr 2026 12:00:00 GMT")
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
-            if let date = formatter.date(from: retryStr) {
+            if let date = retryAfterFormatter.date(from: retryStr) {
                 return max(0, date.timeIntervalSince1970 - Date().timeIntervalSince1970)
             }
         }
