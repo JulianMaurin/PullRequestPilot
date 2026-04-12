@@ -336,7 +336,12 @@ private struct ReviewSummaryPills: View {
 
 // MARK: - Previews
 
-private let sampleURL = URL(string: "https://github.com")!
+private let sampleURL: URL = {
+    guard let url = URL(string: "https://github.com") else {
+        preconditionFailure("Invalid static URL: sample")
+    }
+    return url
+}()
 
 private let samplePRs: [WidgetPullRequest] = [
     WidgetPullRequest(
