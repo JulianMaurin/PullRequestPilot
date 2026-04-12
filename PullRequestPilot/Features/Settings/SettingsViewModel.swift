@@ -98,6 +98,7 @@ final class SettingsViewModel {
             logger.info("Token saved to Keychain successfully")
         } catch {
             logger.error("Failed to save token to Keychain: \(error, privacy: .public)")
+            tokenCache.invalidate()
             saveError = "Could not save token to Keychain. Check that the app has Keychain access."
             validationState = .idle
         }
@@ -167,9 +168,10 @@ final class SettingsViewModel {
         let store = gitDirectoriesStore
         localRepositoryService.startPeriodicRefresh(
             directories: {
-                let dirs = store.load()
-                store.startAccessing(dirs)
-                return dirs
+                // startAccessing is balanced by stopAccessing when directories are
+                // removed via SettingsViewModel. The initial access started in
+                // AppState.init() covers these URLs for the app's lifetime.
+                store.load()
             },
             interval: repoScanInterval
         )
