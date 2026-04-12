@@ -14,20 +14,35 @@ final class TokenCache: @unchecked Sendable {
 
     var token: String? {
         lock.lock()
-        defer { lock.unlock() }
+        if hasLoaded {
+            let cached = cachedToken
+            lock.unlock()
+            return cached
+        }
+        lock.unlock()
+
+        // Perform Keychain I/O outside the lock to avoid blocking other threads
+        // if macOS shows a Keychain access dialog.
+        #if DEBUG
+        if let envToken = ProcessInfo.processInfo.environment["GITHUB_TOKEN"], !envToken.isEmpty {
+            lock.lock()
+            cachedToken = envToken
+            hasLoaded = true
+            lock.unlock()
+            return envToken
+        }
+        #endif
+        let value = keychain.read(key: Constants.Keychain.githubToken)
+
+        lock.lock()
+        // Double-check: another thread may have loaded while we were reading
         if !hasLoaded {
-            // In debug builds, check environment variable first (set via .env or Xcode scheme)
-            #if DEBUG
-            if let envToken = ProcessInfo.processInfo.environment["GITHUB_TOKEN"], !envToken.isEmpty {
-                cachedToken = envToken
-                hasLoaded = true
-                return cachedToken
-            }
-            #endif
-            cachedToken = keychain.read(key: Constants.Keychain.githubToken)
+            cachedToken = value
             hasLoaded = true
         }
-        return cachedToken
+        let result = cachedToken
+        lock.unlock()
+        return result
     }
 
     func set(_ newToken: String) {
