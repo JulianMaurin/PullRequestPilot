@@ -318,9 +318,11 @@ extension CheckRunCommitsConnection {
             let url = node.detailsUrl.flatMap { URL(string: $0) }
             let run = CheckRun(id: "check-\(index)-\(name)", name: name, status: status, conclusion: conclusion, detailsURL: url, isRequired: node.isRequired ?? false)
 
-            if bestByName[name] != nil {
-                // Keep the latest run (last occurrence) — GitHub returns re-runs after originals
-                bestByName[name] = run
+            if let existing = bestByName[name] {
+                // Keep the run with higher priority (success > in-progress > failure > cancelled)
+                if run.conclusionPriority >= existing.conclusionPriority {
+                    bestByName[name] = run
+                }
             } else {
                 nameOrder.append(name)
                 bestByName[name] = run
@@ -462,7 +464,7 @@ extension TimelineItemsConnection {
 
             let actor = actorNode.map { Author(login: $0.login, avatarURL: $0.avatarUrl.flatMap(URL.init(string:))) }
             return TimelineEvent(
-                id: "\(index)-\(node.__typename)-\(dateStr)",
+                id: "\(index)-\(node.__typename)-\(dateStr)-\(actorNode?.login ?? "")",
                 kind: kind,
                 actor: actor,
                 timestamp: date,
