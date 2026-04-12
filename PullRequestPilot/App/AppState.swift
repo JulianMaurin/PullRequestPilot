@@ -58,7 +58,9 @@ final class AppState {
         localRepositoryService.startPeriodicRefresh(
             directories: {
                 let dirs = store.load()
-                store.startAccessing(dirs)
+                // startAccessing is balanced by stopAccessing when directories are
+                // removed via SettingsViewModel. For the periodic scan, the initial
+                // access started above covers these URLs for the app's lifetime.
                 return dirs
             },
             interval: scanInterval > 0 ? scanInterval : Constants.App.defaultRepoScanInterval

@@ -154,7 +154,11 @@ final class SettingsViewModel {
         localRepositoryService.stopPeriodicRefresh()
         let store = gitDirectoriesStore
         localRepositoryService.startPeriodicRefresh(
-            directories: { store.load() },
+            directories: {
+                let dirs = store.load()
+                store.startAccessing(dirs)
+                return dirs
+            },
             interval: repoScanInterval
         )
     }
