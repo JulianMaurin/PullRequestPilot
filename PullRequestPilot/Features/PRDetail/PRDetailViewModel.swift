@@ -62,9 +62,11 @@ final class PRDetailViewModel {
                 var fetchedReviewers: [Reviewer] = []
                 var cursor: String?
                 var checksCursor: String?
+                var eventPageOffset = 0
                 repeat {
                     let page = try await gitHubClient.fetchTimeline(nodeID: pr.id, cursor: cursor)
                     allEvents.append(contentsOf: page.events)
+                    eventPageOffset += page.events.count
                     allCheckRuns.append(contentsOf: page.checkRuns)
                     if checksCursor == nil {
                         checksCursor = page.checksNextCursor

@@ -79,8 +79,12 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
     private let session: URLSession
     private let logger = Logger(subsystem: "PullRequestPilot", category: "GitHubClient")
 
-    // swiftlint:disable:next force_unwrapping
-    private static let endpoint = URL(string: "https://api.github.com/graphql")!
+    private static let endpoint: URL = {
+        guard let url = URL(string: "https://api.github.com/graphql") else {
+            preconditionFailure("Invalid static URL: GitHub GraphQL endpoint")
+        }
+        return url
+    }()
 
     init(tokenProvider: @escaping @Sendable () -> String?, onUnauthorized: @escaping @Sendable () -> Void = {}, session: URLSession = .shared) {
         self.tokenProvider = tokenProvider
@@ -118,8 +122,8 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             return TimelinePage(events: [], checkRuns: [], reviewers: [], nextCursor: nil, checksNextCursor: nil)
         }
 
-        let events = prNode.timelineItems?.toDomain() ?? []
-        let checkRuns = prNode.commits?.toDomain() ?? []
+        let events = prNode.timelineItems?.toDomain(pageOffset: 0) ?? []
+        let checkRuns = prNode.commits?.toDomain(pageOffset: 0) ?? []
         let reviewers = prNode.toReviewers()
         let rawTimelineCursor = prNode.timelineItems?.pageInfo.hasNextPage == true
             ? prNode.timelineItems?.pageInfo.endCursor : nil

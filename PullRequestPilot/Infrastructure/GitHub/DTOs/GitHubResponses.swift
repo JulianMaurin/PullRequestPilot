@@ -299,7 +299,7 @@ struct CheckRunContextNode: Decodable {
 }
 
 extension CheckRunCommitsConnection {
-    func toDomain() -> [CheckRun] {
+    func toDomain(pageOffset: Int = 0) -> [CheckRun] {
         guard let rollup = nodes.first?.commit.statusCheckRollup else { return [] }
         let allNodes = rollup.contexts.nodes
 
@@ -313,14 +313,15 @@ extension CheckRunCommitsConnection {
 
         for (index, node) in checkRunNodes {
             guard let name = node.name else { continue }
+            let globalIndex = pageOffset + index
             let status = node.status.flatMap { CheckRunStatus(rawValue: $0) } ?? .queued
             let conclusion = node.conclusion.flatMap { CheckRunConclusion(rawValue: $0) }
             let url = node.detailsUrl.flatMap { URL(string: $0) }
-            let run = CheckRun(id: "check-\(index)-\(name)", name: name, status: status, conclusion: conclusion, detailsURL: url, isRequired: node.isRequired ?? false)
+            let run = CheckRun(id: "check-\(globalIndex)-\(name)", name: name, status: status, conclusion: conclusion, detailsURL: url, isRequired: node.isRequired ?? false)
 
             if let existing = bestByName[name] {
-                // Keep the run with higher priority (success > in-progress > failure > cancelled)
-                if run.conclusionPriority >= existing.conclusionPriority {
+                // Keep the run with strictly higher priority (success > in-progress > failure > cancelled)
+                if run.conclusionPriority > existing.conclusionPriority {
                     bestByName[name] = run
                 }
             } else {
@@ -331,6 +332,7 @@ extension CheckRunCommitsConnection {
 
         for (index, node) in statusContextNodes {
             guard let context = node.context, bestByName[context] == nil else { continue }
+            let globalIndex = pageOffset + index
             let conclusion: CheckRunConclusion? = node.state.flatMap {
                 switch $0 {
                 case "SUCCESS": return .success
@@ -343,7 +345,7 @@ extension CheckRunCommitsConnection {
             let status: CheckRunStatus = node.state == "PENDING" ? .pending : .completed
             let url = node.targetUrl.flatMap { URL(string: $0) }
             nameOrder.append(context)
-            bestByName[context] = CheckRun(id: "status-\(index)-\(context)", name: context, status: status, conclusion: conclusion, detailsURL: url, isRequired: false)
+            bestByName[context] = CheckRun(id: "status-\(globalIndex)-\(context)", name: context, status: status, conclusion: conclusion, detailsURL: url, isRequired: false)
         }
 
         return nameOrder.compactMap { bestByName[$0] }
@@ -388,8 +390,9 @@ struct TimelineItemDetailNode: Decodable {
 }
 
 extension TimelineItemsConnection {
-    func toDomain() -> [TimelineEvent] {
+    func toDomain(pageOffset: Int = 0) -> [TimelineEvent] {
         return nodes.enumerated().compactMap { index, node in
+            let globalIndex = pageOffset + index
             let kind: TimelineEventKind
             let actorNode: PullRequestNode.AuthorNode?
             let dateString: String?
@@ -464,7 +467,7 @@ extension TimelineItemsConnection {
 
             let actor = actorNode.map { Author(login: $0.login, avatarURL: $0.avatarUrl.flatMap(URL.init(string:))) }
             return TimelineEvent(
-                id: "\(index)-\(node.__typename)-\(dateStr)-\(actorNode?.login ?? "")",
+                id: "\(globalIndex)-\(node.__typename)-\(dateStr)-\(actorNode?.login ?? "")",
                 kind: kind,
                 actor: actor,
                 timestamp: date,
