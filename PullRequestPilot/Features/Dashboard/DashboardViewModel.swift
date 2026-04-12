@@ -4,7 +4,7 @@ import os
 import UserNotifications
 import WidgetKit
 
-struct ViewState {
+struct ViewState: Sendable {
     var pullRequests: [PullRequest] = []
     var seenIDs: Set<String> = []
     var isLoading = false
@@ -14,6 +14,7 @@ struct ViewState {
     var nextCursor: String?
     var rateLimitRetryAfter: TimeInterval?
     var reachedLimit = false
+    var rawFetchedCount = 0
 
     var isEmpty: Bool { pullRequests.isEmpty && !isLoading }
     var hasData: Bool { !pullRequests.isEmpty }
@@ -124,7 +125,8 @@ final class DashboardViewModel {
             viewStates[viewID]?.pullRequests = filteredPRs
             viewStates[viewID]?.seenIDs = seenIDs
             viewStates[viewID]?.nextCursor = page.nextCursor
-            viewStates[viewID]?.reachedLimit = filteredPRs.count >= Constants.App.maxPullRequests
+            viewStates[viewID]?.rawFetchedCount = uniquePRs.count
+            viewStates[viewID]?.reachedLimit = uniquePRs.count >= Constants.App.maxPullRequests
             logger.info("Fetched \(uniquePRs.count, privacy: .public) PR(s) for '\(view.title, privacy: .public)'")
         } catch is CancellationError {
             viewStates[viewID]?.isLoading = false
@@ -158,9 +160,10 @@ final class DashboardViewModel {
 
             viewStates[viewID]?.pullRequests.append(contentsOf: filteredNewPRs)
             viewStates[viewID]?.nextCursor = page.nextCursor
-            let totalCount = viewStates[viewID]?.pullRequests.count ?? 0
-            viewStates[viewID]?.reachedLimit = totalCount >= Constants.App.maxPullRequests
-            logger.info("Loaded \(newPRs.count, privacy: .public) more PR(s) for '\(view.title, privacy: .public)' (total: \(totalCount, privacy: .public))")
+            let rawTotal = (viewStates[viewID]?.rawFetchedCount ?? 0) + newPRs.count
+            viewStates[viewID]?.rawFetchedCount = rawTotal
+            viewStates[viewID]?.reachedLimit = rawTotal >= Constants.App.maxPullRequests
+            logger.info("Loaded \(newPRs.count, privacy: .public) more PR(s) for '\(view.title, privacy: .public)' (total: \(rawTotal, privacy: .public))")
         } catch is CancellationError {
             viewStates[viewID]?.isLoadingMore = false
             return
