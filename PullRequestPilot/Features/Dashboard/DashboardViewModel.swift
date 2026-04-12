@@ -382,6 +382,7 @@ final class DashboardViewModel {
         viewsStore.save(views)
         badgeViewIDs.remove(id.uuidString)
         notifiedViewIDs.remove(id.uuidString)
+        pruneUnseenBadgePRIDs()
         if selectedViewID == id {
             selectedViewID = views.first?.id
         }

@@ -407,6 +407,31 @@ struct DashboardViewModelTests {
         #expect(!viewModel.isBadgeEnabled(for: view1.id))
     }
 
+    @Test("deleteView prunes unseen badge PRs from deleted view")
+    func deleteViewPrunesUnseenBadgePRs() async {
+        let pr1 = makePullRequest(number: 1, title: "PR 1")
+        let pr2 = makePullRequest(number: 2, title: "PR 2")
+
+        let defaults = UserDefaults(suiteName: "DeletePrunes")!
+        defaults.removePersistentDomain(forName: "DeletePrunes")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        viewModel.addView(view1)
+        viewModel.setBadge(for: view1.id, enabled: true)
+
+        // Baseline + new PR to create unseen badge count
+        mockClient.pullRequestsToReturn = [pr1]
+        await viewModel.refresh(viewID: view1.id)
+        mockClient.pullRequestsToReturn = [pr1, pr2]
+        await viewModel.refresh(viewID: view1.id)
+        #expect(viewModel.badgeCount == 1)
+
+        // Delete the view — badge count should drop to 0
+        viewModel.deleteView(id: view1.id)
+        #expect(viewModel.badgeCount == 0)
+    }
+
     @Test("resetViewerLogin clears cached login for re-fetch on next refresh")
     func resetViewerLogin() async {
         let defaults = UserDefaults(suiteName: "ResetViewer")!
