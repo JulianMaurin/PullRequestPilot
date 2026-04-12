@@ -17,7 +17,7 @@ final class AvatarCache: @unchecked Sendable {
             self.session = session
         } else {
             let config = URLSessionConfiguration.default
-            config.urlCache = URLCache(memoryCapacity: 0, diskCapacity: 20 * 1024 * 1024) // 20 MB disk cache
+            config.urlCache = URLCache(memoryCapacity: 10 * 1024 * 1024, diskCapacity: 20 * 1024 * 1024) // 10 MB memory + 20 MB disk
             self.session = URLSession(configuration: config)
         }
     }
