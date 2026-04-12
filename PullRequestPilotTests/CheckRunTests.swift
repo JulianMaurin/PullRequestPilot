@@ -9,13 +9,13 @@ struct CheckRunTests {
 
     @Test("displayStatus shows conclusion label when present")
     func displayStatusWithConclusion() {
-        let check = CheckRun(id: "1", name: "CI", status: .completed, conclusion: .success, detailsURL: nil)
+        let check = CheckRun(id: "1", name: "CI", status: .completed, conclusion: .success, detailsURL: nil, isRequired: false)
         #expect(check.displayStatus == "Success")
     }
 
     @Test("displayStatus shows status label when no conclusion")
     func displayStatusWithoutConclusion() {
-        let check = CheckRun(id: "1", name: "CI", status: .inProgress, conclusion: nil, detailsURL: nil)
+        let check = CheckRun(id: "1", name: "CI", status: .inProgress, conclusion: nil, detailsURL: nil, isRequired: false)
         #expect(check.displayStatus == "In progress")
     }
 
@@ -23,13 +23,13 @@ struct CheckRunTests {
 
     @Test("iconName uses conclusion when present")
     func iconNameWithConclusion() {
-        let check = CheckRun(id: "1", name: "CI", status: .completed, conclusion: .failure, detailsURL: nil)
+        let check = CheckRun(id: "1", name: "CI", status: .completed, conclusion: .failure, detailsURL: nil, isRequired: false)
         #expect(check.iconName == "xmark")
     }
 
     @Test("iconName uses status when no conclusion")
     func iconNameWithoutConclusion() {
-        let check = CheckRun(id: "1", name: "CI", status: .queued, conclusion: nil, detailsURL: nil)
+        let check = CheckRun(id: "1", name: "CI", status: .queued, conclusion: nil, detailsURL: nil, isRequired: false)
         #expect(check.iconName == "clock")
     }
 
@@ -37,13 +37,13 @@ struct CheckRunTests {
 
     @Test("iconColor uses conclusion when present")
     func iconColorWithConclusion() {
-        let check = CheckRun(id: "1", name: "CI", status: .completed, conclusion: .success, detailsURL: nil)
+        let check = CheckRun(id: "1", name: "CI", status: .completed, conclusion: .success, detailsURL: nil, isRequired: false)
         #expect(check.iconColor == "green")
     }
 
     @Test("iconColor uses status when no conclusion")
     func iconColorWithoutConclusion() {
-        let check = CheckRun(id: "1", name: "CI", status: .inProgress, conclusion: nil, detailsURL: nil)
+        let check = CheckRun(id: "1", name: "CI", status: .inProgress, conclusion: nil, detailsURL: nil, isRequired: false)
         #expect(check.iconColor == "yellow")
     }
 
@@ -103,13 +103,14 @@ struct CheckRunTests {
 @Suite("CheckRun DTO Mapping")
 struct CheckRunDTOMappingTests {
 
-    private func makeCheckRunNode(name: String, status: String, conclusion: String? = nil, detailsUrl: String? = nil) -> CheckRunContextNode {
+    private func makeCheckRunNode(name: String, status: String, conclusion: String? = nil, detailsUrl: String? = nil, isRequired: Bool? = nil) -> CheckRunContextNode {
         CheckRunContextNode(
             __typename: "CheckRun",
             name: name,
             status: status,
             conclusion: conclusion,
             detailsUrl: detailsUrl,
+            isRequired: isRequired,
             context: nil,
             state: nil,
             targetUrl: nil
@@ -123,6 +124,7 @@ struct CheckRunDTOMappingTests {
             status: nil,
             conclusion: nil,
             detailsUrl: nil,
+            isRequired: nil,
             context: context,
             state: state,
             targetUrl: targetUrl
@@ -131,7 +133,7 @@ struct CheckRunDTOMappingTests {
 
     private func makeConnection(_ nodes: [CheckRunContextNode]) -> CheckRunCommitsConnection {
         CheckRunCommitsConnection(nodes: [
-            .init(commit: .init(statusCheckRollup: .init(contexts: .init(nodes: nodes)))),
+            .init(commit: .init(statusCheckRollup: .init(contexts: .init(nodes: nodes, pageInfo: nil)))),
         ])
     }
 
@@ -212,7 +214,7 @@ struct CheckRunDTOMappingTests {
     func skipsUnknownTypename() {
         let node = CheckRunContextNode(
             __typename: "Unknown",
-            name: nil, status: nil, conclusion: nil, detailsUrl: nil,
+            name: nil, status: nil, conclusion: nil, detailsUrl: nil, isRequired: nil,
             context: nil, state: nil, targetUrl: nil
         )
         let connection = makeConnection([node])

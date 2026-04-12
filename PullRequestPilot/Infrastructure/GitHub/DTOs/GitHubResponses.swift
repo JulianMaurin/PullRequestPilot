@@ -173,6 +173,7 @@ struct CheckRunCommitsConnection: Decodable {
 
     struct CheckRunContextsConnection: Decodable {
         let nodes: [CheckRunContextNode]
+        let pageInfo: PageInfo?
     }
 }
 
@@ -184,6 +185,7 @@ struct CheckRunContextNode: Decodable {
     let status: String?
     let conclusion: String?
     let detailsUrl: String?
+    let isRequired: Bool?
     // StatusContext fields
     let context: String?
     let state: String?
@@ -199,19 +201,29 @@ extension CheckRunCommitsConnection {
         let checkRunNodes = allNodes.enumerated().filter { $0.element.__typename == "CheckRun" }
         let statusContextNodes = allNodes.enumerated().filter { $0.element.__typename == "StatusContext" }
 
-        var seen = Set<String>()
-        var results: [CheckRun] = []
+        // Collect all entries per name, keeping the best one (success > in-progress > other > cancelled/stale)
+        var bestByName: [String: CheckRun] = [:]
+        var nameOrder: [String] = []
 
         for (index, node) in checkRunNodes {
-            guard let name = node.name, seen.insert(name).inserted else { continue }
+            guard let name = node.name else { continue }
             let status = node.status.flatMap { CheckRunStatus(rawValue: $0) } ?? .queued
             let conclusion = node.conclusion.flatMap { CheckRunConclusion(rawValue: $0) }
             let url = node.detailsUrl.flatMap { URL(string: $0) }
-            results.append(CheckRun(id: "check-\(index)-\(name)", name: name, status: status, conclusion: conclusion, detailsURL: url))
+            let run = CheckRun(id: "check-\(index)-\(name)", name: name, status: status, conclusion: conclusion, detailsURL: url, isRequired: node.isRequired ?? false)
+
+            if let existing = bestByName[name] {
+                if run.conclusionPriority > existing.conclusionPriority {
+                    bestByName[name] = run
+                }
+            } else {
+                nameOrder.append(name)
+                bestByName[name] = run
+            }
         }
 
         for (index, node) in statusContextNodes {
-            guard let context = node.context, seen.insert(context).inserted else { continue }
+            guard let context = node.context, bestByName[context] == nil else { continue }
             let conclusion: CheckRunConclusion? = node.state.flatMap {
                 switch $0 {
                 case "SUCCESS": return .success
@@ -223,10 +235,11 @@ extension CheckRunCommitsConnection {
             }
             let status: CheckRunStatus = node.state == "PENDING" ? .pending : .completed
             let url = node.targetUrl.flatMap { URL(string: $0) }
-            results.append(CheckRun(id: "status-\(index)-\(context)", name: context, status: status, conclusion: conclusion, detailsURL: url))
+            nameOrder.append(context)
+            bestByName[context] = CheckRun(id: "status-\(index)-\(context)", name: context, status: status, conclusion: conclusion, detailsURL: url, isRequired: false)
         }
 
-        return results
+        return nameOrder.compactMap { bestByName[$0] }
     }
 }
 

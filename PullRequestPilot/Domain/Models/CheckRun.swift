@@ -6,6 +6,18 @@ struct CheckRun: Identifiable, Hashable, Sendable {
     let status: CheckRunStatus
     let conclusion: CheckRunConclusion?
     let detailsURL: URL?
+    let isRequired: Bool
+
+    /// Priority for deduplication: higher = preferred when multiple runs share a name.
+    var conclusionPriority: Int {
+        switch conclusion {
+        case .success: return 4
+        case nil: return 3 // in-progress / pending
+        case .failure, .startupFailure, .timedOut: return 2
+        case .neutral, .actionRequired: return 1
+        case .cancelled, .skipped, .stale: return 0
+        }
+    }
 
     var displayStatus: String {
         if let conclusion {

@@ -181,6 +181,16 @@ struct PRDetailView: View {
                 .font(.caption)
                 .lineLimit(1)
 
+            if check.isRequired {
+                Text("Required")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(.orange.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+            }
+
             Spacer()
 
             Text(check.displayStatus)

@@ -49,19 +49,29 @@ final class PRDetailViewModel {
             checkRuns = []
             do {
                 var allEvents: [TimelineEvent] = []
-                var fetchedCheckRuns: [CheckRun] = []
+                var allCheckRuns: [CheckRun] = []
                 var cursor: String?
+                var checksCursor: String?
                 repeat {
                     let page = try await gitHubClient.fetchTimeline(nodeID: pr.id, cursor: cursor)
                     allEvents.append(contentsOf: page.events)
-                    if fetchedCheckRuns.isEmpty {
-                        fetchedCheckRuns = page.checkRuns
+                    if allCheckRuns.isEmpty {
+                        allCheckRuns = page.checkRuns
+                        checksCursor = page.checksNextCursor
                     }
                     cursor = page.nextCursor
                 } while cursor != nil
+
+                // Paginate remaining check runs
+                while let nextChecksCursor = checksCursor {
+                    let checksPage = try await gitHubClient.fetchChecks(nodeID: pr.id, cursor: nextChecksCursor)
+                    allCheckRuns.append(contentsOf: checksPage.checkRuns)
+                    checksCursor = checksPage.nextCursor
+                }
+
                 guard !Task.isCancelled else { return }
                 timelineEvents = allEvents
-                checkRuns = fetchedCheckRuns
+                checkRuns = allCheckRuns
             } catch is CancellationError {
                 return
             } catch {

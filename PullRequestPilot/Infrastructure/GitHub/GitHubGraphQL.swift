@@ -200,12 +200,57 @@ enum GitHubGraphQL {
                             status
                             conclusion
                             detailsUrl
+                            isRequired(pullRequestId: "\(nodeID)")
                           }
                           ... on StatusContext {
                             context
                             state
                             targetUrl
                           }
+                        }
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        """
+    }
+
+    static func checksQuery(nodeID: String, cursor: String) -> String {
+        """
+        {
+          node(id: "\(nodeID)") {
+            ... on PullRequest {
+              commits(last: 1) {
+                nodes {
+                  commit {
+                    statusCheckRollup {
+                      contexts(first: 100, after: "\(cursor)") {
+                        nodes {
+                          __typename
+                          ... on CheckRun {
+                            name
+                            status
+                            conclusion
+                            detailsUrl
+                            isRequired(pullRequestId: "\(nodeID)")
+                          }
+                          ... on StatusContext {
+                            context
+                            state
+                            targetUrl
+                          }
+                        }
+                        pageInfo {
+                          hasNextPage
+                          endCursor
                         }
                       }
                     }

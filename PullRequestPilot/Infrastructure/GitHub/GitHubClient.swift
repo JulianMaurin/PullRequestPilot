@@ -13,11 +13,18 @@ struct TimelinePage: Sendable {
     let events: [TimelineEvent]
     let checkRuns: [CheckRun]
     let nextCursor: String?
+    let checksNextCursor: String?
+}
+
+struct ChecksPage: Sendable {
+    let checkRuns: [CheckRun]
+    let nextCursor: String?
 }
 
 protocol GitHubClientProtocol: Sendable {
     func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage
     func fetchTimeline(nodeID: String, cursor: String?) async throws -> TimelinePage
+    func fetchChecks(nodeID: String, cursor: String) async throws -> ChecksPage
     func fetchViewer() async throws -> (login: String, avatarURL: URL?)
 }
 
@@ -104,14 +111,31 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         }
 
         guard let prNode = data.node else {
-            return TimelinePage(events: [], checkRuns: [], nextCursor: nil)
+            return TimelinePage(events: [], checkRuns: [], nextCursor: nil, checksNextCursor: nil)
         }
 
         let events = prNode.timelineItems?.toDomain() ?? []
         let checkRuns = prNode.commits?.toDomain() ?? []
         let nextCursor = prNode.timelineItems?.pageInfo.hasNextPage == true
             ? prNode.timelineItems?.pageInfo.endCursor : nil
-        return TimelinePage(events: events, checkRuns: checkRuns, nextCursor: nextCursor)
+        let checksPageInfo = prNode.commits?.nodes.first?.commit.statusCheckRollup?.contexts.pageInfo
+        let checksNextCursor = checksPageInfo?.hasNextPage == true ? checksPageInfo?.endCursor : nil
+        return TimelinePage(events: events, checkRuns: checkRuns, nextCursor: nextCursor, checksNextCursor: checksNextCursor)
+    }
+
+    func fetchChecks(nodeID: String, cursor: String) async throws -> ChecksPage {
+        let query = GitHubGraphQL.checksQuery(nodeID: nodeID, cursor: cursor)
+        let response: GraphQLResponse<TimelineNodeData> = try await execute(query: query)
+
+        guard let data = response.data else {
+            let messages = response.errors?.map(\.message) ?? ["Unknown error"]
+            throw GitHubClientError.graphQLErrors(messages)
+        }
+
+        let checkRuns = data.node?.commits?.toDomain() ?? []
+        let pageInfo = data.node?.commits?.nodes.first?.commit.statusCheckRollup?.contexts.pageInfo
+        let nextCursor = pageInfo?.hasNextPage == true ? pageInfo?.endCursor : nil
+        return ChecksPage(checkRuns: checkRuns, nextCursor: nextCursor)
     }
 
     func fetchViewer() async throws -> (login: String, avatarURL: URL?) {
