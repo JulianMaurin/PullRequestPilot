@@ -657,6 +657,7 @@ final class DashboardViewModel {
         let trimmed = newQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != dashView.query else { return }
         updateView(DashboardView(id: dashView.id, title: dashView.title, query: trimmed, hideReviewed: dashView.hideReviewed))
+        viewStates[viewID] = ViewState()
         Task { await refresh(viewID: viewID) }
     }
 
@@ -665,6 +666,7 @@ final class DashboardViewModel {
         guard !dashView.query.contains(qualifier) else { return }
         let newQuery = dashView.query + " " + qualifier
         updateView(DashboardView(id: dashView.id, title: dashView.title, query: newQuery, hideReviewed: dashView.hideReviewed))
+        viewStates[viewID] = ViewState()
         Task { await refresh(viewID: viewID) }
     }
 
