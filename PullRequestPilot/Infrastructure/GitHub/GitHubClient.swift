@@ -86,10 +86,17 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         return url
     }()
 
-    init(tokenProvider: @escaping @Sendable () -> String?, onUnauthorized: @escaping @Sendable () -> Void = {}, session: URLSession = .shared) {
+    private static let defaultSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 60
+        return URLSession(configuration: config)
+    }()
+
+    init(tokenProvider: @escaping @Sendable () -> String?, onUnauthorized: @escaping @Sendable () -> Void = {}, session: URLSession? = nil) {
         self.tokenProvider = tokenProvider
         self.onUnauthorized = onUnauthorized
-        self.session = session
+        self.session = session ?? Self.defaultSession
     }
 
     func fetchPullRequests(query searchQuery: String, cursor: String? = nil) async throws -> PullRequestPage {
