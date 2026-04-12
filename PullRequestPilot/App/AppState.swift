@@ -14,14 +14,14 @@ final class AppState {
     let prDetailViewModel: PRDetailViewModel
     let settingsViewModel: SettingsViewModel
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
         let keychain = KeychainService()
         let tokenCache = TokenCache(keychain: keychain)
         let gitHubClient = GitHubClient(
             tokenProvider: { tokenCache.token },
             onUnauthorized: { tokenCache.invalidate() }
         )
-        let viewsStore = ViewsStore()
+        let viewsStore = ViewsStore(defaults: defaults)
         let gitDirectoriesStore = GitDirectoriesStore()
         let localRepositoryService = LocalRepositoryService()
 
@@ -35,14 +35,16 @@ final class AppState {
         self.dashboardViewModel = DashboardViewModel(
             gitHubClient: gitHubClient,
             viewsStore: viewsStore,
-            localRepositoryService: localRepositoryService
+            localRepositoryService: localRepositoryService,
+            defaults: defaults
         )
         self.settingsViewModel = SettingsViewModel(
             keychain: keychain,
             gitHubClient: gitHubClient,
             tokenCache: tokenCache,
             gitDirectoriesStore: gitDirectoriesStore,
-            localRepositoryService: localRepositoryService
+            localRepositoryService: localRepositoryService,
+            defaults: defaults
         )
 
         // Start security-scoped access for bookmarked directories
@@ -55,7 +57,7 @@ final class AppState {
 
         // Periodic refresh of local repo index (first tick scans immediately)
         let store = gitDirectoriesStore
-        let scanInterval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.repoScanInterval)
+        let scanInterval = defaults.double(forKey: Constants.UserDefaultsKeys.repoScanInterval)
         localRepositoryService.startPeriodicRefresh(
             directories: {
                 let dirs = store.load()

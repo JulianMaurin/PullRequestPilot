@@ -258,7 +258,7 @@ final class DashboardViewModel {
                 let seconds: Double
                 if hasAnyData && !hasAnyError {
                     consecutiveEmptyFetches = 0
-                    let interval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
+                    let interval = self?.defaults.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval) ?? 0
                     seconds = interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
                 } else if hasAnyError {
                     let rateLimitWait = self?.viewStates.values.compactMap(\.rateLimitRetryAfter).max()
@@ -271,7 +271,7 @@ final class DashboardViewModel {
                     }
                 } else if self?.views.isEmpty == true {
                     // No views configured — use normal interval, nothing to fetch
-                    let interval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
+                    let interval = self?.defaults.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval) ?? 0
                     seconds = interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
                 } else {
                     // No data yet, no errors — initial load, use moderate interval
