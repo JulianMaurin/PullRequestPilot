@@ -9,6 +9,9 @@ struct PRDetailView: View {
             Divider()
             detailContent
         }
+        .onChange(of: viewModel.selectedPR?.id) {
+            checksCollapsed = true
+        }
     }
 
     // MARK: - Header
@@ -111,22 +114,55 @@ struct PRDetailView: View {
 
     // MARK: - Checks Section
 
+    @State private var checksCollapsed = true
+
     private var checksSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Checks")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    checksCollapsed.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: checksCollapsed ? "chevron.right" : "chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 10)
+                    Text("Checks")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    checksSummaryBadge
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
 
-            ForEach(viewModel.checkRuns) { check in
-                checkRow(check)
-                if check.id != viewModel.checkRuns.last?.id {
-                    Divider()
-                        .padding(.leading, 36)
+            if !checksCollapsed {
+                ForEach(viewModel.checkRuns) { check in
+                    checkRow(check)
+                    if check.id != viewModel.checkRuns.last?.id {
+                        Divider()
+                            .padding(.leading, 36)
+                    }
                 }
             }
         }
+    }
+
+    private var checksSummaryBadge: some View {
+        let total = viewModel.checkRuns.count
+        let passed = viewModel.checkRuns.filter { $0.conclusion == .success }.count
+        let failed = viewModel.checkRuns.filter {
+            $0.conclusion == .failure || $0.conclusion == .startupFailure || $0.conclusion == .timedOut
+        }.count
+        let color: Color = failed > 0 ? .red : (passed == total ? .green : .yellow)
+
+        return Text("\(passed)/\(total)")
+            .font(.caption2.weight(.medium).monospacedDigit())
+            .foregroundStyle(color)
     }
 
     @State private var hoveredCheckRunID: String?
@@ -199,11 +235,25 @@ struct PRDetailView: View {
 
     private func timelineRow(_ event: TimelineEvent) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: event.iconName)
-                .font(.caption)
-                .foregroundStyle(iconColor(event.iconColor))
-                .frame(width: 20, alignment: .center)
-                .padding(.top, 2)
+            ZStack(alignment: .bottomTrailing) {
+                AsyncImage(url: event.actor?.avatarURL) { image in
+                    image.resizable()
+                } placeholder: {
+                    Circle().fill(.quaternary)
+                }
+                .frame(width: 20, height: 20)
+                .clipShape(Circle())
+
+                Image(systemName: event.iconName)
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(iconColor(event.iconColor))
+                    .padding(2)
+                    .background(.background)
+                    .clipShape(Circle())
+                    .offset(x: 4, y: 4)
+            }
+            .frame(width: 24)
+            .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
@@ -215,6 +265,14 @@ struct PRDetailView: View {
                     Text(event.timestampText)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+                }
+
+                if let body = event.body, !body.isEmpty {
+                    Text(body)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(4)
+                        .textSelection(.enabled)
                 }
             }
         }
