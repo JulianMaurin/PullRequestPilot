@@ -485,10 +485,9 @@ struct DashboardViewModelExtendedTests {
         defaults.removePersistentDomain(forName: "PresetNoConflict")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
-        // Only has default views with non-preset titles
+        // No preset titles exist, so there should be no conflicts
         let conflicts = viewModel.presetConflicts()
-        // May or may not have conflicts depending on default views; just verify it returns an array
-        #expect(conflicts is [String])
+        #expect(conflicts.isEmpty)
     }
 
     @Test("presetConflicts detects matching titles")
