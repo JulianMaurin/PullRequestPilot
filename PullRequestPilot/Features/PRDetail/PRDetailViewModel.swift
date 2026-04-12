@@ -86,7 +86,10 @@ final class PRDetailViewModel {
                 var eventPageOffset = 0
                 var checksPageOffset = 0
                 var previousTimelineCursor: String?
+                var timelinePages = 0
+                let maxPages = 20
                 repeat {
+                    timelinePages += 1
                     let page = try await gitHubClient.fetchTimeline(
                         nodeID: pr.id,
                         cursor: cursor,
@@ -106,11 +109,13 @@ final class PRDetailViewModel {
                     if page.nextCursor != nil, page.nextCursor == previousTimelineCursor { break }
                     previousTimelineCursor = page.nextCursor
                     cursor = page.nextCursor
-                } while cursor != nil
+                } while cursor != nil && timelinePages < maxPages
 
                 // Paginate remaining check runs
                 var previousChecksCursor: String?
-                while let nextChecksCursor = checksCursor {
+                var checksPages = 0
+                while let nextChecksCursor = checksCursor, checksPages < maxPages {
+                    checksPages += 1
                     // Guard against duplicate cursors that would cause an infinite loop
                     guard nextChecksCursor != previousChecksCursor else { break }
                     previousChecksCursor = nextChecksCursor
