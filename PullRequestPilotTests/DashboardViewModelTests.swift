@@ -5,6 +5,8 @@ import Foundation
 @MainActor
 @Suite("DashboardViewModel")
 struct DashboardViewModelTests {
+    // Swift Testing creates a fresh struct instance per @Test method, so
+    // each test gets its own mockClient and localRepoService.
     let mockClient = MockGitHubClient()
     let localRepoService = LocalRepositoryService()
 

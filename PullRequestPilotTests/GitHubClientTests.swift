@@ -102,7 +102,7 @@ struct GitHubClientTests {
         let page = try await client.fetchPullRequests(query: "is:pr", cursor: nil)
         #expect(page.pullRequests.count == 1)
         #expect(page.pullRequests.first?.title == "Test PR")
-        #expect(!page.hasNextPage)
+        #expect(page.nextCursor == nil)
     }
 
     @Test("fetchPullRequests returns nextCursor when hasNextPage")
@@ -115,7 +115,7 @@ struct GitHubClientTests {
         }
 
         let page = try await client.fetchPullRequests(query: "is:pr", cursor: nil)
-        #expect(page.hasNextPage)
+        #expect(page.nextCursor != nil)
         #expect(page.nextCursor == "cursor_abc")
     }
 
@@ -213,20 +213,6 @@ struct GitHubClientTests {
         #expect(capturedRequest?.value(forHTTPHeaderField: "Authorization") == "Bearer my-secret-token")
         #expect(capturedRequest?.value(forHTTPHeaderField: "Content-Type") == "application/json")
         #expect(capturedRequest?.httpMethod == "POST")
-    }
-
-    // MARK: - PullRequestPage
-
-    @Test("PullRequestPage.hasNextPage is true when nextCursor is set")
-    func pullRequestPageHasNextPage() {
-        let page = PullRequestPage(pullRequests: [], nextCursor: "abc")
-        #expect(page.hasNextPage)
-    }
-
-    @Test("PullRequestPage.hasNextPage is false when nextCursor is nil")
-    func pullRequestPageNoNextPage() {
-        let page = PullRequestPage(pullRequests: [], nextCursor: nil)
-        #expect(!page.hasNextPage)
     }
 
     // MARK: - GitHubClientError descriptions

@@ -14,6 +14,7 @@
 		25D44A863F8B2285EE0177E2 /* ReviewerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEE9B03750909980C0F4AD79 /* ReviewerTests.swift */; };
 		2FA559C93493745F8151E166 /* PullRequestPilotWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AE7DBBCDED1A5D00DF910CA4 /* PullRequestPilotWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3651CAC9AEAD9D9240F86DFF /* KeychainServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 664ED928BE49D4A1245F312A /* KeychainServiceTests.swift */; };
+		38651140A14D8C4D0DF2374C /* QueryEditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32AAB0369B31081BA5902536 /* QueryEditTests.swift */; };
 		409CBA2DBF0F6F4F9DB94F77 /* PullRequestPilotApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDDC85340ABAEFB5AFFCA2D7 /* PullRequestPilotApp.swift */; };
 		435918A905F6D46F867F9348 /* DashboardViewEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D10578F537D4DBC84E5E685 /* DashboardViewEntity.swift */; };
 		475BD10DC23B7EB7B3CA38B3 /* ViewsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B7FA651CACE3D0E219A4E5D /* ViewsStoreTests.swift */; };
@@ -24,6 +25,7 @@
 		4EEBE8B39FBA5B52511D4006 /* DashboardViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E6DAF84A0905976CD143089 /* DashboardViewTests.swift */; };
 		52C68063535522DF4E714C6F /* PRDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92323E6B06757DDD14BA3E74 /* PRDetailViewModel.swift */; };
 		546991698C848201A98B6FFA /* WidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D280E24D617F6EDE1976AE5 /* WidgetData.swift */; };
+		63CAE8E5BAA27B337249CE9C /* PRDetailRetryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF6CADF881F6CA764CEC21D1 /* PRDetailRetryTests.swift */; };
 		64F1EC8602CA28E3C0FF1C79 /* TimelineEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40557FE42C98E62F2A4EBB42 /* TimelineEvent.swift */; };
 		6A9967EBC3A428D84C298D15 /* GitHubResponses.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4637988807C67722E35819C /* GitHubResponses.swift */; };
 		72D454E984EC5B6EA1673EAE /* DashboardViewModelExtendedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A6F20A8A9AED8D061E283CD /* DashboardViewModelExtendedTests.swift */; };
@@ -61,6 +63,8 @@
 		CAB3556522F57F20A7401C24 /* GitHubGraphQLTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2584662552AAF5202DFE404C /* GitHubGraphQLTests.swift */; };
 		CDFB4480697006C1219ADF7E /* ViewsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C18A83BE9B2C3D03C2FA98B /* ViewsStore.swift */; };
 		D112C14519578FF1ED82E5D5 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36C3314A5F7DC9889C1BF45B /* KeychainService.swift */; };
+		DB01B4E64258AD8C05F47AEF /* GitHubClientHTTPErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F45834FC6092B1F70D67DB70 /* GitHubClientHTTPErrorTests.swift */; };
+		DBC40620EA1411FD740CEF28 /* BuildStacksTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDB7522333C8C799AE8BA8E7 /* BuildStacksTests.swift */; };
 		DBFD642BE8D3CBF0C561C7DB /* WidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D280E24D617F6EDE1976AE5 /* WidgetData.swift */; };
 		DDE4B84F95468B16178619C7 /* Reviewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 404EA06E3CB78A55D94A2B82 /* Reviewer.swift */; };
 		E32069D9B3DAE2B0AD814D1E /* PullRequestStateIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 650C74ADD7492D7CD010737D /* PullRequestStateIcon.swift */; };
@@ -69,6 +73,7 @@
 		ECE4955ACF2E7F4D23DE0351 /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8065F3287F8EA20E36F537FC /* SettingsViewModel.swift */; };
 		F3FAE81B4334F77A29906380 /* GitHubResponsesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECF50E10022F26E7C0A9B89F /* GitHubResponsesTests.swift */; };
 		F4206F45549E53ADCEE3A7D8 /* PullRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46D916DDB38D7B774FFC58D0 /* PullRequest.swift */; };
+		F9715837499E12B19A834326 /* ReviewerMappingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E95397D0E5E86B354D58214A /* ReviewerMappingTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -113,6 +118,7 @@
 		2584662552AAF5202DFE404C /* GitHubGraphQLTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubGraphQLTests.swift; sourceTree = "<group>"; };
 		2FBA9DC202E1C820FD45E57B /* SettingsViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModelTests.swift; sourceTree = "<group>"; };
 		315B629FAACE161D2BEA26E7 /* LocalRepositoryGitParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRepositoryGitParsingTests.swift; sourceTree = "<group>"; };
+		32AAB0369B31081BA5902536 /* QueryEditTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryEditTests.swift; sourceTree = "<group>"; };
 		36C3314A5F7DC9889C1BF45B /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		3E21D2ACD1877BC876B5A5E8 /* DashboardViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModelTests.swift; sourceTree = "<group>"; };
 		3E6DAF84A0905976CD143089 /* DashboardViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewTests.swift; sourceTree = "<group>"; };
@@ -164,10 +170,14 @@
 		D15F556448815396EF8A8ED2 /* GitDirectoriesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitDirectoriesStore.swift; sourceTree = "<group>"; };
 		D4637988807C67722E35819C /* GitHubResponses.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubResponses.swift; sourceTree = "<group>"; };
 		E4FAD5E316A5839F8E3322E9 /* TimelineResponseMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineResponseMappingTests.swift; sourceTree = "<group>"; };
+		E95397D0E5E86B354D58214A /* ReviewerMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewerMappingTests.swift; sourceTree = "<group>"; };
 		EA99630A67726BEAA7144942 /* PRDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PRDetailView.swift; sourceTree = "<group>"; };
 		ECF50E10022F26E7C0A9B89F /* GitHubResponsesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubResponsesTests.swift; sourceTree = "<group>"; };
+		EDB7522333C8C799AE8BA8E7 /* BuildStacksTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildStacksTests.swift; sourceTree = "<group>"; };
 		EDDC85340ABAEFB5AFFCA2D7 /* PullRequestPilotApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullRequestPilotApp.swift; sourceTree = "<group>"; };
 		EEE9B03750909980C0F4AD79 /* ReviewerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewerTests.swift; sourceTree = "<group>"; };
+		EF6CADF881F6CA764CEC21D1 /* PRDetailRetryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PRDetailRetryTests.swift; sourceTree = "<group>"; };
+		F45834FC6092B1F70D67DB70 /* GitHubClientHTTPErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubClientHTTPErrorTests.swift; sourceTree = "<group>"; };
 		F98F49D6E2E1D2D31F361C09 /* PRDetailViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PRDetailViewModelTests.swift; sourceTree = "<group>"; };
 		FE4D0F5F6FD5656BFDA936ED /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -257,19 +267,24 @@
 		3A159768426BD617D649F989 /* PullRequestPilotTests */ = {
 			isa = PBXGroup;
 			children = (
+				EDB7522333C8C799AE8BA8E7 /* BuildStacksTests.swift */,
 				77412D15C854BB2FFB5413F8 /* CheckRunTests.swift */,
 				7A6F20A8A9AED8D061E283CD /* DashboardViewModelExtendedTests.swift */,
 				3E21D2ACD1877BC876B5A5E8 /* DashboardViewModelTests.swift */,
 				3E6DAF84A0905976CD143089 /* DashboardViewTests.swift */,
 				AD59F7D8B3ED9864BC1DE708 /* GitDirectoriesStoreTests.swift */,
+				F45834FC6092B1F70D67DB70 /* GitHubClientHTTPErrorTests.swift */,
 				AD46693817F4AC7B0929F1BD /* GitHubClientTests.swift */,
 				2584662552AAF5202DFE404C /* GitHubGraphQLTests.swift */,
 				ECF50E10022F26E7C0A9B89F /* GitHubResponsesTests.swift */,
 				664ED928BE49D4A1245F312A /* KeychainServiceTests.swift */,
 				315B629FAACE161D2BEA26E7 /* LocalRepositoryGitParsingTests.swift */,
 				6D1DB214BC50D97E3CD1F5DA /* LocalRepositoryServiceTests.swift */,
+				EF6CADF881F6CA764CEC21D1 /* PRDetailRetryTests.swift */,
 				F98F49D6E2E1D2D31F361C09 /* PRDetailViewModelTests.swift */,
 				53AD27A0204C2931E1B75616 /* PullRequestTests.swift */,
+				32AAB0369B31081BA5902536 /* QueryEditTests.swift */,
+				E95397D0E5E86B354D58214A /* ReviewerMappingTests.swift */,
 				EEE9B03750909980C0F4AD79 /* ReviewerTests.swift */,
 				2FBA9DC202E1C820FD45E57B /* SettingsViewModelTests.swift */,
 				611FE229324726ACB5D01619 /* TimelineEventTests.swift */,
@@ -607,11 +622,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DBC40620EA1411FD740CEF28 /* BuildStacksTests.swift in Sources */,
 				B73D7594DD891F3F5DE1D799 /* CheckRunTests.swift in Sources */,
 				72D454E984EC5B6EA1673EAE /* DashboardViewModelExtendedTests.swift in Sources */,
 				C485E7FD59A33E8A2B75815D /* DashboardViewModelTests.swift in Sources */,
 				4EEBE8B39FBA5B52511D4006 /* DashboardViewTests.swift in Sources */,
 				4E8AFCCD90549D300371993B /* GitDirectoriesStoreTests.swift in Sources */,
+				DB01B4E64258AD8C05F47AEF /* GitHubClientHTTPErrorTests.swift in Sources */,
 				A9BF6A0F8472D55C7972DDF6 /* GitHubClientTests.swift in Sources */,
 				CAB3556522F57F20A7401C24 /* GitHubGraphQLTests.swift in Sources */,
 				F3FAE81B4334F77A29906380 /* GitHubResponsesTests.swift in Sources */,
@@ -620,8 +637,11 @@
 				E61F9ADB7469BCE775EF9CB4 /* LocalRepositoryServiceTests.swift in Sources */,
 				4AEB0F26BFD153CADA81E314 /* MockGitHubClient.swift in Sources */,
 				A695E5D237DE79F0C4C2BEDA /* MockURLProtocol.swift in Sources */,
+				63CAE8E5BAA27B337249CE9C /* PRDetailRetryTests.swift in Sources */,
 				1B60D5C21D449ECB5263957A /* PRDetailViewModelTests.swift in Sources */,
 				812EB44365E322642D879615 /* PullRequestTests.swift in Sources */,
+				38651140A14D8C4D0DF2374C /* QueryEditTests.swift in Sources */,
+				F9715837499E12B19A834326 /* ReviewerMappingTests.swift in Sources */,
 				25D44A863F8B2285EE0177E2 /* ReviewerTests.swift in Sources */,
 				7485EF4CAF939DB4C5EBC0C5 /* SettingsViewModelTests.swift in Sources */,
 				964ADE8F02C6BD934DF5B96D /* TestPullRequestFactory.swift in Sources */,
