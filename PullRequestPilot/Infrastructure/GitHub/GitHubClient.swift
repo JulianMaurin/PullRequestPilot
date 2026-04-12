@@ -75,6 +75,7 @@ extension Error {
 
 final class GitHubClient: GitHubClientProtocol, Sendable {
     private let tokenProvider: @Sendable () -> String?
+    private let onUnauthorized: @Sendable () -> Void
     private let session: URLSession
     private let logger = Logger(subsystem: "PullRequestPilot", category: "GitHubClient")
 
@@ -85,8 +86,9 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         return url
     }()
 
-    init(tokenProvider: @escaping @Sendable () -> String?, session: URLSession = .shared) {
+    init(tokenProvider: @escaping @Sendable () -> String?, onUnauthorized: @escaping @Sendable () -> Void = {}, session: URLSession = .shared) {
         self.tokenProvider = tokenProvider
+        self.onUnauthorized = onUnauthorized
         self.session = session
     }
 
@@ -102,7 +104,8 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         let prs = data.search.nodes.compactMap { $0.toDomain() }
         logger.info("Page returned \(data.search.nodes.count, privacy: .public) node(s), mapped \(prs.count, privacy: .public) PR(s)")
 
-        let nextCursor = data.search.pageInfo.hasNextPage ? data.search.pageInfo.endCursor : nil
+        let rawCursor = data.search.pageInfo.hasNextPage ? data.search.pageInfo.endCursor : nil
+        let nextCursor = rawCursor?.isEmpty == false ? rawCursor : nil
         return PullRequestPage(pullRequests: prs, nextCursor: nextCursor)
     }
 
@@ -122,10 +125,12 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         let events = prNode.timelineItems?.toDomain() ?? []
         let checkRuns = prNode.commits?.toDomain() ?? []
         let reviewers = prNode.toReviewers()
-        let nextCursor = prNode.timelineItems?.pageInfo.hasNextPage == true
+        let rawTimelineCursor = prNode.timelineItems?.pageInfo.hasNextPage == true
             ? prNode.timelineItems?.pageInfo.endCursor : nil
+        let nextCursor = rawTimelineCursor?.isEmpty == false ? rawTimelineCursor : nil
         let checksPageInfo = prNode.commits?.nodes.first?.commit.statusCheckRollup?.contexts.pageInfo
-        let checksNextCursor = checksPageInfo?.hasNextPage == true ? checksPageInfo?.endCursor : nil
+        let rawChecksCursor = checksPageInfo?.hasNextPage == true ? checksPageInfo?.endCursor : nil
+        let checksNextCursor = rawChecksCursor?.isEmpty == false ? rawChecksCursor : nil
         return TimelinePage(events: events, checkRuns: checkRuns, reviewers: reviewers, nextCursor: nextCursor, checksNextCursor: checksNextCursor)
     }
 
@@ -140,7 +145,8 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
 
         let checkRuns = data.node?.commits?.toDomain() ?? []
         let pageInfo = data.node?.commits?.nodes.first?.commit.statusCheckRollup?.contexts.pageInfo
-        let nextCursor = pageInfo?.hasNextPage == true ? pageInfo?.endCursor : nil
+        let rawCheckCursor = pageInfo?.hasNextPage == true ? pageInfo?.endCursor : nil
+        let nextCursor = rawCheckCursor?.isEmpty == false ? rawCheckCursor : nil
         return ChecksPage(checkRuns: checkRuns, nextCursor: nextCursor)
     }
 
@@ -186,19 +192,10 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             case 200...299:
                 break
             case 401:
+                onUnauthorized()
                 throw GitHubClientError.unauthorized
-            case 403:
-                let retryAfter: TimeInterval?
-                if let retryStr = httpResponse.value(forHTTPHeaderField: "Retry-After"),
-                   let seconds = TimeInterval(retryStr) {
-                    retryAfter = seconds
-                } else if let resetStr = httpResponse.value(forHTTPHeaderField: "X-RateLimit-Reset"),
-                          let resetTimestamp = TimeInterval(resetStr) {
-                    retryAfter = max(0, resetTimestamp - Date().timeIntervalSince1970)
-                } else {
-                    retryAfter = nil
-                }
-                throw GitHubClientError.rateLimited(retryAfter: retryAfter)
+            case 403, 429:
+                throw GitHubClientError.rateLimited(retryAfter: Self.parseRetryAfter(from: httpResponse))
             case 400...499:
                 throw GitHubClientError.serverError(statusCode: httpResponse.statusCode)
             case 500...599:
@@ -219,5 +216,29 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             }
             throw GitHubClientError.decodingError(error)
         }
+    }
+
+    // MARK: - Retry-After Parsing
+
+    private static func parseRetryAfter(from response: HTTPURLResponse) -> TimeInterval? {
+        if let retryStr = response.value(forHTTPHeaderField: "Retry-After") {
+            // Try seconds first (most common for GitHub)
+            if let seconds = TimeInterval(retryStr) {
+                return seconds
+            }
+            // Try HTTP-date format (e.g. "Fri, 22 Apr 2026 12:00:00 GMT")
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+            if let date = formatter.date(from: retryStr) {
+                return max(0, date.timeIntervalSince1970 - Date().timeIntervalSince1970)
+            }
+        }
+        // Fall back to X-RateLimit-Reset (UNIX timestamp)
+        if let resetStr = response.value(forHTTPHeaderField: "X-RateLimit-Reset"),
+           let resetTimestamp = TimeInterval(resetStr) {
+            return max(0, resetTimestamp - Date().timeIntervalSince1970)
+        }
+        return nil
     }
 }

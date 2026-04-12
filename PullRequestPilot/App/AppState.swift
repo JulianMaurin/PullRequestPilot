@@ -14,11 +14,17 @@ final class AppState {
     let prDetailViewModel: PRDetailViewModel
     let settingsViewModel: SettingsViewModel
 
+    func cleanup() {
+        dashboardViewModel.stopAutoRefresh()
+        localRepositoryService.stopPeriodicRefresh()
+    }
+
     init() {
         let keychain = KeychainService()
         let tokenCache = TokenCache(keychain: keychain)
         let gitHubClient = GitHubClient(
-            tokenProvider: { tokenCache.token }
+            tokenProvider: { tokenCache.token },
+            onUnauthorized: { tokenCache.invalidate() }
         )
         let viewsStore = ViewsStore()
         let gitDirectoriesStore = GitDirectoriesStore()
