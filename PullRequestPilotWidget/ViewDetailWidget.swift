@@ -12,8 +12,12 @@ struct ViewDetailEntry: TimelineEntry {
 // MARK: - Timeline Provider
 
 struct ViewDetailProvider: AppIntentTimelineProvider {
-    // swiftlint:disable:next force_unwrapping
-    private static let placeholderURL = URL(string: "https://github.com")!
+    private static let placeholderURL: URL = {
+        guard let url = URL(string: "https://github.com") else {
+            preconditionFailure("Invalid static URL: placeholder")
+        }
+        return url
+    }()
 
     func placeholder(in _: Context) -> ViewDetailEntry {
         ViewDetailEntry(date: .now, viewData: WidgetViewData(
