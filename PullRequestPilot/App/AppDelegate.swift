@@ -6,12 +6,19 @@ import UserNotifications
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     private var statusItem: NSStatusItem?
     /// Set by PullRequestPilotApp once AppState is available.
-    var dashboardViewModel: DashboardViewModel?
+    var dashboardViewModel: DashboardViewModel? {
+        didSet {
+            dashboardViewModel?.onBadgeCountChanged = { [weak self] count in
+                self?.updateStatusBarBadge(count)
+            }
+            updateStatusBarBadge(dashboardViewModel?.badgeCount ?? 0)
+        }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().delegate = self
 
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem?.button {
             if let appIcon = NSImage(named: "AppIcon") {
                 appIcon.size = NSSize(width: 18, height: 18)
@@ -19,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             } else {
                 button.image = NSImage(systemSymbolName: "list.bullet.rectangle", accessibilityDescription: "Pull Request Pilot")
             }
+            button.imagePosition = .imageLeading
             button.action = #selector(statusBarButtonClicked)
             button.target = self
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -97,6 +105,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         showWindow()
     }
 
+    // MARK: - Status Bar Badge
+
+    func updateStatusBarBadge(_ count: Int) {
+        guard let button = statusItem?.button else { return }
+        if count > 0 {
+            let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .medium)
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: NSColor.secondaryLabelColor,
+            ]
+            button.attributedTitle = NSAttributedString(string: " \(count)", attributes: attrs)
+        } else {
+            button.attributedTitle = NSAttributedString(string: "")
+        }
+    }
+
     // MARK: - Window
 
     func showWindow() {
@@ -105,5 +129,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             window.makeKeyAndOrderFront(nil)
         }
         NSApplication.shared.activate()
+        dashboardViewModel?.markBadgeAsSeen()
     }
 }

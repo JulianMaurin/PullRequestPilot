@@ -143,25 +143,14 @@ struct SettingsView: View {
                                 .foregroundStyle(.primary)
                         }
                     }
-                }
-                if dashboardViewModel.views.isEmpty {
-                    Text("No views configured yet.")
-                        .foregroundStyle(.secondary)
                 } else {
-                    ForEach(dashboardViewModel.views) { view in
-                        Toggle(view.title, isOn: Binding(
-                            get: { dashboardViewModel.isNotificationEnabled(for: view.id) },
-                            set: { newValue in
-                                dashboardViewModel.setNotification(for: view.id, enabled: newValue)
-                                Task { await dashboardViewModel.ensureNotificationPermission(for: view.id) }
-                            }
-                        ))
-                    }
+                    SwiftUI.Label("System notifications are enabled.", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.secondary)
                 }
             } header: {
                 Text("Notifications")
             } footer: {
-                Text("Get notified when new pull requests appear in a view.")
+                Text("Use the icons on each view's query bar to toggle notifications and new-PR tracking in the menu bar.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

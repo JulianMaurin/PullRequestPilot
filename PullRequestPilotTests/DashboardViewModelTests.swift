@@ -240,6 +240,178 @@ struct DashboardViewModelTests {
         #expect(stored == nil)
     }
 
+    // MARK: - Badge Count
+
+    @Test("badgeCount tracks unseen PRs that appear after initial load")
+    func badgeCountTracksUnseen() async {
+        let pr1 = makePullRequest(number: 1, title: "PR 1")
+        let pr2 = makePullRequest(number: 2, title: "PR 2")
+
+        let defaults = UserDefaults(suiteName: "BadgeUnseen")!
+        defaults.removePersistentDomain(forName: "BadgeUnseen")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        viewModel.addView(view1)
+        viewModel.setBadge(for: view1.id, enabled: true)
+
+        // First refresh = baseline, no unseen
+        mockClient.pullRequestsToReturn = [pr1]
+        await viewModel.refresh(viewID: view1.id)
+        #expect(viewModel.badgeCount == 0)
+
+        // Second refresh with a new PR = 1 unseen
+        mockClient.pullRequestsToReturn = [pr1, pr2]
+        await viewModel.refresh(viewID: view1.id)
+        #expect(viewModel.badgeCount == 1)
+    }
+
+    @Test("badgeCount returns 0 when no views have badge enabled")
+    func badgeCountZeroWhenNoneEnabled() async {
+        mockClient.pullRequestsToReturn = [makePullRequest(number: 1, title: "PR 1")]
+        let viewModel = makeViewModel(suiteName: "BadgeCountNone")
+        let viewID = viewModel.views.first!.id
+        await viewModel.refresh(viewID: viewID)
+
+        #expect(viewModel.badgeCount == 0)
+    }
+
+    @Test("markBadgeAsSeen resets badgeCount to zero")
+    func markBadgeAsSeen() async {
+        let pr1 = makePullRequest(number: 1, title: "PR 1")
+        let pr2 = makePullRequest(number: 2, title: "PR 2")
+
+        let defaults = UserDefaults(suiteName: "BadgeSeen")!
+        defaults.removePersistentDomain(forName: "BadgeSeen")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        viewModel.addView(view1)
+        viewModel.setBadge(for: view1.id, enabled: true)
+
+        mockClient.pullRequestsToReturn = [pr1]
+        await viewModel.refresh(viewID: view1.id)
+        mockClient.pullRequestsToReturn = [pr1, pr2]
+        await viewModel.refresh(viewID: view1.id)
+        #expect(viewModel.badgeCount == 1)
+
+        viewModel.markBadgeAsSeen()
+        #expect(viewModel.badgeCount == 0)
+    }
+
+    @Test("isBadgeEnabled and setBadge toggle correctly")
+    func badgeToggle() {
+        let viewModel = makeViewModel(suiteName: "BadgeToggle")
+        let viewID = viewModel.views.first!.id
+
+        #expect(!viewModel.isBadgeEnabled(for: viewID))
+        viewModel.setBadge(for: viewID, enabled: true)
+        #expect(viewModel.isBadgeEnabled(for: viewID))
+        viewModel.setBadge(for: viewID, enabled: false)
+        #expect(!viewModel.isBadgeEnabled(for: viewID))
+    }
+
+    @Test("setBadge sets baseline so existing PRs are not counted as new")
+    func setBadgeBaseline() async {
+        mockClient.pullRequestsToReturn = [makePullRequest(number: 1, title: "PR 1")]
+        let defaults = UserDefaults(suiteName: "BadgeBaseline")!
+        defaults.removePersistentDomain(forName: "BadgeBaseline")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        viewModel.addView(view1)
+
+        // Load PRs first, then enable badge
+        await viewModel.refresh(viewID: view1.id)
+        viewModel.setBadge(for: view1.id, enabled: true)
+
+        // Re-refresh with same PRs — should be 0 unseen
+        await viewModel.refresh(viewID: view1.id)
+        #expect(viewModel.badgeCount == 0)
+    }
+
+    @Test("badgeViewIDs persists to UserDefaults")
+    func badgeViewIDsPersisted() {
+        let defaults = UserDefaults(suiteName: "BadgePersist")!
+        defaults.removePersistentDomain(forName: "BadgePersist")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        viewModel.addView(view1)
+
+        viewModel.setBadge(for: view1.id, enabled: true)
+
+        let stored = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.badgeViewIDs) ?? [])
+        #expect(stored.contains(view1.id.uuidString))
+    }
+
+    @Test("badgeViewIDs restores from UserDefaults on init")
+    func badgeViewIDsRestored() {
+        let defaults = UserDefaults(suiteName: "BadgeRestore")!
+        defaults.removePersistentDomain(forName: "BadgeRestore")
+        let viewID = UUID()
+        defaults.set([viewID.uuidString], forKey: Constants.UserDefaultsKeys.badgeViewIDs)
+        let store = ViewsStore(defaults: defaults)
+
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        #expect(viewModel.isBadgeEnabled(for: viewID))
+    }
+
+    @Test("clearAllData clears badgeViewIDs and unseen count")
+    func clearAllDataClearsBadge() async {
+        let defaults = UserDefaults(suiteName: "ClearBadge")!
+        defaults.removePersistentDomain(forName: "ClearBadge")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        viewModel.addView(view1)
+        viewModel.setBadge(for: view1.id, enabled: true)
+
+        viewModel.clearAllData()
+        #expect(viewModel.badgeViewIDs.isEmpty)
+        #expect(viewModel.badgeCount == 0)
+    }
+
+    @Test("onBadgeCountChanged is called when new PRs appear")
+    func badgeCallbackOnNewPRs() async {
+        let pr1 = makePullRequest(number: 1, title: "PR 1")
+        let pr2 = makePullRequest(number: 2, title: "PR 2")
+
+        let defaults = UserDefaults(suiteName: "BadgeCallback")!
+        defaults.removePersistentDomain(forName: "BadgeCallback")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        viewModel.addView(view1)
+        viewModel.setBadge(for: view1.id, enabled: true)
+
+        // Baseline refresh
+        mockClient.pullRequestsToReturn = [pr1]
+        await viewModel.refresh(viewID: view1.id)
+
+        // Now listen for callback when new PR appears
+        var receivedCount: Int?
+        viewModel.onBadgeCountChanged = { count in receivedCount = count }
+        mockClient.pullRequestsToReturn = [pr1, pr2]
+        await viewModel.refresh(viewID: view1.id)
+
+        #expect(receivedCount == 1)
+    }
+
+    @Test("deleteView removes view from badgeViewIDs")
+    func deleteViewRemovesBadge() {
+        let defaults = UserDefaults(suiteName: "DeleteBadge")!
+        defaults.removePersistentDomain(forName: "DeleteBadge")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        viewModel.addView(view1)
+        viewModel.setBadge(for: view1.id, enabled: true)
+
+        viewModel.deleteView(id: view1.id)
+        #expect(!viewModel.isBadgeEnabled(for: view1.id))
+    }
+
     // MARK: - View Navigation
 
     @Test("selectNextView cycles to next view")

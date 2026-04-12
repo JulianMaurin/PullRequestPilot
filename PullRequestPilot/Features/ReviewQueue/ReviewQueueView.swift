@@ -143,14 +143,7 @@ struct ReviewQueueView: View {
             prDetailViewModel.deselect()
             viewModel.selectedViewID = dashView.id
         } label: {
-            HStack(spacing: 4) {
-                Text(dashView.title)
-                if dashView.hideReviewed {
-                    Image(systemName: "eye.slash")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
+            Text(dashView.title)
             .font(.subheadline)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
@@ -170,15 +163,6 @@ struct ReviewQueueView: View {
             viewModel: viewModel
         ))
         .contextMenu {
-            Button {
-                viewModel.toggleHideReviewed(for: dashView.id)
-            } label: {
-                SwiftUI.Label(
-                    dashView.hideReviewed ? "Show Reviewed PRs" : "Hide Reviewed PRs",
-                    systemImage: dashView.hideReviewed ? "eye" : "eye.slash"
-                )
-            }
-            Divider()
             Button(role: .destructive) {
                 viewToDelete = dashView
                 showDeleteConfirmation = true
@@ -219,9 +203,59 @@ struct ReviewQueueView: View {
             .font(.system(.caption, design: .monospaced))
             .foregroundStyle(isQueryFocused ? .primary : .tertiary)
             .focused($isQueryFocused)
+            viewConfigIcons
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
+    }
+
+    @ViewBuilder
+    private var viewConfigIcons: some View {
+        if let viewID = viewModel.selectedViewID,
+           let dashView = viewModel.views.first(where: { $0.id == viewID }) {
+            HStack(spacing: 2) {
+                viewToggleButton(
+                    icon: viewModel.isNotificationEnabled(for: viewID) ? "bell.fill" : "bell",
+                    isOn: viewModel.isNotificationEnabled(for: viewID),
+                    helpOn: "Disable notifications",
+                    helpOff: "Enable notifications"
+                ) {
+                    let on = !viewModel.isNotificationEnabled(for: viewID)
+                    viewModel.setNotification(for: viewID, enabled: on)
+                    if on { Task { await viewModel.ensureNotificationPermission(for: viewID) } }
+                }
+
+                viewToggleButton(
+                    icon: "number",
+                    isOn: viewModel.isBadgeEnabled(for: viewID),
+                    helpOn: "Hide new PRs from menu bar",
+                    helpOff: "Show new PRs in menu bar"
+                ) {
+                    viewModel.setBadge(for: viewID, enabled: !viewModel.isBadgeEnabled(for: viewID))
+                }
+
+                viewToggleButton(
+                    icon: dashView.hideReviewed ? "eye.slash" : "eye",
+                    isOn: dashView.hideReviewed,
+                    helpOn: "Show reviewed PRs",
+                    helpOff: "Hide reviewed PRs"
+                ) {
+                    viewModel.toggleHideReviewed(for: viewID)
+                }
+            }
+        }
+    }
+
+    private func viewToggleButton(icon: String, isOn: Bool, helpOn: String, helpOff: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
+                .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(isOn ? helpOn : helpOff)
     }
 
     private func commitQueryEdit() {

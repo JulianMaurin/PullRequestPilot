@@ -35,6 +35,8 @@ final class DashboardViewModel {
         didSet { persistCollapsedSections() }
     }
 
+    var onBadgeCountChanged: ((Int) -> Void)?
+
     private let gitHubClient: GitHubClientProtocol
     private let viewsStore: ViewsStore
     private let localRepositoryService: LocalRepositoryService
@@ -53,6 +55,7 @@ final class DashboardViewModel {
         self.defaults = defaults
         self.collapsedOrgs = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.collapsedOrgs) ?? [])
         self.collapsedRepos = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.collapsedRepos) ?? [])
+        self.badgeViewIDs = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.badgeViewIDs) ?? [])
         self.notifiedViewIDs = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.notifiedViewIDs) ?? [])
         let loadedViews = viewsStore.load()
         self.views = loadedViews
@@ -277,6 +280,8 @@ final class DashboardViewModel {
         hasCompletedInitialLoad = []
         viewerLogin = nil
         notifiedViewIDs = []
+        badgeViewIDs = []
+        unseenBadgePRIDs = []
         collapsedOrgs = []
         collapsedRepos = []
         defaults.removeObject(forKey: Constants.UserDefaultsKeys.selectedViewID)
@@ -342,6 +347,8 @@ final class DashboardViewModel {
         views.removeAll { $0.id == id }
         viewStates.removeValue(forKey: id)
         viewsStore.save(views)
+        badgeViewIDs.remove(id.uuidString)
+        notifiedViewIDs.remove(id.uuidString)
         if selectedViewID == id {
             selectedViewID = views.first?.id
         }
@@ -405,6 +412,49 @@ final class DashboardViewModel {
 
     func openInBrowser(_ pr: PullRequest) {
         NSWorkspace.shared.open(pr.url)
+    }
+
+    // MARK: - Badge Count
+
+    var badgeViewIDs: Set<String> = [] {
+        didSet {
+            defaults.set(Array(badgeViewIDs), forKey: Constants.UserDefaultsKeys.badgeViewIDs)
+            notifyBadgeCount()
+        }
+    }
+
+    private(set) var unseenBadgePRIDs: Set<String> = []
+
+    var badgeCount: Int { unseenBadgePRIDs.count }
+
+    func isBadgeEnabled(for viewID: UUID) -> Bool {
+        badgeViewIDs.contains(viewID.uuidString)
+    }
+
+    func setBadge(for viewID: UUID, enabled: Bool) {
+        var ids = badgeViewIDs
+        if enabled {
+            ids.insert(viewID.uuidString)
+            // Set baseline from existing PRs so they aren't counted as "new"
+            if previousPRIDs[viewID] == nil,
+               let prs = viewStates[viewID]?.pullRequests, !prs.isEmpty {
+                previousPRIDs[viewID] = Set(prs.map(\.id))
+                hasCompletedInitialLoad.insert(viewID)
+            }
+        } else {
+            ids.remove(viewID.uuidString)
+        }
+        badgeViewIDs = ids
+    }
+
+    func markBadgeAsSeen() {
+        guard !unseenBadgePRIDs.isEmpty else { return }
+        unseenBadgePRIDs.removeAll()
+        notifyBadgeCount()
+    }
+
+    private func notifyBadgeCount() {
+        onBadgeCountChanged?(badgeCount)
     }
 
     // MARK: - Notifications
@@ -481,7 +531,9 @@ final class DashboardViewModel {
     }
 
     private func checkAndNotify(viewID: UUID, newPRs: [PullRequest]) {
-        guard isNotificationEnabled(for: viewID) else { return }
+        let notifyEnabled = isNotificationEnabled(for: viewID)
+        let badgeEnabled = isBadgeEnabled(for: viewID)
+        guard notifyEnabled || badgeEnabled else { return }
 
         let newIDs = Set(newPRs.map(\.id))
 
@@ -496,6 +548,14 @@ final class DashboardViewModel {
         previousPRIDs[viewID] = newIDs
 
         guard !addedIDs.isEmpty else { return }
+
+        // Track unseen PRs for badge count
+        if badgeEnabled {
+            unseenBadgePRIDs.formUnion(addedIDs)
+            notifyBadgeCount()
+        }
+
+        guard notifyEnabled else { return }
 
         // Skip delivering notifications during unit tests
         guard NSClassFromString("XCTestCase") == nil else { return }
