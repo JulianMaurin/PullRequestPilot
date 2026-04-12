@@ -115,7 +115,9 @@ struct WidgetDataTests {
                 state: "OPEN"
             )
         }
-        return WidgetViewData(id: "view1", title: "Test", count: prs.count, pullRequests: prs)
+        let approved = prs.filter { $0.reviewDecision == "APPROVED" }.count
+        let changesRequested = prs.filter { $0.reviewDecision == "CHANGES_REQUESTED" }.count
+        return WidgetViewData(id: "view1", title: "Test", count: prs.count, approvedCount: approved, changesRequestedCount: changesRequested, pullRequests: prs)
     }
 
     @Test("approvedCount filters correctly")
@@ -138,7 +140,7 @@ struct WidgetDataTests {
 
     @Test("all counts are zero for empty pullRequests")
     func emptyCounts() {
-        let data = WidgetViewData(id: "view1", title: "Test", count: 0, pullRequests: [])
+        let data = WidgetViewData(id: "view1", title: "Test", count: 0, approvedCount: 0, changesRequestedCount: 0, pullRequests: [])
         #expect(data.approvedCount == 0)
         #expect(data.changesRequestedCount == 0)
         #expect(data.pendingReviewCount == 0)
@@ -149,7 +151,7 @@ struct WidgetDataTests {
     @Test("WidgetData encodes and decodes with secondsSince1970 dates")
     func codableRoundTrip() throws {
         let pr = makeWidgetPR(createdAt: Date(timeIntervalSince1970: 1700000000))
-        let viewData = WidgetViewData(id: "v1", title: "View", count: 1, pullRequests: [pr])
+        let viewData = WidgetViewData(id: "v1", title: "View", count: 1, approvedCount: 0, changesRequestedCount: 0, pullRequests: [pr])
         let widgetData = WidgetData(views: [viewData], lastUpdated: Date(timeIntervalSince1970: 1700000100))
 
         let encoder = JSONEncoder()
@@ -175,7 +177,7 @@ struct WidgetDataTests {
 
     @Test("WidgetViewData Identifiable uses id")
     func viewDataIdentifiable() {
-        let data = WidgetViewData(id: "test-id", title: "Test", count: 0, pullRequests: [])
+        let data = WidgetViewData(id: "test-id", title: "Test", count: 0, approvedCount: 0, changesRequestedCount: 0, pullRequests: [])
         #expect(data.id == "test-id")
     }
 }

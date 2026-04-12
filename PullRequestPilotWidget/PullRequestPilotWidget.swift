@@ -21,8 +21,8 @@ struct SummaryEntry: TimelineEntry {
 struct SummaryProvider: TimelineProvider {
     func placeholder(in _: Context) -> SummaryEntry {
         SummaryEntry(date: .now, views: [
-            WidgetViewData(id: "1", title: "Review Requests", count: 5, pullRequests: []),
-            WidgetViewData(id: "2", title: "My PRs", count: 3, pullRequests: []),
+            WidgetViewData(id: "1", title: "Review Requests", count: 5, approvedCount: 0, changesRequestedCount: 0, pullRequests: []),
+            WidgetViewData(id: "2", title: "My PRs", count: 3, approvedCount: 0, changesRequestedCount: 0, pullRequests: []),
         ])
     }
 
@@ -371,9 +371,9 @@ private struct ViewSection: View {
     SummaryWidget()
 } timeline: {
     SummaryEntry(date: .now, views: [
-        WidgetViewData(id: "1", title: "Review Requests", count: 5, pullRequests: []),
-        WidgetViewData(id: "2", title: "My PRs", count: 2, pullRequests: []),
-        WidgetViewData(id: "3", title: "Team PRs", count: 8, pullRequests: []),
+        WidgetViewData(id: "1", title: "Review Requests", count: 5, approvedCount: 0, changesRequestedCount: 0, pullRequests: []),
+        WidgetViewData(id: "2", title: "My PRs", count: 2, approvedCount: 0, changesRequestedCount: 0, pullRequests: []),
+        WidgetViewData(id: "3", title: "Team PRs", count: 8, approvedCount: 0, changesRequestedCount: 0, pullRequests: []),
     ])
 }
 
@@ -381,9 +381,9 @@ private struct ViewSection: View {
     SummaryWidget()
 } timeline: {
     SummaryEntry(date: .now, views: [
-        WidgetViewData(id: "1", title: "Review Requests", count: 5, pullRequests: []),
-        WidgetViewData(id: "2", title: "My PRs", count: 2, pullRequests: []),
-        WidgetViewData(id: "3", title: "Team PRs", count: 8, pullRequests: []),
-        WidgetViewData(id: "4", title: "Urgent", count: 1, pullRequests: []),
+        WidgetViewData(id: "1", title: "Review Requests", count: 5, approvedCount: 0, changesRequestedCount: 0, pullRequests: []),
+        WidgetViewData(id: "2", title: "My PRs", count: 2, approvedCount: 0, changesRequestedCount: 0, pullRequests: []),
+        WidgetViewData(id: "3", title: "Team PRs", count: 8, approvedCount: 0, changesRequestedCount: 0, pullRequests: []),
+        WidgetViewData(id: "4", title: "Urgent", count: 1, approvedCount: 0, changesRequestedCount: 0, pullRequests: []),
     ])
 }

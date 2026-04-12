@@ -25,6 +25,8 @@ struct ViewDetailProvider: AppIntentTimelineProvider {
             id: "placeholder",
             title: "Review Requests",
             count: 3,
+            approvedCount: 1,
+            changesRequestedCount: 0,
             pullRequests: [
                 WidgetPullRequest(
                     id: "1", number: 42, title: "Add user authentication",
@@ -379,7 +381,7 @@ private let samplePRs: [WidgetPullRequest] = [
     ViewDetailWidget()
 } timeline: {
     ViewDetailEntry(date: .now, viewData: WidgetViewData(
-        id: "1", title: "Review Requests", count: 5, pullRequests: samplePRs
+        id: "1", title: "Review Requests", count: 5, approvedCount: 2, changesRequestedCount: 1, pullRequests: samplePRs
     ))
 }
 
@@ -387,7 +389,7 @@ private let samplePRs: [WidgetPullRequest] = [
     ViewDetailWidget()
 } timeline: {
     ViewDetailEntry(date: .now, viewData: WidgetViewData(
-        id: "1", title: "Review Requests", count: 5, pullRequests: samplePRs
+        id: "1", title: "Review Requests", count: 5, approvedCount: 2, changesRequestedCount: 1, pullRequests: samplePRs
     ))
 }
 
@@ -395,6 +397,6 @@ private let samplePRs: [WidgetPullRequest] = [
     ViewDetailWidget()
 } timeline: {
     ViewDetailEntry(date: .now, viewData: WidgetViewData(
-        id: "1", title: "Review Requests", count: 8, pullRequests: samplePRs
+        id: "1", title: "Review Requests", count: 8, approvedCount: 2, changesRequestedCount: 1, pullRequests: samplePRs
     ))
 }

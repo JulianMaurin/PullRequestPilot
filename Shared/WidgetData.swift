@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // MARK: - Widget PR Model
 
@@ -38,18 +39,12 @@ struct WidgetViewData: Codable, Sendable, Hashable, Identifiable {
     let id: String
     let title: String
     let count: Int
+    let approvedCount: Int
+    let changesRequestedCount: Int
     let pullRequests: [WidgetPullRequest]
 
-    var approvedCount: Int {
-        pullRequests.filter { $0.reviewDecision == "APPROVED" }.count
-    }
-
-    var changesRequestedCount: Int {
-        pullRequests.filter { $0.reviewDecision == "CHANGES_REQUESTED" }.count
-    }
-
     var pendingReviewCount: Int {
-        count - approvedCount - changesRequestedCount
+        max(0, count - approvedCount - changesRequestedCount)
     }
 }
 
@@ -60,6 +55,7 @@ struct WidgetData: Codable, Sendable {
     let lastUpdated: Date
 
     private static let appGroupIdentifier = "FNR3B372S8.com.pullrequestpilot.shared"
+    private static let logger = Logger(subsystem: "PullRequestPilot", category: "WidgetData")
 
     private static var sharedFileURL: URL? {
         guard let container = FileManager.default.containerURL(
@@ -70,19 +66,28 @@ struct WidgetData: Codable, Sendable {
 
     static func load() -> WidgetData? {
         guard let url = sharedFileURL else { return nil }
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .secondsSince1970
-        return try? decoder.decode(WidgetData.self, from: data)
+        do {
+            let data = try Data(contentsOf: url)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .secondsSince1970
+            return try decoder.decode(WidgetData.self, from: data)
+        } catch {
+            logger.debug("Failed to load widget data: \(error, privacy: .public)")
+            return nil
+        }
     }
 
     func save() {
         guard let url = Self.sharedFileURL else { return }
-        let dir = url.deletingLastPathComponent()
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .secondsSince1970
-        guard let data = try? encoder.encode(self) else { return }
-        try? data.write(to: url, options: .atomic)
+        do {
+            let dir = url.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .secondsSince1970
+            let data = try encoder.encode(self)
+            try data.write(to: url, options: .atomic)
+        } catch {
+            Self.logger.error("Failed to save widget data: \(error, privacy: .public)")
+        }
     }
 }
