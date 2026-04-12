@@ -26,12 +26,16 @@ struct PullRequest: Identifiable, Hashable, Sendable {
 
     var linesChanged: Int { additions + deletions }
 
+    private nonisolated(unsafe) static let ageFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter
+    }()
+
     var age: String { age(relativeTo: .now) }
 
     func age(relativeTo now: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: createdAt, relativeTo: now)
+        Self.ageFormatter.localizedString(for: createdAt, relativeTo: now)
     }
 }
 
@@ -140,12 +144,22 @@ struct LastActivity: Hashable, Sendable {
 // MARK: - Shared Timestamp Formatting
 
 extension Date {
+    private nonisolated(unsafe) static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    private nonisolated(unsafe) static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("MMM d")
+        return formatter
+    }()
+
     func relativeTimestampText(relativeTo now: Date) -> String {
         let calendar = Calendar.current
-        let timeFormatter = DateFormatter()
-        timeFormatter.dateStyle = .none
-        timeFormatter.timeStyle = .short
-        let time = timeFormatter.string(from: self)
+        let time = Self.timeFormatter.string(from: self)
 
         let startOfToday = calendar.startOfDay(for: now)
         let startOfTimestamp = calendar.startOfDay(for: self)
@@ -156,9 +170,7 @@ extension Date {
         } else if dayDifference == 1 {
             return "yesterday at \(time)"
         } else {
-            let dateFormatter = DateFormatter()
-            dateFormatter.setLocalizedDateFormatFromTemplate("MMM d")
-            return "\(dateFormatter.string(from: self)) at \(time)"
+            return "\(Self.dateFormatter.string(from: self)) at \(time)"
         }
     }
 }
