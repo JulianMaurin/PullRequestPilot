@@ -9,7 +9,7 @@ enum Constants {
         static let defaultPRRefreshInterval: TimeInterval = 60
         static let defaultRepoScanInterval: TimeInterval = 120
         static let maxPullRequests = 100
-        static let appGroupIdentifier = "FNR3B372S8.com.pullrequestpilot.shared"
+        static let appGroupIdentifier = WidgetData.appGroupIdentifier
     }
 
     enum UserDefaultsKeys {
@@ -23,18 +23,10 @@ enum Constants {
     }
 
     enum URLs {
-        static let privacyPolicy: URL = {
-            guard let url = URL(string: "https://julianmaurin.github.io/PullRequestPilot/privacy") else {
-                preconditionFailure("Invalid hardcoded privacy policy URL")
-            }
-            return url
-        }()
-        static let support: URL = {
-            guard let url = URL(string: "https://github.com/JulianMaurin/PullRequestPilot/issues") else {
-                preconditionFailure("Invalid hardcoded support URL")
-            }
-            return url
-        }()
+        // swiftlint:disable:next force_unwrapping
+        static let privacyPolicy = URL(string: "https://julianmaurin.github.io/PullRequestPilot/privacy")!
+        // swiftlint:disable:next force_unwrapping
+        static let support = URL(string: "https://github.com/JulianMaurin/PullRequestPilot/issues")!
     }
 
     enum Notifications {

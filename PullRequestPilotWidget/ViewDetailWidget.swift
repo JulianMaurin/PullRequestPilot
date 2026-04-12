@@ -13,12 +13,7 @@ struct ViewDetailEntry: TimelineEntry {
 
 struct ViewDetailProvider: AppIntentTimelineProvider {
     // swiftlint:disable:next force_unwrapping
-    private static let placeholderURL: URL = {
-        guard let url = URL(string: "https://github.com") else {
-            preconditionFailure("Invalid hardcoded placeholder URL")
-        }
-        return url
-    }()
+    private static let placeholderURL = URL(string: "https://github.com")!
 
     func placeholder(in _: Context) -> ViewDetailEntry {
         ViewDetailEntry(date: .now, viewData: WidgetViewData(

@@ -54,7 +54,7 @@ struct WidgetData: Codable, Sendable {
     let views: [WidgetViewData]
     let lastUpdated: Date
 
-    private static let appGroupIdentifier = "FNR3B372S8.com.pullrequestpilot.shared"
+    static let appGroupIdentifier = "FNR3B372S8.com.pullrequestpilot.shared"
     private static let logger = Logger(subsystem: "PullRequestPilot", category: "WidgetData")
 
     private static var sharedFileURL: URL? {

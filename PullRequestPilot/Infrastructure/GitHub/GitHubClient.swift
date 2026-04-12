@@ -79,12 +79,8 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
     private let session: URLSession
     private let logger = Logger(subsystem: "PullRequestPilot", category: "GitHubClient")
 
-    private static let endpoint: URL = {
-        guard let url = URL(string: "https://api.github.com/graphql") else {
-            preconditionFailure("Invalid hardcoded GitHub API endpoint URL")
-        }
-        return url
-    }()
+    // swiftlint:disable:next force_unwrapping
+    private static let endpoint = URL(string: "https://api.github.com/graphql")!
 
     init(tokenProvider: @escaping @Sendable () -> String?, onUnauthorized: @escaping @Sendable () -> Void = {}, session: URLSession = .shared) {
         self.tokenProvider = tokenProvider
@@ -220,7 +216,7 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
 
     // MARK: - Retry-After Parsing
 
-    private static func parseRetryAfter(from response: HTTPURLResponse) -> TimeInterval? {
+    static func parseRetryAfter(from response: HTTPURLResponse) -> TimeInterval? {
         if let retryStr = response.value(forHTTPHeaderField: "Retry-After") {
             // Try seconds first (most common for GitHub)
             if let seconds = TimeInterval(retryStr) {
