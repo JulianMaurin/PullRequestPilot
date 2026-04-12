@@ -268,12 +268,8 @@ struct ReviewQueueView: View {
     }
 
     private func commitQueryEdit() {
-        guard let id = viewModel.selectedViewID,
-              let dashView = viewModel.views.first(where: { $0.id == id }) else { return }
-        let trimmed = editingQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != dashView.query else { return }
-        viewModel.updateView(DashboardView(id: dashView.id, title: dashView.title, query: trimmed, hideReviewed: dashView.hideReviewed))
-        Task { await viewModel.refresh(viewID: id) }
+        guard let id = viewModel.selectedViewID else { return }
+        viewModel.commitQueryEdit(viewID: id, newQuery: editingQuery)
     }
 
     private var addViewPopover: some View {
@@ -407,7 +403,7 @@ struct ReviewQueueView: View {
     }
 
     private func listView(_ pullRequests: [PullRequest]) -> some View {
-        let grouped = groupedByOrgAndRepo(pullRequests)
+        let grouped = viewModel.groupedByOrgAndRepo(pullRequests)
         return TimelineView(.periodic(from: .now, by: 30)) { context in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -433,7 +429,7 @@ struct ReviewQueueView: View {
     }
 
     @ViewBuilder
-    private func orgSection(_ orgGroup: OrgGroup, pullRequests: [PullRequest], now: Date) -> some View {
+    private func orgSection(_ orgGroup: DashboardViewModel.OrgGroup, pullRequests: [PullRequest], now: Date) -> some View {
         let isOrgCollapsed = viewModel.collapsedOrgs.contains(orgGroup.org)
         let prCount = orgGroup.repos.reduce(0) { $0 + $1.stacks.reduce(0) { $0 + $1.totalCount } }
 
@@ -488,7 +484,7 @@ struct ReviewQueueView: View {
                 Divider()
                 Button("Collapse All Orgs") {
                     withAnimation {
-                        let grouped = groupedByOrgAndRepo(viewModel.selectedViewState.pullRequests)
+                        let grouped = viewModel.groupedByOrgAndRepo(viewModel.selectedViewState.pullRequests)
                         for org in grouped { viewModel.collapsedOrgs.insert(org.org) }
                     }
                 }
@@ -518,7 +514,7 @@ struct ReviewQueueView: View {
     }
 
     @ViewBuilder
-    private func repoSection(_ repoGroup: RepoGroup, org: String, pullRequests: [PullRequest], now: Date) -> some View {
+    private func repoSection(_ repoGroup: DashboardViewModel.RepoGroup, org: String, pullRequests: [PullRequest], now: Date) -> some View {
         let repoKey = "\(org)/\(repoGroup.repo)"
         let isRepoCollapsed = viewModel.collapsedRepos.contains(repoKey)
         let prCount = repoGroup.stacks.reduce(0) { $0 + $1.totalCount }
@@ -572,7 +568,7 @@ struct ReviewQueueView: View {
     }
 
     @ViewBuilder
-    private func stackView(_ stack: PRStack, isLast: Bool, now: Date) -> some View {
+    private func stackView(_ stack: DashboardViewModel.PRStack, isLast: Bool, now: Date) -> some View {
         let isExpanded = expandedStacks.contains(stack.id)
 
         pullRequestItem(stack.root, isLast: isLast && stack.children.isEmpty, stackSize: stack.totalCount, now: now) {
@@ -674,13 +670,9 @@ struct ReviewQueueView: View {
     // MARK: - Query Filters
 
     private func appendFilter(_ qualifier: String) {
-        guard let id = viewModel.selectedViewID,
-              let dashView = viewModel.views.first(where: { $0.id == id }) else { return }
-        guard !dashView.query.contains(qualifier) else { return }
-        let newQuery = dashView.query + " " + qualifier
-        editingQuery = newQuery
-        viewModel.updateView(DashboardView(id: dashView.id, title: dashView.title, query: newQuery, hideReviewed: dashView.hideReviewed))
-        Task { await viewModel.refresh(viewID: id) }
+        guard let id = viewModel.selectedViewID else { return }
+        viewModel.appendFilter(viewID: id, qualifier: qualifier)
+        syncEditingQuery()
     }
 
     // MARK: - Editor
@@ -696,64 +688,6 @@ struct ReviewQueueView: View {
         }
     }
 
-    // MARK: - Stacking
-
-    private struct PRStack: Identifiable {
-        let root: PullRequest
-        let children: [PullRequest]
-        var id: String { root.id }
-        var totalCount: Int { 1 + children.count }
-    }
-
-    // MARK: - Grouping
-
-    private struct OrgGroup {
-        let org: String
-        let repos: [RepoGroup]
-    }
-
-    private struct RepoGroup {
-        let repo: String
-        let stacks: [PRStack]
-    }
-
-    private func groupedByOrgAndRepo(_ pullRequests: [PullRequest]) -> [OrgGroup] {
-        let byOrg = Dictionary(grouping: pullRequests) { $0.repository.owner }
-        return byOrg.keys.sorted().compactMap { org in
-            guard let orgPRs = byOrg[org] else { return nil }
-            let byRepo = Dictionary(grouping: orgPRs) { $0.repository.name }
-            let repoGroups = byRepo.keys.sorted().compactMap { repo -> RepoGroup? in
-                guard let repoPRs = byRepo[repo] else { return nil }
-                return RepoGroup(repo: repo, stacks: buildStacks(repoPRs))
-            }
-            return OrgGroup(org: org, repos: repoGroups)
-        }
-    }
-
-    private func buildStacks(_ pullRequests: [PullRequest]) -> [PRStack] {
-        // Map head branch → PR for this repo
-        let headToPR = Dictionary(pullRequests.map { ($0.headRefName, $0) }, uniquingKeysWith: { first, _ in first })
-
-        // A PR is a child if its base branch is another PR's head branch
-        let childIDs = Set(pullRequests.compactMap { pr -> String? in
-            guard headToPR[pr.baseRefName] != nil else { return nil }
-            return pr.id
-        })
-
-        // Root PRs are those not stacked on another PR in the set
-        let roots = pullRequests.filter { !childIDs.contains($0.id) }
-
-        return roots.map { root in
-            var children: [PullRequest] = []
-            var currentHead = root.headRefName
-            // Walk the chain: find PRs whose base is the current head
-            while let next = pullRequests.first(where: { $0.baseRefName == currentHead && $0.id != root.id }) {
-                children.append(next)
-                currentHead = next.headRefName
-            }
-            return PRStack(root: root, children: children)
-        }
-    }
 }
 
 // MARK: - Tab Drag & Drop
@@ -770,7 +704,9 @@ private struct TabDropDelegate: DropDelegate {
 
     func dropEntered(info: DropInfo) {
         guard let sourceID = draggedID, sourceID != targetID else { return }
-        viewModel.moveView(from: sourceID, to: targetID)
+        withAnimation(.easeInOut(duration: 0.2)) {
+            viewModel.moveView(from: sourceID, to: targetID)
+        }
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {

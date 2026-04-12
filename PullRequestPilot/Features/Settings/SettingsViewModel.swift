@@ -1,7 +1,7 @@
+import AppKit
 import Foundation
 import os
 import ServiceManagement
-import SwiftUI
 
 @MainActor
 @Observable
@@ -211,6 +211,10 @@ final class SettingsViewModel {
         switch error {
         case .unauthorized:
             "Token is invalid or expired. Generate a new one at github.com/settings/tokens."
+        case .rateLimited:
+            "GitHub API rate limit exceeded. Wait a few minutes and try again."
+        case .serverError:
+            "GitHub is experiencing issues. Try again later."
         case .graphQLErrors:
             "GitHub rejected the request. The token may lack the required `repo` scope."
         case .networkError:

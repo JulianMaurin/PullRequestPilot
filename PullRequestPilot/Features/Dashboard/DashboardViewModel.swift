@@ -1,6 +1,6 @@
+import AppKit
 import Foundation
 import os
-import SwiftUI
 import UserNotifications
 import WidgetKit
 
@@ -118,7 +118,7 @@ final class DashboardViewModel {
             viewStates[viewID]?.pullRequests = filteredPRs
             viewStates[viewID]?.seenIDs = seenIDs
             viewStates[viewID]?.nextCursor = page.nextCursor
-            viewStates[viewID]?.reachedLimit = uniquePRs.count >= Constants.App.maxPullRequests
+            viewStates[viewID]?.reachedLimit = filteredPRs.count >= Constants.App.maxPullRequests
             logger.info("Fetched \(uniquePRs.count, privacy: .public) PR(s) for '\(view.title, privacy: .public)'")
         } catch is CancellationError {
             return
@@ -139,6 +139,8 @@ final class DashboardViewModel {
               state.canLoadMore else { return }
 
         viewStates[viewID]?.isLoadingMore = true
+        viewStates[viewID]?.error = nil
+        viewStates[viewID]?.isNetworkError = false
 
         do {
             let page = try await gitHubClient.fetchPullRequests(query: view.query, cursor: state.nextCursor)
@@ -216,6 +218,8 @@ final class DashboardViewModel {
                 id: view.id.uuidString,
                 title: view.title,
                 count: prs.count,
+                approvedCount: prs.filter { $0.reviewDecision == .approved }.count,
+                changesRequestedCount: prs.filter { $0.reviewDecision == .changesRequested }.count,
                 pullRequests: Array(widgetPRs)
             )
         }
@@ -273,6 +277,7 @@ final class DashboardViewModel {
 
     func clearAllData() {
         stopAutoRefresh()
+        localRepositoryService.stopPeriodicRefresh()
         views = []
         viewStates = [:]
         selectedViewID = nil
@@ -318,10 +323,8 @@ final class DashboardViewModel {
         guard let sourceIndex = views.firstIndex(where: { $0.id == sourceID }),
               let targetIndex = views.firstIndex(where: { $0.id == targetID }),
               sourceIndex != targetIndex else { return }
-        withAnimation(.easeInOut(duration: 0.2)) {
-            views.move(fromOffsets: IndexSet(integer: sourceIndex),
-                       toOffset: targetIndex > sourceIndex ? targetIndex + 1 : targetIndex)
-        }
+        views.move(fromOffsets: IndexSet(integer: sourceIndex),
+                   toOffset: targetIndex > sourceIndex ? targetIndex + 1 : targetIndex)
         viewsStore.save(views)
     }
 
@@ -609,5 +612,76 @@ final class DashboardViewModel {
     func openInTerminal(_ pr: PullRequest) {
         guard let match = localMatch(for: pr) else { return }
         localRepositoryService.openInITerm(path: match.path)
+    }
+
+    // MARK: - Query Editing
+
+    func commitQueryEdit(viewID: UUID, newQuery: String) {
+        guard let dashView = views.first(where: { $0.id == viewID }) else { return }
+        let trimmed = newQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != dashView.query else { return }
+        updateView(DashboardView(id: dashView.id, title: dashView.title, query: trimmed, hideReviewed: dashView.hideReviewed))
+        Task { await refresh(viewID: viewID) }
+    }
+
+    func appendFilter(viewID: UUID, qualifier: String) {
+        guard let dashView = views.first(where: { $0.id == viewID }) else { return }
+        guard !dashView.query.contains(qualifier) else { return }
+        let newQuery = dashView.query + " " + qualifier
+        updateView(DashboardView(id: dashView.id, title: dashView.title, query: newQuery, hideReviewed: dashView.hideReviewed))
+        Task { await refresh(viewID: viewID) }
+    }
+
+    // MARK: - Grouping & Stacking
+
+    struct PRStack: Identifiable {
+        let root: PullRequest
+        let children: [PullRequest]
+        var id: String { root.id }
+        var totalCount: Int { 1 + children.count }
+    }
+
+    struct OrgGroup {
+        let org: String
+        let repos: [RepoGroup]
+    }
+
+    struct RepoGroup {
+        let repo: String
+        let stacks: [PRStack]
+    }
+
+    func groupedByOrgAndRepo(_ pullRequests: [PullRequest]) -> [OrgGroup] {
+        let byOrg = Dictionary(grouping: pullRequests) { $0.repository.owner }
+        return byOrg.keys.sorted().compactMap { org in
+            guard let orgPRs = byOrg[org] else { return nil }
+            let byRepo = Dictionary(grouping: orgPRs) { $0.repository.name }
+            let repoGroups = byRepo.keys.sorted().compactMap { repo -> RepoGroup? in
+                guard let repoPRs = byRepo[repo] else { return nil }
+                return RepoGroup(repo: repo, stacks: buildStacks(repoPRs))
+            }
+            return OrgGroup(org: org, repos: repoGroups)
+        }
+    }
+
+    private func buildStacks(_ pullRequests: [PullRequest]) -> [PRStack] {
+        let headToPR = Dictionary(pullRequests.map { ($0.headRefName, $0) }, uniquingKeysWith: { first, _ in first })
+        let childIDs = Set(pullRequests.compactMap { pr -> String? in
+            guard headToPR[pr.baseRefName] != nil else { return nil }
+            return pr.id
+        })
+        let roots = pullRequests.filter { !childIDs.contains($0.id) }
+
+        return roots.map { root in
+            var children: [PullRequest] = []
+            var currentHead = root.headRefName
+            var visited: Set<String> = [root.id]
+            while let next = pullRequests.first(where: { $0.baseRefName == currentHead && !visited.contains($0.id) }) {
+                children.append(next)
+                visited.insert(next.id)
+                currentHead = next.headRefName
+            }
+            return PRStack(root: root, children: children)
+        }
     }
 }

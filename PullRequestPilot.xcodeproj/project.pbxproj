@@ -11,6 +11,7 @@
 		0EB5FF630CA876E20B04822F /* SelectViewIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1BC5B3AADE18A80A9DAB42F /* SelectViewIntent.swift */; };
 		10B00C7E1FFC9F019FD5B701 /* LocalRepositoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B919383AC965AD29C544D35C /* LocalRepositoryService.swift */; };
 		1B60D5C21D449ECB5263957A /* PRDetailViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F98F49D6E2E1D2D31F361C09 /* PRDetailViewModelTests.swift */; };
+		25D44A863F8B2285EE0177E2 /* ReviewerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEE9B03750909980C0F4AD79 /* ReviewerTests.swift */; };
 		2FA559C93493745F8151E166 /* PullRequestPilotWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AE7DBBCDED1A5D00DF910CA4 /* PullRequestPilotWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3651CAC9AEAD9D9240F86DFF /* KeychainServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 664ED928BE49D4A1245F312A /* KeychainServiceTests.swift */; };
 		409CBA2DBF0F6F4F9DB94F77 /* PullRequestPilotApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDDC85340ABAEFB5AFFCA2D7 /* PullRequestPilotApp.swift */; };
@@ -61,6 +62,7 @@
 		CDFB4480697006C1219ADF7E /* ViewsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C18A83BE9B2C3D03C2FA98B /* ViewsStore.swift */; };
 		D112C14519578FF1ED82E5D5 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36C3314A5F7DC9889C1BF45B /* KeychainService.swift */; };
 		DBFD642BE8D3CBF0C561C7DB /* WidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D280E24D617F6EDE1976AE5 /* WidgetData.swift */; };
+		DDE4B84F95468B16178619C7 /* Reviewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 404EA06E3CB78A55D94A2B82 /* Reviewer.swift */; };
 		E32069D9B3DAE2B0AD814D1E /* PullRequestStateIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 650C74ADD7492D7CD010737D /* PullRequestStateIcon.swift */; };
 		E456F00B61F4B43E3803C549 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C20AB34CBB7354ED75236A3 /* ContentView.swift */; };
 		E61F9ADB7469BCE775EF9CB4 /* LocalRepositoryServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D1DB214BC50D97E3CD1F5DA /* LocalRepositoryServiceTests.swift */; };
@@ -114,6 +116,7 @@
 		36C3314A5F7DC9889C1BF45B /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		3E21D2ACD1877BC876B5A5E8 /* DashboardViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModelTests.swift; sourceTree = "<group>"; };
 		3E6DAF84A0905976CD143089 /* DashboardViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewTests.swift; sourceTree = "<group>"; };
+		404EA06E3CB78A55D94A2B82 /* Reviewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Reviewer.swift; sourceTree = "<group>"; };
 		40557FE42C98E62F2A4EBB42 /* TimelineEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEvent.swift; sourceTree = "<group>"; };
 		46D916DDB38D7B774FFC58D0 /* PullRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullRequest.swift; sourceTree = "<group>"; };
 		4BDE5E98E84A1E172858C467 /* PullRequestPilotWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PullRequestPilotWidget.entitlements; sourceTree = "<group>"; };
@@ -164,6 +167,7 @@
 		EA99630A67726BEAA7144942 /* PRDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PRDetailView.swift; sourceTree = "<group>"; };
 		ECF50E10022F26E7C0A9B89F /* GitHubResponsesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubResponsesTests.swift; sourceTree = "<group>"; };
 		EDDC85340ABAEFB5AFFCA2D7 /* PullRequestPilotApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullRequestPilotApp.swift; sourceTree = "<group>"; };
+		EEE9B03750909980C0F4AD79 /* ReviewerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewerTests.swift; sourceTree = "<group>"; };
 		F98F49D6E2E1D2D31F361C09 /* PRDetailViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PRDetailViewModelTests.swift; sourceTree = "<group>"; };
 		FE4D0F5F6FD5656BFDA936ED /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -213,6 +217,7 @@
 				774BB0D9F4E2D73FC6DECF5F /* CheckRun.swift */,
 				C15EBD57347F4C981EB507D8 /* DashboardView.swift */,
 				46D916DDB38D7B774FFC58D0 /* PullRequest.swift */,
+				404EA06E3CB78A55D94A2B82 /* Reviewer.swift */,
 				40557FE42C98E62F2A4EBB42 /* TimelineEvent.swift */,
 			);
 			path = Models;
@@ -265,6 +270,7 @@
 				6D1DB214BC50D97E3CD1F5DA /* LocalRepositoryServiceTests.swift */,
 				F98F49D6E2E1D2D31F361C09 /* PRDetailViewModelTests.swift */,
 				53AD27A0204C2931E1B75616 /* PullRequestTests.swift */,
+				EEE9B03750909980C0F4AD79 /* ReviewerTests.swift */,
 				2FBA9DC202E1C820FD45E57B /* SettingsViewModelTests.swift */,
 				611FE229324726ACB5D01619 /* TimelineEventTests.swift */,
 				E4FAD5E316A5839F8E3322E9 /* TimelineResponseMappingTests.swift */,
@@ -587,6 +593,7 @@
 				A717FD411A0256261FBDCC71 /* PullRequestRow.swift in Sources */,
 				E32069D9B3DAE2B0AD814D1E /* PullRequestStateIcon.swift in Sources */,
 				A03FBAB45801495A5236A4AA /* ReviewQueueView.swift in Sources */,
+				DDE4B84F95468B16178619C7 /* Reviewer.swift in Sources */,
 				7AE9D1D59D755D749A07689D /* SettingsView.swift in Sources */,
 				ECE4955ACF2E7F4D23DE0351 /* SettingsViewModel.swift in Sources */,
 				64F1EC8602CA28E3C0FF1C79 /* TimelineEvent.swift in Sources */,
@@ -615,6 +622,7 @@
 				A695E5D237DE79F0C4C2BEDA /* MockURLProtocol.swift in Sources */,
 				1B60D5C21D449ECB5263957A /* PRDetailViewModelTests.swift in Sources */,
 				812EB44365E322642D879615 /* PullRequestTests.swift in Sources */,
+				25D44A863F8B2285EE0177E2 /* ReviewerTests.swift in Sources */,
 				7485EF4CAF939DB4C5EBC0C5 /* SettingsViewModelTests.swift in Sources */,
 				964ADE8F02C6BD934DF5B96D /* TestPullRequestFactory.swift in Sources */,
 				77C16D0F8E345235B722E6FB /* TimelineEventTests.swift in Sources */,
