@@ -85,6 +85,7 @@ final class PRDetailViewModel {
                 var checksCursor: String?
                 var eventPageOffset = 0
                 var checksPageOffset = 0
+                var previousTimelineCursor: String?
                 repeat {
                     let page = try await gitHubClient.fetchTimeline(
                         nodeID: pr.id,
@@ -101,6 +102,9 @@ final class PRDetailViewModel {
                         checksCursor = pageChecksCursor
                     }
                     fetchedReviewers.append(contentsOf: page.reviewers)
+                    // Guard against duplicate cursors that would cause an infinite loop
+                    if page.nextCursor != nil, page.nextCursor == previousTimelineCursor { break }
+                    previousTimelineCursor = page.nextCursor
                     cursor = page.nextCursor
                 } while cursor != nil
 
