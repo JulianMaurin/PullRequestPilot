@@ -92,7 +92,8 @@ final class GitDirectoriesStore: @unchecked Sendable {
                 bookmarkDataIsStale: &isStale
             )
             if isStale {
-                logger.warning("Bookmark is stale for \(url.path, privacy: .private) — user may need to re-select")
+                logger.warning("Bookmark is stale for \(url.path, privacy: .private) — user must re-select the directory")
+                return nil
             }
             return url
         } catch {
