@@ -726,7 +726,10 @@ final class DashboardViewModel {
             var children: [PullRequest] = []
             var currentHead = root.headRefName
             var visited: Set<String> = [root.id]
-            while let next = pullRequests.first(where: { $0.baseRefName == currentHead && !visited.contains($0.id) }) {
+            // Cap depth to prevent infinite loops from circular branch dependencies
+            let maxDepth = pullRequests.count
+            while children.count < maxDepth,
+                  let next = pullRequests.first(where: { $0.baseRefName == currentHead && !visited.contains($0.id) }) {
                 children.append(next)
                 visited.insert(next.id)
                 currentHead = next.headRefName

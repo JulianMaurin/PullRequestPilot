@@ -123,6 +123,25 @@ struct BuildStacksTests {
         #expect(stacks.isEmpty)
     }
 
+    @Test("partial cycle with root terminates due to max depth guard")
+    func partialCycleWithRoot() {
+        let vm = makeViewModel(suiteName: "PartialCycle")
+        // root → a → b, but b also points back to a via baseRefName.
+        // The root is valid (base=main), but children a→b could loop
+        // if not for the visited set. Verify it terminates correctly.
+        let root = TestPullRequestFactory.make(id: "root", baseRefName: "main", headRefName: "a")
+        let childA = TestPullRequestFactory.make(id: "childA", baseRefName: "a", headRefName: "b")
+        let childB = TestPullRequestFactory.make(id: "childB", baseRefName: "b", headRefName: "a")
+        let groups = vm.groupedByOrgAndRepo([root, childA, childB])
+        let stacks = groups[0].repos[0].stacks
+        // root is the only non-child (base=main, not anyone's head)
+        // childA and childB both have bases matching someone's head
+        #expect(stacks.count == 1)
+        #expect(stacks[0].root.id == "root")
+        // children count should be exactly 2 (a, b) — visited set prevents revisiting
+        #expect(stacks[0].children.count == 2)
+    }
+
     @Test("totalCount includes root plus children")
     func totalCount() {
         let vm = makeViewModel(suiteName: "TotalCount")
