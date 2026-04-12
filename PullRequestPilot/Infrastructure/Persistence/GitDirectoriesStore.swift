@@ -21,7 +21,19 @@ final class GitDirectoriesStore: @unchecked Sendable {
         guard let bookmarksData = defaults.array(forKey: Self.key) as? [Data] else {
             return []
         }
-        return bookmarksData.compactMap { resolveBookmark($0) }
+        var validBookmarks: [Data] = []
+        var urls: [URL] = []
+        for data in bookmarksData {
+            if let url = resolveBookmark(data) {
+                validBookmarks.append(data)
+                urls.append(url)
+            }
+        }
+        // Prune stale or unresolvable bookmarks
+        if validBookmarks.count != bookmarksData.count {
+            defaults.set(validBookmarks, forKey: Self.key)
+        }
+        return urls
     }
 
     func save(_ directories: [URL]) {

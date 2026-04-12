@@ -293,6 +293,10 @@ struct PullRequestRow<RowMenu: View>: View {
 extension Color {
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        guard hex.count == 6 else {
+            self.init(white: 0.5)
+            return
+        }
         let scanner = Scanner(string: hex)
         var rgbValue: UInt64 = 0
         scanner.scanHexInt64(&rgbValue)
