@@ -47,6 +47,7 @@ final class DashboardViewModel {
     private var previousPRIDs: [UUID: Set<String>] = [:]
     private var hasCompletedInitialLoad: Set<UUID> = []
     private var viewerLogin: String?
+    private var isFetchingViewer = false
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Dashboard")
 
     init(gitHubClient: GitHubClientProtocol, viewsStore: ViewsStore, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard) {
@@ -182,7 +183,9 @@ final class DashboardViewModel {
     }
 
     private func fetchViewerLoginIfNeeded() async {
-        guard viewerLogin == nil else { return }
+        guard viewerLogin == nil, !isFetchingViewer else { return }
+        isFetchingViewer = true
+        defer { isFetchingViewer = false }
         do {
             let viewer = try await gitHubClient.fetchViewer()
             viewerLogin = viewer.login
