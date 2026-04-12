@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // MARK: - GraphQL Response Envelope
 
@@ -25,6 +26,33 @@ struct SearchData: Decodable {
 struct SearchResult: Decodable {
     let nodes: [PullRequestNode]
     let pageInfo: PageInfo
+
+    /// Custom decoding: the `type: ISSUE` search can return non-PR nodes that
+    /// lack `... on PullRequest` fields. Decode each node individually and
+    /// silently skip any that fail (e.g. plain Issue nodes).
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        pageInfo = try container.decode(PageInfo.self, forKey: .pageInfo)
+
+        var nodesContainer = try container.nestedUnkeyedContainer(forKey: .nodes)
+        var decoded: [PullRequestNode] = []
+        while !nodesContainer.isAtEnd {
+            if let node = try? nodesContainer.decode(PullRequestNode.self) {
+                decoded.append(node)
+            } else {
+                // Skip non-PullRequest nodes (plain Issues) that fail to decode
+                _ = try? nodesContainer.decode(EmptyNode.self)
+            }
+        }
+        nodes = decoded
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case nodes, pageInfo
+    }
+
+    /// Minimal type that always succeeds decoding, used to advance the container past a skipped node.
+    private struct EmptyNode: Decodable {}
 }
 
 struct PageInfo: Decodable {
@@ -447,20 +475,30 @@ extension TimelineItemsConnection {
 
 // MARK: - Shared ISO8601 Formatters
 
-private nonisolated(unsafe) let isoDateFormatter: ISO8601DateFormatter = {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter
-}()
+private enum ISO8601DateParsing {
+    private static let lock = NSLock()
 
-private nonisolated(unsafe) let isoDateFallbackFormatter: ISO8601DateFormatter = {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime]
-    return formatter
-}()
+    private nonisolated(unsafe) static let primary: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private nonisolated(unsafe) static let fallback: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    static func parse(_ string: String) -> Date? {
+        lock.lock()
+        defer { lock.unlock() }
+        return primary.date(from: string) ?? fallback.date(from: string)
+    }
+}
 
 private func parseISO8601Date(_ string: String) -> Date? {
-    isoDateFormatter.date(from: string) ?? isoDateFallbackFormatter.date(from: string)
+    ISO8601DateParsing.parse(string)
 }
 
 // MARK: - DTO → Domain Mapping
@@ -471,6 +509,7 @@ extension PullRequestNode {
 
         guard let created = parseISO8601Date(createdAt),
               let updated = parseISO8601Date(updatedAt) else {
+            os_log(.error, "Failed to parse ISO8601 date for PR #%d: createdAt=%{public}@, updatedAt=%{public}@", number, createdAt, updatedAt)
             return nil
         }
 
