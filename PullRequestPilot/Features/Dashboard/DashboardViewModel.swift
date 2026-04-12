@@ -45,11 +45,11 @@ final class DashboardViewModel {
     private let defaults: UserDefaults
     private var refreshTask: Task<Void, Never>?
     private var refreshIntervalTask: Task<Void, Never>?
+    private var hideReviewedTask: Task<Void, Never>?
     private var previousPRIDs: [UUID: Set<String>] = [:]
     private var hasCompletedInitialLoad: Set<UUID> = []
     private var refreshingViewIDs: Set<UUID> = []
     private var viewerLogin: String?
-    private var isFetchingViewer = false
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Dashboard")
 
     init(gitHubClient: GitHubClientProtocol, viewsStore: ViewsStore, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard) {
@@ -194,18 +194,29 @@ final class DashboardViewModel {
     /// Must be called when the GitHub token changes (e.g. after saving a new token in Settings).
     func resetViewerLogin() {
         viewerLogin = nil
+        viewerLoginTask?.cancel()
+        viewerLoginTask = nil
     }
 
+    private var viewerLoginTask: Task<Void, Never>?
+
     private func fetchViewerLoginIfNeeded() async {
-        guard viewerLogin == nil, !isFetchingViewer else { return }
-        isFetchingViewer = true
-        defer { isFetchingViewer = false }
-        do {
-            let viewer = try await gitHubClient.fetchViewer()
-            viewerLogin = viewer.login
-        } catch {
-            logger.warning("Failed to fetch viewer login: \(error, privacy: .public)")
+        if let existing = viewerLoginTask {
+            await existing.value
+            return
         }
+        guard viewerLogin == nil else { return }
+        let task = Task {
+            do {
+                let viewer = try await gitHubClient.fetchViewer()
+                viewerLogin = viewer.login
+            } catch {
+                logger.warning("Failed to fetch viewer login: \(error, privacy: .public)")
+            }
+        }
+        viewerLoginTask = task
+        await task.value
+        viewerLoginTask = nil
     }
 
     private func filterReviewedPRs(_ prs: [PullRequest], for view: DashboardView) -> [PullRequest] {
@@ -280,7 +291,11 @@ final class DashboardViewModel {
                     // No data yet, no errors — initial load, use moderate interval
                     seconds = 30
                 }
-                try? await Task.sleep(for: .seconds(seconds))
+                do {
+                    try await Task.sleep(for: .seconds(seconds))
+                } catch {
+                    break
+                }
             }
         }
         observeRefreshIntervalChanges()
@@ -349,7 +364,8 @@ final class DashboardViewModel {
         guard let index = views.firstIndex(where: { $0.id == viewID }) else { return }
         views[index].hideReviewed.toggle()
         viewsStore.save(views)
-        Task { await refresh(viewID: viewID) }
+        hideReviewedTask?.cancel()
+        hideReviewedTask = Task { await refresh(viewID: viewID) }
     }
 
     func moveView(from sourceID: UUID, to targetID: UUID) {
