@@ -14,6 +14,7 @@ struct ReviewQueueView: View {
     @State private var editingQuery: String = ""
     @State private var draggedViewID: UUID?
     @FocusState private var isQueryFocused: Bool
+    @AppStorage("detailPanelWidth") private var detailPanelWidth: Double = 550
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,7 +26,15 @@ struct ReviewQueueView: View {
                     .frame(minWidth: 350)
                 if prDetailViewModel.selectedPR != nil {
                     PRDetailView(viewModel: prDetailViewModel)
-                        .frame(minWidth: 500, maxWidth: 700)
+                        .frame(minWidth: 400, idealWidth: detailPanelWidth, maxWidth: 800)
+                        .background {
+                            GeometryReader { geo in
+                                Color.clear
+                                    .onChange(of: geo.size.width) { _, newWidth in
+                                        detailPanelWidth = newWidth
+                                    }
+                            }
+                        }
                 }
             }
         }
