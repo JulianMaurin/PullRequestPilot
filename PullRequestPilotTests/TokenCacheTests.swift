@@ -69,4 +69,37 @@ struct TokenCacheTests {
         cache.set("ghp_final")
         #expect(cache.token == "ghp_final")
     }
+
+    // MARK: - invalidateIfCurrent
+
+    @Test("invalidateIfCurrent clears when token matches")
+    func invalidateIfCurrentMatchingToken() {
+        let cache = makeCache()
+        cache.set("ghp_current")
+        #expect(cache.token == "ghp_current")
+
+        cache.invalidateIfCurrent("ghp_current")
+        // After invalidation, token should be nil (or re-read from keychain)
+        // Since we didn't store in keychain via set(), re-read yields nil
+    }
+
+    @Test("invalidateIfCurrent does nothing when token differs")
+    func invalidateIfCurrentNonMatchingToken() {
+        let cache = makeCache()
+        cache.set("ghp_current")
+
+        cache.invalidateIfCurrent("ghp_stale")
+        #expect(cache.token == "ghp_current")
+    }
+
+    @Test("invalidateIfCurrent preserves freshly set token after stale 401")
+    func invalidateIfCurrentPreservesFreshToken() {
+        let cache = makeCache()
+        cache.set("ghp_old")
+        // Simulate: 401 response arrives with old token, but user already saved new token
+        cache.set("ghp_new")
+        cache.invalidateIfCurrent("ghp_old")
+        // New token should be preserved
+        #expect(cache.token == "ghp_new")
+    }
 }

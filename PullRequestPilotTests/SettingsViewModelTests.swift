@@ -243,7 +243,7 @@ struct SettingsViewModelTests {
     @Test("prRefreshInterval posts notification on change")
     func prRefreshIntervalPostsNotification() {
         let (vm, _, _, _, _) = makeViewModel(suiteName: "PRInterval")
-        var notificationReceived = false
+        nonisolated(unsafe) var notificationReceived = false
         let observer = NotificationCenter.default.addObserver(
             forName: Constants.Notifications.prRefreshIntervalChanged,
             object: nil,

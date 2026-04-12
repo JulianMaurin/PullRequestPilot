@@ -156,6 +156,69 @@ struct GitHubClientHTTPErrorTests {
         }
     }
 
+    // MARK: - HTTP 429
+
+    @Test("throws rateLimited on HTTP 429 response")
+    func http429ThrowsRateLimited() async {
+        let client = makeClient()
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 429,
+                httpVersion: nil,
+                headerFields: ["Retry-After": "60"]
+            )!
+            return (response, Data())
+        }
+
+        do {
+            _ = try await client.fetchPullRequests(query: "is:pr", cursor: nil)
+            Issue.record("Should have thrown")
+        } catch let error as GitHubClientError {
+            if case .rateLimited(let retryAfter) = error {
+                #expect(retryAfter == 60)
+            } else {
+                Issue.record("Expected rateLimited, got \(error)")
+            }
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+    }
+
+    // MARK: - HTTP 401
+
+    @Test("throws unauthorized on HTTP 401 and invokes onUnauthorized callback")
+    func http401ThrowsUnauthorized() async {
+        nonisolated(unsafe) var capturedToken: String?
+        let client = GitHubClient(
+            tokenProvider: { "test-token" },
+            onUnauthorized: { token in capturedToken = token },
+            session: makeSession()
+        )
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 401,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (response, Data())
+        }
+
+        do {
+            _ = try await client.fetchPullRequests(query: "is:pr", cursor: nil)
+            Issue.record("Should have thrown")
+        } catch let error as GitHubClientError {
+            if case .unauthorized = error {
+                #expect(capturedToken == "test-token")
+            } else {
+                Issue.record("Expected unauthorized, got \(error)")
+            }
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+    }
+
     // MARK: - Error descriptions
 
     @Test("rateLimited error has user-friendly description")

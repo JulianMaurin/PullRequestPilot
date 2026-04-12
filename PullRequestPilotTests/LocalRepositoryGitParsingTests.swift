@@ -419,6 +419,36 @@ struct LocalRepositoryGitParsingTests {
 
     // MARK: - Config parsing edge cases
 
+    @Test("scan handles SSH URL with explicit port (ssh://)")
+    func scanSSHWithExplicitPort() async throws {
+        let tempDir = try makeTempDir()
+        defer { try? fm.removeItem(at: tempDir) }
+
+        let repoDir = tempDir.appendingPathComponent("port-repo")
+        try createFakeRepo(at: repoDir, remoteURL: "ssh://git@github.com:22/owner/port-repo.git")
+
+        let service = LocalRepositoryService()
+        await service.scan(directories: [tempDir])
+
+        #expect(service.indexedRepoCount == 1)
+        #expect(service.repoIndex.first?.nameWithOwner == "owner/port-repo")
+    }
+
+    @Test("scan handles SSH URL with non-standard port")
+    func scanSSHWithNonStandardPort() async throws {
+        let tempDir = try makeTempDir()
+        defer { try? fm.removeItem(at: tempDir) }
+
+        let repoDir = tempDir.appendingPathComponent("custom-port-repo")
+        try createFakeRepo(at: repoDir, remoteURL: "ssh://git@github.com:2222/owner/custom-port-repo.git")
+
+        let service = LocalRepositoryService()
+        await service.scan(directories: [tempDir])
+
+        #expect(service.indexedRepoCount == 1)
+        #expect(service.repoIndex.first?.nameWithOwner == "owner/custom-port-repo")
+    }
+
     @Test("scan handles config with multiple remotes, picks origin")
     func scanMultipleRemotes() async throws {
         let tempDir = try makeTempDir()
