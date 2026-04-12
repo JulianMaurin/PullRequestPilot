@@ -170,9 +170,9 @@ struct SettingsView: View {
             }
             .task {
                 await dashboardViewModel.refreshNotificationAuthorization()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                Task { await dashboardViewModel.refreshNotificationAuthorization() }
+                for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) {
+                    await dashboardViewModel.refreshNotificationAuthorization()
+                }
             }
 
             Section {
