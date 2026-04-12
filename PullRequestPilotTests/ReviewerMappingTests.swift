@@ -149,8 +149,8 @@ struct ReviewerMappingTests {
         #expect(reviewers[0].state == .approved)
     }
 
-    @Test("unknown review state defaults to commented")
-    func unknownStateDefaultsToCommented() {
+    @Test("unknown review state is skipped")
+    func unknownStateIsSkipped() {
         let node = TimelinePullRequestNode(
             timelineItems: nil,
             reviewRequests: nil,
@@ -158,7 +158,7 @@ struct ReviewerMappingTests {
             commits: nil
         )
         let reviewers = node.toReviewers()
-        #expect(reviewers[0].state == .commented)
+        #expect(reviewers.isEmpty)
     }
 
     @Test("review with nil author is skipped")

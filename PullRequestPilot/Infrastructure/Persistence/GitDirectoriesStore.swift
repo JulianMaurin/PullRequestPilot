@@ -136,9 +136,19 @@ final class GitDirectoriesStore: @unchecked Sendable {
         let urls = paths.map { URL(fileURLWithPath: $0) }
         let bookmarks = urls.compactMap { createBookmark(for: $0) }
         if !bookmarks.isEmpty {
-            var existing = defaults.array(forKey: Self.key) as? [Data] ?? []
-            existing.append(contentsOf: bookmarks)
-            defaults.set(existing, forKey: Self.key)
+            let existing = defaults.array(forKey: Self.key) as? [Data] ?? []
+            let existingPaths = Set(existing.compactMap { resolveBookmark($0)?.path })
+            let newBookmarks = zip(urls, bookmarks).compactMap { url, data in
+                existingPaths.contains(url.path) ? nil : data
+            }
+            guard !newBookmarks.isEmpty else {
+                // All paths already bookmarked — clean up legacy key
+                defaults.removeObject(forKey: Self.legacyKey)
+                return
+            }
+            var updated = existing
+            updated.append(contentsOf: newBookmarks)
+            defaults.set(updated, forKey: Self.key)
             logger.info("Migrated \(bookmarks.count, privacy: .public) directory bookmark(s) from legacy storage")
         }
         // Only remove legacy key if all paths were migrated successfully

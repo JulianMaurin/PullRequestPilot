@@ -234,12 +234,13 @@ extension TimelinePullRequestNode {
 
         for node in (reviews?.nodes ?? []) {
             guard let author = node.author else { continue }
-            let state: ReviewerState = switch node.state {
-            case "APPROVED": .approved
-            case "CHANGES_REQUESTED": .changesRequested
-            case "COMMENTED": .commented
-            case "DISMISSED": .dismissed
-            default: .commented
+            let state: ReviewerState
+            switch node.state {
+            case "APPROVED": state = .approved
+            case "CHANGES_REQUESTED": state = .changesRequested
+            case "COMMENTED": state = .commented
+            case "DISMISSED": state = .dismissed
+            default: continue
             }
             if latestState[author.login] == nil {
                 authorOrder.append(author.login)
