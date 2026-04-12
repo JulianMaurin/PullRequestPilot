@@ -295,8 +295,26 @@ final class LocalRepositoryService {
     }
 
     nonisolated private static func parseNameWithOwner(from url: String) -> String? {
-        // SSH: git@github.com:owner/repo.git
-        if url.contains("github.com:") {
+        // SSH with URL scheme: ssh://git@github.com/owner/repo.git
+        // or ssh://git@github.com:22/owner/repo.git (with port)
+        if url.hasPrefix("ssh://"), url.contains("github.com") {
+            guard let afterDomain = url.components(separatedBy: "github.com").last else { return nil }
+            // Strip optional :port prefix (e.g. ":22/owner/repo" → "/owner/repo")
+            let pathPart: String
+            if afterDomain.hasPrefix(":") {
+                guard let slashIndex = afterDomain.firstIndex(of: "/") else { return nil }
+                pathPart = String(afterDomain[slashIndex...])
+            } else {
+                pathPart = afterDomain
+            }
+            let trimmed = pathPart
+                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                .replacingOccurrences(of: ".git", with: "")
+            return trimmed.isEmpty ? nil : trimmed.lowercased()
+        }
+
+        // SCP-style SSH: git@github.com:owner/repo.git
+        if url.contains("github.com:") && !url.hasPrefix("ssh://") {
             guard let afterColon = url.components(separatedBy: "github.com:").last else { return nil }
             return afterColon
                 .replacingOccurrences(of: ".git", with: "")
