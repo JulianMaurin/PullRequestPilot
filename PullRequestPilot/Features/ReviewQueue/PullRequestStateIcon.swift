@@ -31,8 +31,8 @@ struct PullRequestStateIcon: View {
     private var fillColor: String {
         if state == .open && isDraft { return "#848d97" }
         switch state {
-        case .open: return "#db6d28"
-        case .closed: return "#848d97"
+        case .open: return "#3fb950"
+        case .closed: return "#f85149"
         case .merged: return "#a371f7"
         }
     }
