@@ -5,8 +5,8 @@ struct SettingsView: View {
     var dashboardViewModel: DashboardViewModel
     var isInitialSetup: Bool = false
     var onDismiss: (() -> Void)?
-    @State private var showPresetConflictAlert = false
-    @State private var presetConflictNames: [String] = []
+    @State private var showResetConfirmation = false
+    @State private var presetToReset: DashboardView?
 
     var body: some View {
         Form {
@@ -108,23 +108,33 @@ struct SettingsView: View {
             }
 
             Section {
-                Button("Create Preset Views") {
-                    let conflicts = dashboardViewModel.presetConflicts()
-                    if conflicts.isEmpty {
-                        dashboardViewModel.createPresetViews(replacingConflicts: false)
-                        Task { await dashboardViewModel.refreshAll() }
-                    } else {
-                        presetConflictNames = conflicts
-                        showPresetConflictAlert = true
-                    }
+                ForEach(DashboardView.presetViews) { preset in
+                    presetRow(preset)
                 }
             } header: {
-                Text("Views")
+                Text("Preset Views")
             } footer: {
-                let names = DashboardView.presetViews.map(\.title).joined(separator: ", ")
-                Text("Creates \(names) views to get you started quickly.")
+                Text("A recommended workflow for staying on top of pull requests. Add what fits your needs — each view's query can be customized from the dashboard.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            .alert("Reset View?", isPresented: $showResetConfirmation) {
+                Button("Cancel", role: .cancel) { presetToReset = nil }
+                Button("Reset") {
+                    if let preset = presetToReset,
+                       let existing = dashboardViewModel.views.first(where: { $0.title == preset.title }) {
+                        dashboardViewModel.updateView(DashboardView(
+                            id: existing.id,
+                            title: preset.title,
+                            query: preset.query,
+                            hideReviewed: preset.hideReviewed
+                        ))
+                        Task { await dashboardViewModel.refresh(viewID: existing.id) }
+                    }
+                    presetToReset = nil
+                }
+            } message: {
+                Text("This will reset \"\(presetToReset?.title ?? "")\" to its default query.")
             }
 
             Section {
@@ -237,16 +247,6 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(minWidth: 450, minHeight: 250)
-        .alert("Replace Existing Views?", isPresented: $showPresetConflictAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Replace") {
-                dashboardViewModel.createPresetViews(replacingConflicts: true)
-                Task { await dashboardViewModel.refreshAll() }
-            }
-        } message: {
-            let names = presetConflictNames.map { "\"\($0)\"" }.joined(separator: ", ")
-            Text("The following views already exist and will be replaced: \(names).")
-        }
     }
 
     @ViewBuilder
@@ -257,6 +257,53 @@ struct SettingsView: View {
             let count = viewModel.indexedRepoCount
             Text("\(count) repo\(count == 1 ? "" : "s") indexed — last scan \(lastScan, format: .relative(presentation: .named))")
         }
+    }
+
+    private func presetRow(_ preset: DashboardView) -> some View {
+        let existing = dashboardViewModel.views.first(where: { $0.title == preset.title })
+        let isAdded = existing != nil
+        let isModified = isAdded && existing?.query != preset.query
+
+        return HStack(alignment: .top, spacing: 10) {
+            Image(systemName: isAdded ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(isAdded ? AnyShapeStyle(.green) : AnyShapeStyle(.tertiary))
+                .font(.body)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(preset.title)
+                    .fontWeight(isAdded ? .medium : .regular)
+                Text(preset.query)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            if isAdded {
+                Button("Reset") {
+                    presetToReset = preset
+                    showResetConfirmation = true
+                }
+                .controlSize(.small)
+                .disabled(!isModified)
+                .help(isModified ? "Reset query to preset default" : "Query matches preset")
+            } else {
+                Button("Add") {
+                    let newView = DashboardView(
+                        id: UUID(),
+                        title: preset.title,
+                        query: preset.query,
+                        hideReviewed: preset.hideReviewed
+                    )
+                    dashboardViewModel.addView(newView)
+                    Task { await dashboardViewModel.refresh(viewID: newView.id) }
+                }
+                .controlSize(.small)
+            }
+        }
+        .padding(.vertical, 2)
     }
 
     @ViewBuilder
