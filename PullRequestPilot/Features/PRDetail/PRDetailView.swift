@@ -157,23 +157,21 @@ struct PRDetailView: View {
 
     private func reviewerRow(_ reviewer: Reviewer) -> some View {
         HStack(spacing: 8) {
-            AsyncImage(url: reviewer.avatarURL) { image in
-                image.resizable()
-            } placeholder: {
-                if reviewer.isTeam {
-                    Image(systemName: "person.2.fill")
-                        .font(.system(size: 8))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 20, height: 20)
-                        .background(.quaternary)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                } else {
-                    Circle().fill(.quaternary)
-                        .frame(width: 20, height: 20)
-                }
-            }
-            .frame(width: 20, height: 20)
-            .clipShape(reviewer.isTeam ? AnyShape(RoundedRectangle(cornerRadius: 4)) : AnyShape(Circle()))
+            CachedAvatarView(
+                url: reviewer.avatarURL,
+                size: 20,
+                shape: reviewer.isTeam ? .roundedRect(cornerRadius: 4) : .circle,
+                placeholder: reviewer.isTeam
+                    ? AnyView(
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 8))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 20, height: 20)
+                            .background(.quaternary)
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    )
+                    : nil
+            )
 
             Text(reviewer.displayName)
                 .font(.caption)
@@ -328,13 +326,7 @@ struct PRDetailView: View {
     private func timelineRow(_ event: TimelineEvent) -> some View {
         HStack(alignment: .top, spacing: 8) {
             ZStack(alignment: .bottomTrailing) {
-                AsyncImage(url: event.actor?.avatarURL) { image in
-                    image.resizable()
-                } placeholder: {
-                    Circle().fill(.quaternary)
-                }
-                .frame(width: 20, height: 20)
-                .clipShape(Circle())
+                CachedAvatarView(url: event.actor?.avatarURL, size: 20)
 
                 Image(systemName: event.iconName)
                     .font(.system(size: 7, weight: .bold))

@@ -19,17 +19,15 @@ struct SettingsView: View {
                         }
                     } label: {
                         HStack(spacing: 8) {
-                            AsyncImage(url: viewModel.viewerAvatarURL) { image in
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                            } placeholder: {
-                                Image(systemName: "person.crop.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(.green)
-                            }
-                            .frame(width: 28, height: 28)
-                            .clipShape(Circle())
+                            CachedAvatarView(
+                                url: viewModel.viewerAvatarURL,
+                                size: 28,
+                                placeholder: AnyView(
+                                    Image(systemName: "person.crop.circle.fill")
+                                        .font(.title2)
+                                        .foregroundStyle(.green)
+                                )
+                            )
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(login)
                                     .fontWeight(.medium)

@@ -89,14 +89,8 @@ struct PullRequestRow<RowMenu: View>: View {
     // MARK: - Subviews
 
     private var authorAvatar: some View {
-        AsyncImage(url: pullRequest.author.avatarURL) { image in
-            image.resizable()
-        } placeholder: {
-            Circle().fill(.quaternary)
-        }
-        .frame(width: 32, height: 32)
-        .clipShape(Circle())
-        .padding(.top, 2)
+        CachedAvatarView(url: pullRequest.author.avatarURL, size: 32)
+            .padding(.top, 2)
     }
 
     private var titleRow: some View {
@@ -140,13 +134,7 @@ struct PullRequestRow<RowMenu: View>: View {
     private var activityRow: some View {
         if let activity = pullRequest.lastActivity {
             HStack(spacing: 4) {
-                AsyncImage(url: activity.actor?.avatarURL) { image in
-                    image.resizable()
-                } placeholder: {
-                    Circle().fill(.quaternary)
-                }
-                .frame(width: 14, height: 14)
-                .clipShape(Circle())
+                CachedAvatarView(url: activity.actor?.avatarURL, size: 14)
 
                 Image(systemName: activity.kind.iconName)
                     .font(.caption2)
