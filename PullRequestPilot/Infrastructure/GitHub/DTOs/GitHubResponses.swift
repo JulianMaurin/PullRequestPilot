@@ -151,7 +151,85 @@ struct TimelineNodeData: Decodable {
 
 struct TimelinePullRequestNode: Decodable {
     let timelineItems: TimelineItemsConnection?
+    let reviewRequests: ReviewRequestsConnection?
+    let reviews: ReviewsConnection?
     let commits: CheckRunCommitsConnection?
+}
+
+// MARK: - Reviewer DTOs
+
+struct ReviewRequestsConnection: Decodable {
+    let nodes: [ReviewRequestNode]
+}
+
+struct ReviewRequestNode: Decodable {
+    let requestedReviewer: RequestedReviewerNode?
+}
+
+struct RequestedReviewerNode: Decodable {
+    // swiftlint:disable:next identifier_name
+    let __typename: String
+    let login: String?
+    let name: String?
+    let avatarUrl: String?
+}
+
+struct ReviewsConnection: Decodable {
+    let nodes: [ReviewNode]
+}
+
+struct ReviewNode: Decodable {
+    struct ReviewAuthorNode: Decodable {
+        let login: String
+        let avatarUrl: String?
+    }
+    let author: ReviewAuthorNode?
+    let state: String
+}
+
+extension TimelinePullRequestNode {
+    func toReviewers() -> [Reviewer] {
+        var reviewers: [Reviewer] = []
+        var seen = Set<String>()
+
+        // Keep the latest review per author (last occurrence in the list wins).
+        var latestState: [String: (state: ReviewerState, avatarUrl: String?)] = [:]
+        var authorOrder: [String] = []
+
+        for node in (reviews?.nodes ?? []) {
+            guard let author = node.author else { continue }
+            let state: ReviewerState = switch node.state {
+            case "APPROVED": .approved
+            case "CHANGES_REQUESTED": .changesRequested
+            case "COMMENTED": .commented
+            case "DISMISSED": .dismissed
+            default: .commented
+            }
+            if latestState[author.login] == nil {
+                authorOrder.append(author.login)
+            }
+            latestState[author.login] = (state, author.avatarUrl)
+        }
+
+        for login in authorOrder {
+            guard let entry = latestState[login], seen.insert(login).inserted else { continue }
+            let avatarURL = entry.avatarUrl.flatMap(URL.init)
+            reviewers.append(Reviewer(id: login, displayName: login, avatarURL: avatarURL, isTeam: false, state: entry.state))
+        }
+
+        // Then, add requested reviewers who haven't reviewed yet
+        for node in (reviewRequests?.nodes ?? []) {
+            guard let requested = node.requestedReviewer else { continue }
+            let isTeam = requested.__typename == "Team"
+            let displayName = isTeam ? (requested.name ?? "team") : (requested.login ?? "user")
+            let id = isTeam ? "team-\(displayName)" : displayName
+            guard seen.insert(id).inserted else { continue }
+            let avatarURL = requested.avatarUrl.flatMap { URL(string: $0) }
+            reviewers.append(Reviewer(id: id, displayName: displayName, avatarURL: avatarURL, isTeam: isTeam, state: .pending))
+        }
+
+        return reviewers
+    }
 }
 
 // MARK: - Check Run DTOs

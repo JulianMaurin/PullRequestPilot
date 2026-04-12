@@ -25,7 +25,7 @@ final class MockGitHubClient: GitHubClientProtocol, @unchecked Sendable {
 
     func fetchTimeline(nodeID: String, cursor: String?) async throws -> TimelinePage {
         if let error = errorToThrow { throw error }
-        return TimelinePage(events: timelineEventsToReturn, checkRuns: checkRunsToReturn, nextCursor: timelineNextCursorToReturn, checksNextCursor: nil)
+        return TimelinePage(events: timelineEventsToReturn, checkRuns: checkRunsToReturn, reviewers: [], nextCursor: timelineNextCursorToReturn, checksNextCursor: nil)
     }
 
     func fetchChecks(nodeID: String, cursor: String) async throws -> ChecksPage {

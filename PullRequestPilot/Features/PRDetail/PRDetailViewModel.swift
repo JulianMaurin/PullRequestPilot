@@ -6,6 +6,7 @@ final class PRDetailViewModel {
     private(set) var selectedPR: PullRequest?
     private(set) var timelineEvents: [TimelineEvent] = []
     private(set) var checkRuns: [CheckRun] = []
+    private(set) var reviewers: [Reviewer] = []
     private(set) var isLoading = false
     private(set) var error: String?
     private(set) var isNetworkError = false
@@ -32,6 +33,7 @@ final class PRDetailViewModel {
         fetchTask?.cancel()
         timelineEvents = []
         checkRuns = []
+        reviewers = []
         error = nil
         isNetworkError = false
         isLoading = false
@@ -47,9 +49,11 @@ final class PRDetailViewModel {
             isNetworkError = false
             timelineEvents = []
             checkRuns = []
+            reviewers = []
             do {
                 var allEvents: [TimelineEvent] = []
                 var allCheckRuns: [CheckRun] = []
+                var fetchedReviewers: [Reviewer] = []
                 var cursor: String?
                 var checksCursor: String?
                 repeat {
@@ -58,6 +62,9 @@ final class PRDetailViewModel {
                     if allCheckRuns.isEmpty {
                         allCheckRuns = page.checkRuns
                         checksCursor = page.checksNextCursor
+                    }
+                    if fetchedReviewers.isEmpty {
+                        fetchedReviewers = page.reviewers
                     }
                     cursor = page.nextCursor
                 } while cursor != nil
@@ -72,6 +79,7 @@ final class PRDetailViewModel {
                 guard !Task.isCancelled else { return }
                 timelineEvents = allEvents
                 checkRuns = allCheckRuns
+                reviewers = fetchedReviewers
             } catch is CancellationError {
                 return
             } catch {

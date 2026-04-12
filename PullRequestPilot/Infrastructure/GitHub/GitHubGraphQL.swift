@@ -188,6 +188,21 @@ enum GitHubGraphQL {
                   endCursor
                 }
               }
+              reviewRequests(first: 20) {
+                nodes {
+                  requestedReviewer {
+                    __typename
+                    ... on User { login avatarUrl }
+                    ... on Team { name avatarUrl }
+                  }
+                }
+              }
+              reviews(last: 50) {
+                nodes {
+                  author { login avatarUrl }
+                  state
+                }
+              }
               commits(last: 1) {
                 nodes {
                   commit {

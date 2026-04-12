@@ -12,6 +12,7 @@ struct PullRequestPage: Sendable {
 struct TimelinePage: Sendable {
     let events: [TimelineEvent]
     let checkRuns: [CheckRun]
+    let reviewers: [Reviewer]
     let nextCursor: String?
     let checksNextCursor: String?
 }
@@ -111,16 +112,17 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         }
 
         guard let prNode = data.node else {
-            return TimelinePage(events: [], checkRuns: [], nextCursor: nil, checksNextCursor: nil)
+            return TimelinePage(events: [], checkRuns: [], reviewers: [], nextCursor: nil, checksNextCursor: nil)
         }
 
         let events = prNode.timelineItems?.toDomain() ?? []
         let checkRuns = prNode.commits?.toDomain() ?? []
+        let reviewers = prNode.toReviewers()
         let nextCursor = prNode.timelineItems?.pageInfo.hasNextPage == true
             ? prNode.timelineItems?.pageInfo.endCursor : nil
         let checksPageInfo = prNode.commits?.nodes.first?.commit.statusCheckRollup?.contexts.pageInfo
         let checksNextCursor = checksPageInfo?.hasNextPage == true ? checksPageInfo?.endCursor : nil
-        return TimelinePage(events: events, checkRuns: checkRuns, nextCursor: nextCursor, checksNextCursor: checksNextCursor)
+        return TimelinePage(events: events, checkRuns: checkRuns, reviewers: reviewers, nextCursor: nextCursor, checksNextCursor: checksNextCursor)
     }
 
     func fetchChecks(nodeID: String, cursor: String) async throws -> ChecksPage {

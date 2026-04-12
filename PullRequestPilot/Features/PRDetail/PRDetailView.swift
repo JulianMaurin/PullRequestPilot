@@ -11,6 +11,7 @@ struct PRDetailView: View {
         }
         .onChange(of: viewModel.selectedPR?.id) {
             checksCollapsed = true
+            reviewersCollapsed = false
         }
     }
 
@@ -98,6 +99,10 @@ struct PRDetailView: View {
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
+                    if !viewModel.reviewers.isEmpty {
+                        reviewersSection
+                        Divider()
+                    }
                     if !viewModel.checkRuns.isEmpty {
                         checksSection
                     }
@@ -110,6 +115,85 @@ struct PRDetailView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Reviewers Section
+
+    @State private var reviewersCollapsed = false
+
+    private var reviewersSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    reviewersCollapsed.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: reviewersCollapsed ? "chevron.right" : "chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 10)
+                    Text("Reviewers")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            if !reviewersCollapsed {
+                ForEach(viewModel.reviewers) { reviewer in
+                    reviewerRow(reviewer)
+                }
+            }
+        }
+    }
+
+    private func reviewerRow(_ reviewer: Reviewer) -> some View {
+        HStack(spacing: 8) {
+            AsyncImage(url: reviewer.avatarURL) { image in
+                image.resizable()
+            } placeholder: {
+                if reviewer.isTeam {
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 8))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 20, height: 20)
+                        .background(.quaternary)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                } else {
+                    Circle().fill(.quaternary)
+                        .frame(width: 20, height: 20)
+                }
+            }
+            .frame(width: 20, height: 20)
+            .clipShape(reviewer.isTeam ? AnyShape(RoundedRectangle(cornerRadius: 4)) : AnyShape(Circle()))
+
+            Text(reviewer.displayName)
+                .font(.caption)
+                .lineLimit(1)
+
+            if reviewer.isTeam {
+                Text("team")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer()
+
+            Image(systemName: reviewer.state.iconName)
+                .font(.caption)
+                .foregroundStyle(iconColor(reviewer.state.iconColor))
+
+            Text(reviewer.state.label)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
     }
 
     // MARK: - Checks Section
@@ -158,11 +242,9 @@ struct PRDetailView: View {
         let failed = viewModel.checkRuns.filter {
             $0.conclusion == .failure || $0.conclusion == .startupFailure || $0.conclusion == .timedOut
         }.count
-        let color: Color = failed > 0 ? .red : (passed == total ? .green : .yellow)
-
         return Text("\(passed)/\(total)")
             .font(.caption2.weight(.medium).monospacedDigit())
-            .foregroundStyle(color)
+            .foregroundStyle(.secondary)
     }
 
     @State private var hoveredCheckRunID: String?
