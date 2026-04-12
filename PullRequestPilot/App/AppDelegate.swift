@@ -6,6 +6,7 @@ import UserNotifications
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     private var statusItem: NSStatusItem?
     /// Set by PullRequestPilotApp once AppState is available.
+    var appState: AppState?
     var dashboardViewModel: DashboardViewModel? {
         didSet {
             dashboardViewModel?.onBadgeCountChanged = { [weak self] count in
@@ -38,6 +39,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             showWindow()
         }
         return true
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        appState?.cleanup()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

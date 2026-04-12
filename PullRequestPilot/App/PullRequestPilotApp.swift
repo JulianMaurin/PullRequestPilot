@@ -25,6 +25,7 @@ struct PullRequestPilotApp: App {
                     handleIncomingURL(url)
                 }
                 .onAppear {
+                    appDelegate.appState = appState
                     appDelegate.dashboardViewModel = appState.dashboardViewModel
                 }
             }
