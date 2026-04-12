@@ -243,6 +243,7 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
 
     // MARK: - Retry-After Parsing
 
+    private static let retryAfterLock = NSLock()
     private static let retryAfterFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -257,7 +258,10 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
                 return seconds
             }
             // Try HTTP-date format (e.g. "Fri, 22 Apr 2026 12:00:00 GMT")
-            if let date = retryAfterFormatter.date(from: retryStr) {
+            retryAfterLock.lock()
+            let date = retryAfterFormatter.date(from: retryStr)
+            retryAfterLock.unlock()
+            if let date {
                 return max(0, date.timeIntervalSince1970 - Date().timeIntervalSince1970)
             }
         }
