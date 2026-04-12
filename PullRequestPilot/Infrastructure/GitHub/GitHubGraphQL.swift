@@ -2,12 +2,24 @@ import Foundation
 
 enum GitHubGraphQL {
     private static func escapeGraphQL(_ value: String) -> String {
-        value
+        var result = value
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
             .replacingOccurrences(of: "\n", with: "\\n")
             .replacingOccurrences(of: "\r", with: "\\r")
             .replacingOccurrences(of: "\t", with: "\\t")
+        // Escape remaining ASCII control characters (U+0000–U+001F) as Unicode escapes
+        result = String(result.flatMap { ch -> [Character] in
+            guard let scalar = ch.unicodeScalars.first,
+                  ch.unicodeScalars.count == 1,
+                  scalar.value < 0x20,
+                  scalar.value != 0x0A, // \n already handled
+                  scalar.value != 0x0D, // \r already handled
+                  scalar.value != 0x09  // \t already handled
+            else { return [ch] }
+            return Array(String(format: "\\u%04X", scalar.value))
+        })
+        return result
     }
 
     static func searchQuery(query: String, cursor: String? = nil) -> String {
