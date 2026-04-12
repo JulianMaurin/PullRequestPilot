@@ -81,6 +81,32 @@ struct GitHubGraphQLTests {
         }
     }
 
+    // MARK: - Checks Query
+
+    @Test("checksQuery includes nodeID and cursor")
+    func checksQueryIncludesNodeIDAndCursor() {
+        let query = GitHubGraphQL.checksQuery(nodeID: "PR_abc123", cursor: "cursor456")
+        #expect(query.contains(#"node(id: "PR_abc123")"#))
+        #expect(query.contains(#"after: "cursor456""#))
+    }
+
+    @Test("checksQuery includes check run fields")
+    func checksQueryIncludesFields() {
+        let query = GitHubGraphQL.checksQuery(nodeID: "PR_1", cursor: "c1")
+        let expectedFields = ["name", "status", "conclusion", "detailsUrl", "isRequired", "context", "state", "targetUrl", "__typename", "statusCheckRollup", "pageInfo", "hasNextPage", "endCursor"]
+        for field in expectedFields {
+            #expect(query.contains(field), "Missing field: \(field)")
+        }
+    }
+
+    @Test("checksQuery escapes special characters in nodeID")
+    func checksQueryEscapesNodeID() {
+        let query = GitHubGraphQL.checksQuery(nodeID: #"PR_"test""#, cursor: "c1")
+        #expect(query.contains(#"PR_\"test\""#))
+    }
+
+    // MARK: - Viewer Query
+
     @Test("viewerQuery requests viewer login")
     func viewerQueryContent() {
         let query = GitHubGraphQL.viewerQuery
