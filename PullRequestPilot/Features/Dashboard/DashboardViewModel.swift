@@ -43,7 +43,7 @@ final class DashboardViewModel {
     private let localRepositoryService: LocalRepositoryService
     private let defaults: UserDefaults
     private var refreshTask: Task<Void, Never>?
-    private var refreshIntervalObserver: (any NSObjectProtocol)?
+    private var refreshIntervalTask: Task<Void, Never>?
     private var previousPRIDs: [UUID: Set<String>] = [:]
     private var hasCompletedInitialLoad: Set<UUID> = []
     private var refreshingViewIDs: Set<UUID> = []
@@ -268,8 +268,8 @@ final class DashboardViewModel {
                     let interval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
                     seconds = interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
                 } else {
-                    // No data yet, no errors — initial load, retry quickly
-                    seconds = 5
+                    // No data yet, no errors — initial load, use moderate interval
+                    seconds = 30
                 }
                 try? await Task.sleep(for: .seconds(seconds))
             }
@@ -280,10 +280,8 @@ final class DashboardViewModel {
     func stopAutoRefresh() {
         refreshTask?.cancel()
         refreshTask = nil
-        if let observer = refreshIntervalObserver {
-            NotificationCenter.default.removeObserver(observer)
-            refreshIntervalObserver = nil
-        }
+        refreshIntervalTask?.cancel()
+        refreshIntervalTask = nil
     }
 
     private func restartAutoRefresh() {
@@ -292,12 +290,8 @@ final class DashboardViewModel {
     }
 
     private func observeRefreshIntervalChanges() {
-        refreshIntervalObserver = NotificationCenter.default.addObserver(
-            forName: Constants.Notifications.prRefreshIntervalChanged,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
+        refreshIntervalTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: Constants.Notifications.prRefreshIntervalChanged) {
                 self?.restartAutoRefresh()
             }
         }
