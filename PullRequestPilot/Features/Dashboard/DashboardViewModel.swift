@@ -203,9 +203,10 @@ final class DashboardViewModel {
     private func fetchViewerLoginIfNeeded() async {
         if let existing = viewerLoginTask {
             await existing.value
-            return
         }
         guard viewerLogin == nil else { return }
+        // Another caller may have started a new task while we were awaiting
+        guard viewerLoginTask == nil else { return }
         let task = Task {
             do {
                 let viewer = try await gitHubClient.fetchViewer()
@@ -276,8 +277,8 @@ final class DashboardViewModel {
                     seconds = interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
                 } else if hasAnyError {
                     let rateLimitWait = self?.viewStates.values.compactMap(\.rateLimitRetryAfter).max()
-                    if let wait = rateLimitWait, wait > 60 {
-                        seconds = min(wait, 3600) // Cap at 1 hour
+                    if let wait = rateLimitWait, wait > 0 {
+                        seconds = min(max(wait, 10), 3600) // At least 10s, cap at 1 hour
                     } else {
                         // Exponential backoff on errors: 10s, 20s, 40s, capped at 60s
                         consecutiveEmptyFetches += 1
@@ -695,7 +696,8 @@ final class DashboardViewModel {
 
     func appendFilter(viewID: UUID, qualifier: String) {
         guard let dashView = views.first(where: { $0.id == viewID }) else { return }
-        guard !dashView.query.contains(qualifier) else { return }
+        let existingTokens = Set(dashView.query.split(separator: " ").map(String.init))
+        guard !existingTokens.contains(qualifier) else { return }
         let newQuery = dashView.query + " " + qualifier
         updateView(DashboardView(id: dashView.id, title: dashView.title, query: newQuery, hideReviewed: dashView.hideReviewed))
         viewStates[viewID] = ViewState()
