@@ -57,20 +57,7 @@ struct TimelineEvent: Identifiable, Hashable, Sendable {
     }
 
     var timestampText: String {
-        let calendar = Calendar.current
-        let timeFormatter = DateFormatter()
-        timeFormatter.dateFormat = "HH:mm"
-        let time = timeFormatter.string(from: timestamp)
-
-        if calendar.isDateInToday(timestamp) {
-            return "today at \(time)"
-        } else if calendar.isDateInYesterday(timestamp) {
-            return "yesterday at \(time)"
-        } else {
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "MMM d"
-            return "\(dateFormatter.string(from: timestamp)) at \(time)"
-        }
+        timestamp.relativeTimestampText(relativeTo: .now)
     }
 }
 

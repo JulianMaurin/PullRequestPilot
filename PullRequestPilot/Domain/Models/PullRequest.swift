@@ -1,6 +1,6 @@
 import Foundation
 
-struct PullRequest: Identifiable, Hashable {
+struct PullRequest: Identifiable, Hashable, Sendable {
     let id: String
     let number: Int
     let title: String
@@ -35,7 +35,7 @@ struct PullRequest: Identifiable, Hashable {
     }
 }
 
-struct Repository: Hashable {
+struct Repository: Hashable, Sendable {
     let nameWithOwner: String
 
     var owner: String { String(nameWithOwner.split(separator: "/").first ?? "") }
@@ -47,18 +47,18 @@ struct Author: Hashable, Sendable {
     let avatarURL: URL?
 }
 
-struct Label: Hashable {
+struct Label: Hashable, Sendable {
     let name: String
     let color: String
 }
 
-enum PullRequestState: String {
+enum PullRequestState: String, Sendable {
     case open = "OPEN"
     case closed = "CLOSED"
     case merged = "MERGED"
 }
 
-enum CheckStatus: String {
+enum CheckStatus: String, Sendable {
     case pending = "PENDING"
     case success = "SUCCESS"
     case failure = "FAILURE"
@@ -66,7 +66,7 @@ enum CheckStatus: String {
     case expected = "EXPECTED"
 }
 
-enum ReviewDecision: String {
+enum ReviewDecision: String, Sendable {
     case approved = "APPROVED"
     case changesRequested = "CHANGES_REQUESTED"
     case reviewRequired = "REVIEW_REQUIRED"
@@ -74,7 +74,7 @@ enum ReviewDecision: String {
 
 // MARK: - User Review
 
-struct UserReview: Hashable {
+struct UserReview: Hashable, Sendable {
     let login: String
     let state: ReviewState
 }
@@ -89,7 +89,7 @@ enum ReviewState: String, Sendable {
 
 // MARK: - Last Activity
 
-enum ActivityKind: Hashable {
+enum ActivityKind: Hashable, Sendable {
     case comment
     case review(ReviewDecision?)
     case merged
@@ -111,7 +111,7 @@ enum ActivityKind: Hashable {
     }
 }
 
-struct LastActivity: Hashable {
+struct LastActivity: Hashable, Sendable {
     let kind: ActivityKind
     let actor: Author?
     let timestamp: Date
@@ -133,19 +133,31 @@ struct LastActivity: Hashable {
     var timestampText: String { timestampText(relativeTo: .now) }
 
     func timestampText(relativeTo now: Date) -> String {
+        timestamp.relativeTimestampText(relativeTo: now)
+    }
+}
+
+// MARK: - Shared Timestamp Formatting
+
+extension Date {
+    func relativeTimestampText(relativeTo now: Date) -> String {
         let calendar = Calendar.current
         let timeFormatter = DateFormatter()
         timeFormatter.dateFormat = "HH:mm"
-        let time = timeFormatter.string(from: timestamp)
+        let time = timeFormatter.string(from: self)
 
-        if calendar.isDateInToday(timestamp) {
+        let startOfToday = calendar.startOfDay(for: now)
+        let startOfTimestamp = calendar.startOfDay(for: self)
+        let dayDifference = calendar.dateComponents([.day], from: startOfTimestamp, to: startOfToday).day ?? 0
+
+        if dayDifference == 0 {
             return "today at \(time)"
-        } else if calendar.isDateInYesterday(timestamp) {
+        } else if dayDifference == 1 {
             return "yesterday at \(time)"
         } else {
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "MMM d"
-            return "\(dateFormatter.string(from: timestamp)) at \(time)"
+            return "\(dateFormatter.string(from: self)) at \(time)"
         }
     }
 }

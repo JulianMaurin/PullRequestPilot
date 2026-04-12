@@ -1,6 +1,6 @@
 import Foundation
 
-struct DashboardView: Identifiable, Codable, Hashable {
+struct DashboardView: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var title: String
     var query: String

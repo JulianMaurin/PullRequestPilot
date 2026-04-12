@@ -360,12 +360,6 @@ struct TimelineItemDetailNode: Decodable {
 
 extension TimelineItemsConnection {
     func toDomain() -> [TimelineEvent] {
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        let fallbackFormatter = ISO8601DateFormatter()
-        fallbackFormatter.formatOptions = [.withInternetDateTime]
-
         return nodes.enumerated().compactMap { index, node in
             let kind: TimelineEventKind
             let actorNode: PullRequestNode.AuthorNode?
@@ -435,7 +429,7 @@ extension TimelineItemsConnection {
             }
 
             guard let dateStr = dateString,
-                  let date = isoFormatter.date(from: dateStr) ?? fallbackFormatter.date(from: dateStr) else {
+                  let date = parseISO8601Date(dateStr) else {
                 return nil
             }
 
@@ -451,20 +445,32 @@ extension TimelineItemsConnection {
     }
 }
 
+// MARK: - Shared ISO8601 Formatters
+
+private nonisolated(unsafe) let isoDateFormatter: ISO8601DateFormatter = {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter
+}()
+
+private nonisolated(unsafe) let isoDateFallbackFormatter: ISO8601DateFormatter = {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime]
+    return formatter
+}()
+
+private func parseISO8601Date(_ string: String) -> Date? {
+    isoDateFormatter.date(from: string) ?? isoDateFallbackFormatter.date(from: string)
+}
+
 // MARK: - DTO → Domain Mapping
 
 extension PullRequestNode {
     func toDomain() -> PullRequest? {
         guard let url = URL(string: url) else { return nil }
 
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        let fallbackFormatter = ISO8601DateFormatter()
-        fallbackFormatter.formatOptions = [.withInternetDateTime]
-
-        guard let created = isoFormatter.date(from: createdAt) ?? fallbackFormatter.date(from: createdAt),
-              let updated = isoFormatter.date(from: updatedAt) ?? fallbackFormatter.date(from: updatedAt) else {
+        guard let created = parseISO8601Date(createdAt),
+              let updated = parseISO8601Date(updatedAt) else {
             return nil
         }
 
@@ -492,7 +498,7 @@ extension PullRequestNode {
             baseRefName: baseRefName,
             headRefName: headRefName,
             headCommitSha: headRefOid,
-            lastActivity: mapLastActivity(isoFormatter: isoFormatter, fallbackFormatter: fallbackFormatter),
+            lastActivity: mapLastActivity(),
             latestReviews: latestReviews?.nodes.compactMap { node in
                 guard let login = node.author?.login,
                       let state = ReviewState(rawValue: node.state) else { return nil }
@@ -501,7 +507,7 @@ extension PullRequestNode {
         )
     }
 
-    private func mapLastActivity(isoFormatter: ISO8601DateFormatter, fallbackFormatter: ISO8601DateFormatter) -> LastActivity? {
+    private func mapLastActivity() -> LastActivity? {
         guard let node = timelineItems?.nodes.first else { return nil }
 
         let kind: ActivityKind
@@ -545,7 +551,7 @@ extension PullRequestNode {
         }
 
         guard let dateStr = dateString,
-              let date = isoFormatter.date(from: dateStr) ?? fallbackFormatter.date(from: dateStr) else {
+              let date = parseISO8601Date(dateStr) else {
             return nil
         }
 
