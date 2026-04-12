@@ -23,6 +23,10 @@ struct CopyPRListIntent: AppIntent {
             return .result()
         }
 
+        guard !view.pullRequests.isEmpty else {
+            return .result()
+        }
+
         let lines = view.pullRequests.map { "- \($0.url.absoluteString): \($0.title)" }
         let text = lines.joined(separator: "\n")
 
