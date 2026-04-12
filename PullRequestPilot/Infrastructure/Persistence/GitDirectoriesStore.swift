@@ -68,9 +68,13 @@ final class GitDirectoriesStore: @unchecked Sendable {
 
     func saveFromPanel(_ url: URL) -> URL? {
         guard let bookmarkData = createBookmark(for: url) else { return nil }
-        var existing = defaults.array(forKey: Self.key) as? [Data] ?? []
-        existing.append(bookmarkData)
-        defaults.set(existing, forKey: Self.key)
+        // Deduplicate: check if this directory is already bookmarked
+        let existing = defaults.array(forKey: Self.key) as? [Data] ?? []
+        let existingPaths = Set(existing.compactMap { resolveBookmark($0)?.path })
+        guard !existingPaths.contains(url.path) else { return url }
+        var updated = existing
+        updated.append(bookmarkData)
+        defaults.set(updated, forKey: Self.key)
         return url
     }
 
@@ -132,9 +136,16 @@ final class GitDirectoriesStore: @unchecked Sendable {
         let urls = paths.map { URL(fileURLWithPath: $0) }
         let bookmarks = urls.compactMap { createBookmark(for: $0) }
         if !bookmarks.isEmpty {
-            defaults.set(bookmarks, forKey: Self.key)
+            var existing = defaults.array(forKey: Self.key) as? [Data] ?? []
+            existing.append(contentsOf: bookmarks)
+            defaults.set(existing, forKey: Self.key)
             logger.info("Migrated \(bookmarks.count, privacy: .public) directory bookmark(s) from legacy storage")
         }
-        defaults.removeObject(forKey: Self.legacyKey)
+        // Only remove legacy key if all paths were migrated successfully
+        if bookmarks.count == paths.count {
+            defaults.removeObject(forKey: Self.legacyKey)
+        } else {
+            logger.warning("Could not migrate \(paths.count - bookmarks.count, privacy: .public) legacy path(s) — legacy key retained for retry")
+        }
     }
 }
