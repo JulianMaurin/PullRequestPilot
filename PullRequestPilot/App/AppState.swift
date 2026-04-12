@@ -75,5 +75,7 @@ final class AppState {
     func cleanup() {
         dashboardViewModel.stopAutoRefresh()
         localRepositoryService.stopPeriodicRefresh()
+        let dirs = gitDirectoriesStore.load()
+        gitDirectoriesStore.stopAccessing(dirs)
     }
 }

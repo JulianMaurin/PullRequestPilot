@@ -59,6 +59,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         completionHandler([.banner, .sound])
     }
 
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        Task { @MainActor in
+            showWindow()
+        }
+        completionHandler()
+    }
+
     // MARK: - Status Bar Click Handling
 
     @objc private func statusBarButtonClicked() {

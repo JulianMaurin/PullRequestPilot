@@ -8,7 +8,8 @@ struct PullRequestPilotApp: App {
     init() {
         // Skip full app initialization when running unit tests
         if NSClassFromString("XCTestCase") == nil {
-            _appState = State(initialValue: AppState())
+            let state = AppState()
+            _appState = State(initialValue: state)
         }
     }
 
@@ -25,8 +26,10 @@ struct PullRequestPilotApp: App {
                     handleIncomingURL(url)
                 }
                 .onAppear {
-                    appDelegate.appState = appState
-                    appDelegate.dashboardViewModel = appState.dashboardViewModel
+                    if appDelegate.appState == nil {
+                        appDelegate.appState = appState
+                        appDelegate.dashboardViewModel = appState.dashboardViewModel
+                    }
                 }
             }
         }
@@ -94,11 +97,13 @@ extension PullRequestPilotApp {
 // MARK: - Window close → hide
 
 /// Finds the hosting NSWindow and overrides close behavior to hide instead of destroy.
+/// Forwards all other delegate messages to SwiftUI's original delegate.
 private struct WindowAccessor: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
             guard let window = view.window else { return }
+            context.coordinator.originalDelegate = window.delegate
             window.delegate = context.coordinator
         }
         return view
@@ -109,9 +114,39 @@ private struct WindowAccessor: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     final class Coordinator: NSObject, NSWindowDelegate {
+        weak var originalDelegate: NSWindowDelegate?
+
         func windowShouldClose(_ sender: NSWindow) -> Bool {
             sender.orderOut(nil)
             return false
+        }
+
+        func windowDidResize(_ notification: Notification) {
+            originalDelegate?.windowDidResize?(notification)
+        }
+
+        func windowDidMove(_ notification: Notification) {
+            originalDelegate?.windowDidMove?(notification)
+        }
+
+        func windowDidBecomeKey(_ notification: Notification) {
+            originalDelegate?.windowDidBecomeKey?(notification)
+        }
+
+        func windowDidResignKey(_ notification: Notification) {
+            originalDelegate?.windowDidResignKey?(notification)
+        }
+
+        override func responds(to aSelector: Selector!) -> Bool {
+            if super.responds(to: aSelector) { return true }
+            return originalDelegate?.responds(to: aSelector) ?? false
+        }
+
+        override func forwardingTarget(for aSelector: Selector!) -> Any? {
+            if let original = originalDelegate, original.responds(to: aSelector) {
+                return original
+            }
+            return super.forwardingTarget(for: aSelector)
         }
     }
 }
