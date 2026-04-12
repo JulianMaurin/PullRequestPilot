@@ -109,7 +109,7 @@ struct SummarySmallView: View {
 
             if !entry.views.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
-                    ForEach(Array(entry.views.prefix(3).enumerated()), id: \.element.id) { index, view in
+                    ForEach(entry.views.prefix(3)) { view in
                         HStack(spacing: 6) {
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(.secondary.opacity(0.5))
@@ -177,7 +177,7 @@ struct SummaryMediumView: View {
                         GridItem(.flexible(), spacing: 8),
                     ]
                     LazyVGrid(columns: columns, spacing: 4) {
-                        ForEach(Array(entry.views.prefix(4).enumerated()), id: \.element.id) { index, viewData in
+                        ForEach(entry.views.prefix(4)) { viewData in
                             ViewCardCompact(viewData: viewData)
                         }
                     }
