@@ -65,13 +65,11 @@ final class PRDetailViewModel {
                 repeat {
                     let page = try await gitHubClient.fetchTimeline(nodeID: pr.id, cursor: cursor)
                     allEvents.append(contentsOf: page.events)
-                    if allCheckRuns.isEmpty {
-                        allCheckRuns = page.checkRuns
+                    allCheckRuns.append(contentsOf: page.checkRuns)
+                    if checksCursor == nil {
                         checksCursor = page.checksNextCursor
                     }
-                    if fetchedReviewers.isEmpty {
-                        fetchedReviewers = page.reviewers
-                    }
+                    fetchedReviewers.append(contentsOf: page.reviewers)
                     cursor = page.nextCursor
                 } while cursor != nil
 
@@ -82,10 +80,14 @@ final class PRDetailViewModel {
                     checksCursor = checksPage.nextCursor
                 }
 
+                // Deduplicate reviewers across pages, keeping last occurrence (latest state)
+                var seenReviewerIDs = Set<String>()
+                let deduplicatedReviewers = fetchedReviewers.reversed().filter { seenReviewerIDs.insert($0.id).inserted }.reversed()
+
                 guard !Task.isCancelled else { return }
                 timelineEvents = allEvents
                 checkRuns = allCheckRuns
-                reviewers = fetchedReviewers
+                reviewers = Array(deduplicatedReviewers)
             } catch is CancellationError {
                 return
             } catch {
