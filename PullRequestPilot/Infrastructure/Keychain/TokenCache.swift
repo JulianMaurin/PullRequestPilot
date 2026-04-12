@@ -7,6 +7,9 @@ final class TokenCache: @unchecked Sendable {
     private var cachedToken: String?
     private var hasLoaded = false
     private let lock = NSLock()
+    /// Monotonically increasing generation counter. Each `invalidate()` bumps this,
+    /// allowing a concurrent Keychain read to detect that its result is stale.
+    private var generation: UInt64 = 0
 
     init(keychain: KeychainService) {
         self.keychain = keychain
@@ -19,30 +22,35 @@ final class TokenCache: @unchecked Sendable {
             lock.unlock()
             return cached
         }
+        let capturedGeneration = generation
         lock.unlock()
 
-        // Perform Keychain I/O outside the lock to avoid blocking other threads
-        // if macOS shows a Keychain access dialog.
         #if DEBUG
         if let envToken = ProcessInfo.processInfo.environment["GITHUB_TOKEN"], !envToken.isEmpty {
             lock.lock()
-            cachedToken = envToken
-            hasLoaded = true
-            lock.unlock()
-            return envToken
+            defer { lock.unlock() }
+            if generation == capturedGeneration, !hasLoaded {
+                cachedToken = envToken
+                hasLoaded = true
+            }
+            return cachedToken
         }
         #endif
+
+        // Perform Keychain I/O outside the lock to avoid blocking other threads
+        // if macOS shows a Keychain access dialog.
         let value = keychain.read(key: Constants.Keychain.githubToken)
 
         lock.lock()
-        // Double-check: another thread may have loaded while we were reading
-        if !hasLoaded {
+        defer { lock.unlock() }
+        // Only store the result if no invalidation occurred while we were reading.
+        // If generation changed, another thread called invalidate() or set(), so
+        // our Keychain read is stale — discard it.
+        if generation == capturedGeneration, !hasLoaded {
             cachedToken = value
             hasLoaded = true
         }
-        let result = cachedToken
-        lock.unlock()
-        return result
+        return cachedToken
     }
 
     func set(_ newToken: String) {
@@ -50,6 +58,7 @@ final class TokenCache: @unchecked Sendable {
         defer { lock.unlock() }
         cachedToken = newToken
         hasLoaded = true
+        generation &+= 1
     }
 
     func invalidate() {
@@ -57,5 +66,6 @@ final class TokenCache: @unchecked Sendable {
         defer { lock.unlock() }
         cachedToken = nil
         hasLoaded = false
+        generation &+= 1
     }
 }
