@@ -105,7 +105,11 @@ final class PRDetailViewModel {
                 } while cursor != nil
 
                 // Paginate remaining check runs
+                var previousChecksCursor: String?
                 while let nextChecksCursor = checksCursor {
+                    // Guard against duplicate cursors that would cause an infinite loop
+                    guard nextChecksCursor != previousChecksCursor else { break }
+                    previousChecksCursor = nextChecksCursor
                     let checksPage = try await gitHubClient.fetchChecks(
                         nodeID: pr.id,
                         cursor: nextChecksCursor,
