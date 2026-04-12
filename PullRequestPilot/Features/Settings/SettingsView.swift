@@ -216,8 +216,16 @@ struct SettingsView: View {
                     }
                 }
             } footer: {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("Directories containing cloned repositories. Used to locate PRs on disk and open them in your editor.")
+                    if let warning = viewModel.staleDirectoryWarning {
+                        HStack(alignment: .top, spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                            Text(warning)
+                        }
+                        .foregroundStyle(.orange)
+                    }
                     scanStatus
                 }
                 .font(.caption)

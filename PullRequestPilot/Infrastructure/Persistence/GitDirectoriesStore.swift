@@ -4,6 +4,7 @@ import os
 final class GitDirectoriesStore: @unchecked Sendable {
     private static let key = "git_directory_bookmarks"
     private static let legacyKey = "git_directories"
+    private(set) var lastPrunedStaleCount = 0
     private let defaults: UserDefaults
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot",
@@ -30,7 +31,9 @@ final class GitDirectoriesStore: @unchecked Sendable {
             }
         }
         // Prune stale or unresolvable bookmarks
-        if validBookmarks.count != bookmarksData.count {
+        let prunedCount = bookmarksData.count - validBookmarks.count
+        lastPrunedStaleCount = prunedCount
+        if prunedCount > 0 {
             defaults.set(validBookmarks, forKey: Self.key)
         }
         return urls

@@ -12,6 +12,7 @@ final class SettingsViewModel {
     private(set) var validationState: ValidationState = .idle
     private(set) var saveError: String?
     var gitDirectories: [URL] = []
+    private(set) var staleDirectoryWarning: String?
 
     private(set) var launchAtLoginError: String?
 
@@ -44,6 +45,10 @@ final class SettingsViewModel {
         self.token = tokenCache.token ?? ""
         self.hasSavedToken = tokenCache.token != nil
         self.gitDirectories = gitDirectoriesStore.load()
+        if gitDirectoriesStore.lastPrunedStaleCount > 0 {
+            let count = gitDirectoriesStore.lastPrunedStaleCount
+            self.staleDirectoryWarning = "\(count) directory bookmark\(count == 1 ? " was" : "s were") removed because \(count == 1 ? "it is" : "they are") no longer accessible. Re-add \(count == 1 ? "it" : "them") using the Add Directory button."
+        }
 
         let prInterval = defaults.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
         self.prRefreshInterval = prInterval > 0 ? prInterval : Constants.App.defaultPRRefreshInterval
