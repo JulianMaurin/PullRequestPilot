@@ -110,19 +110,17 @@ struct BuildStacksTests {
         #expect(stacks[0].children.map(\.id) == ["2", "3"])
     }
 
-    @Test("cycle in branch names does not cause infinite loop")
+    @Test("cycle in branch names produces no stacks because no root is found")
     func cycleProtection() {
         let vm = makeViewModel(suiteName: "Cycle")
-        // a -> b -> a (cycle): both are identified as children of each other,
-        // so neither is a root. The algorithm returns no stacks (no roots found).
-        // The key property is that it terminates without infinite loop.
+        // a -> b -> a (cycle): each PR's base matches the other's head,
+        // so both are identified as children and neither qualifies as a root.
+        // The algorithm terminates and returns an empty stacks array.
         let pr1 = TestPullRequestFactory.make(id: "1", baseRefName: "b", headRefName: "a")
         let pr2 = TestPullRequestFactory.make(id: "2", baseRefName: "a", headRefName: "b")
         let groups = vm.groupedByOrgAndRepo([pr1, pr2])
         let stacks = groups[0].repos[0].stacks
-        // Algorithm terminates — exact grouping depends on root detection
-        let totalPRs = stacks.reduce(0) { $0 + $1.totalCount }
-        #expect(totalPRs >= 0) // Does not hang
+        #expect(stacks.isEmpty)
     }
 
     @Test("totalCount includes root plus children")
