@@ -1,7 +1,8 @@
 import Foundation
 import os
 
-final class ViewsStore: @unchecked Sendable {
+@MainActor
+final class ViewsStore {
     private static let key = "dashboard_views"
     private let defaults: UserDefaults
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "ViewsStore")

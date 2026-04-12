@@ -7,6 +7,7 @@ import Testing
 // MARK: - Avatar Cache Tests
 
 @Suite("AvatarCache")
+@MainActor
 struct AvatarCacheTests {
 
     private func makeSession() -> URLSession {

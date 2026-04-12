@@ -26,6 +26,7 @@ struct PullRequest: Identifiable, Hashable, Sendable {
 
     var linesChanged: Int { additions + deletions }
 
+    private static let ageFormatterLock = NSLock()
     private nonisolated(unsafe) static let ageFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
@@ -35,7 +36,9 @@ struct PullRequest: Identifiable, Hashable, Sendable {
     var age: String { age(relativeTo: .now) }
 
     func age(relativeTo now: Date) -> String {
-        Self.ageFormatter.localizedString(for: createdAt, relativeTo: now)
+        Self.ageFormatterLock.lock()
+        defer { Self.ageFormatterLock.unlock() }
+        return Self.ageFormatter.localizedString(for: createdAt, relativeTo: now)
     }
 }
 
@@ -144,14 +147,16 @@ struct LastActivity: Hashable, Sendable {
 // MARK: - Shared Timestamp Formatting
 
 extension Date {
-    private nonisolated(unsafe) static let timeFormatter: DateFormatter = {
+    private static let timestampLock = NSLock()
+
+    private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .none
         formatter.timeStyle = .short
         return formatter
     }()
 
-    private nonisolated(unsafe) static let dateFormatter: DateFormatter = {
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.setLocalizedDateFormatFromTemplate("MMM d")
         return formatter
@@ -159,18 +164,22 @@ extension Date {
 
     func relativeTimestampText(relativeTo now: Date) -> String {
         let calendar = Calendar.current
-        let time = Self.timeFormatter.string(from: self)
 
         let startOfToday = calendar.startOfDay(for: now)
         let startOfTimestamp = calendar.startOfDay(for: self)
         let dayDifference = calendar.dateComponents([.day], from: startOfTimestamp, to: startOfToday).day ?? 0
+
+        Self.timestampLock.lock()
+        let time = Self.timeFormatter.string(from: self)
+        let dateStr = dayDifference > 1 ? Self.dateFormatter.string(from: self) : nil
+        Self.timestampLock.unlock()
 
         if dayDifference == 0 {
             return "today at \(time)"
         } else if dayDifference == 1 {
             return "yesterday at \(time)"
         } else {
-            return "\(Self.dateFormatter.string(from: self)) at \(time)"
+            return "\(dateStr!) at \(time)"
         }
     }
 }

@@ -3,6 +3,7 @@ import Foundation
 @testable import PullRequestPilot
 
 @Suite("ViewsStore")
+@MainActor
 struct ViewsStoreTests {
     private func makeStore(suiteName: String) -> ViewsStore {
         let defaults = UserDefaults(suiteName: suiteName)!
