@@ -7,6 +7,7 @@ enum GitHubGraphQL {
             .replacingOccurrences(of: "\"", with: "\\\"")
             .replacingOccurrences(of: "\n", with: "\\n")
             .replacingOccurrences(of: "\r", with: "\\r")
+            .replacingOccurrences(of: "\t", with: "\\t")
     }
 
     static func searchQuery(query: String, cursor: String? = nil) -> String {
