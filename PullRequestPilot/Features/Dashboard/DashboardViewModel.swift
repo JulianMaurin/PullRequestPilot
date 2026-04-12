@@ -124,6 +124,7 @@ final class DashboardViewModel {
             viewStates[viewID]?.reachedLimit = filteredPRs.count >= Constants.App.maxPullRequests
             logger.info("Fetched \(uniquePRs.count, privacy: .public) PR(s) for '\(view.title, privacy: .public)'")
         } catch is CancellationError {
+            viewStates[viewID]?.isLoading = false
             return
         } catch {
             logger.error("Failed to fetch PRs for '\(view.title, privacy: .public)': \(error, privacy: .public)")
@@ -158,6 +159,7 @@ final class DashboardViewModel {
             viewStates[viewID]?.reachedLimit = totalCount >= Constants.App.maxPullRequests
             logger.info("Loaded \(newPRs.count, privacy: .public) more PR(s) for '\(view.title, privacy: .public)' (total: \(totalCount, privacy: .public))")
         } catch is CancellationError {
+            viewStates[viewID]?.isLoadingMore = false
             return
         } catch {
             logger.error("Failed to load more PRs for '\(view.title, privacy: .public)': \(error, privacy: .public)")
@@ -258,6 +260,10 @@ final class DashboardViewModel {
                         consecutiveEmptyFetches += 1
                         seconds = min(10 * pow(2.0, Double(consecutiveEmptyFetches - 1)), 60)
                     }
+                } else if self?.views.isEmpty == true {
+                    // No views configured — use normal interval, nothing to fetch
+                    let interval = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
+                    seconds = interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
                 } else {
                     // No data yet, no errors — initial load, retry quickly
                     seconds = 5
