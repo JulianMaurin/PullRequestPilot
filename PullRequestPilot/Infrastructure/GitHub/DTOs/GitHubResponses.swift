@@ -318,10 +318,9 @@ extension CheckRunCommitsConnection {
             let url = node.detailsUrl.flatMap { URL(string: $0) }
             let run = CheckRun(id: "check-\(index)-\(name)", name: name, status: status, conclusion: conclusion, detailsURL: url, isRequired: node.isRequired ?? false)
 
-            if let existing = bestByName[name] {
-                if run.conclusionPriority > existing.conclusionPriority {
-                    bestByName[name] = run
-                }
+            if bestByName[name] != nil {
+                // Keep the latest run (last occurrence) — GitHub returns re-runs after originals
+                bestByName[name] = run
             } else {
                 nameOrder.append(name)
                 bestByName[name] = run
