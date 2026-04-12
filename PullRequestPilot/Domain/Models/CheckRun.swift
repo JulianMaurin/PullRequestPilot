@@ -11,8 +11,8 @@ struct CheckRun: Identifiable, Hashable, Sendable {
     /// Priority for deduplication: higher = preferred when multiple runs share a name.
     var conclusionPriority: Int {
         switch conclusion {
+        case nil: return 5 // in-progress / pending — active runs always win over completed
         case .success: return 4
-        case nil: return 3 // in-progress / pending
         case .failure, .startupFailure, .timedOut: return 2
         case .neutral, .actionRequired: return 1
         case .cancelled, .skipped, .stale: return 0
