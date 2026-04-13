@@ -1,7 +1,6 @@
 import AppKit
 import Foundation
 import os
-import UserNotifications
 import WidgetKit
 
 struct ViewState: Sendable {
@@ -23,7 +22,10 @@ struct ViewState: Sendable {
 
 @MainActor
 @Observable
-final class DashboardViewModel {
+final class DashboardViewModel: DashboardActionsProtocol {
+
+    // MARK: - Properties
+
     private(set) var views: [DashboardView]
     private(set) var viewStates: [UUID: ViewState] = [:]
     var selectedViewID: UUID? {
@@ -37,30 +39,31 @@ final class DashboardViewModel {
         didSet { persistCollapsedSections() }
     }
 
-    var onBadgeCountChanged: ((Int) -> Void)?
+    let badgeTracker: BadgeTracker
+    let notificationService: NotificationService
 
     private let gitHubClient: GitHubClientProtocol
-    private let viewsStore: ViewsStore
+    private let viewsStore: any ViewsStoreProtocol
     private let localRepositoryService: LocalRepositoryService
     private let defaults: UserDefaults
     private var refreshTask: Task<Void, Never>?
     private var refreshIntervalTask: Task<Void, Never>?
     private var hideReviewedTask: Task<Void, Never>?
-    private var previousPRIDs: [UUID: Set<String>] = [:]
-    private var hasCompletedInitialLoad: Set<UUID> = []
     private var refreshingViewIDs: Set<UUID> = []
     private var viewerLogin: String?
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Dashboard")
 
-    init(gitHubClient: GitHubClientProtocol, viewsStore: ViewsStore, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard) {
+    // MARK: - Init
+
+    init(gitHubClient: GitHubClientProtocol, viewsStore: any ViewsStoreProtocol, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard) {
         self.gitHubClient = gitHubClient
         self.viewsStore = viewsStore
         self.localRepositoryService = localRepositoryService
         self.defaults = defaults
         self.collapsedOrgs = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.collapsedOrgs) ?? [])
         self.collapsedRepos = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.collapsedRepos) ?? [])
-        self.badgeViewIDs = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.badgeViewIDs) ?? [])
-        self.notifiedViewIDs = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.notifiedViewIDs) ?? [])
+        self.badgeTracker = BadgeTracker(defaults: defaults)
+        self.notificationService = NotificationService(defaults: defaults)
         let loadedViews = viewsStore.load()
         self.views = loadedViews
         self.selectedViewID = Self.restoreSelectedViewID(from: defaults, views: loadedViews)
@@ -91,6 +94,59 @@ final class DashboardViewModel {
     var selectedViewState: ViewState {
         guard let id = selectedViewID else { return ViewState() }
         return viewStates[id] ?? ViewState()
+    }
+
+    // MARK: - Badge / Notification Forwarding
+
+    var onBadgeCountChanged: ((Int) -> Void)? {
+        get { badgeTracker.onCountChanged }
+        set { badgeTracker.onCountChanged = newValue }
+    }
+
+    var badgeCount: Int { badgeTracker.count }
+
+    func isBadgeEnabled(for viewID: UUID) -> Bool {
+        badgeTracker.isEnabled(for: viewID)
+    }
+
+    func setBadge(for viewID: UUID, enabled: Bool) {
+        badgeTracker.setEnabled(for: viewID, enabled: enabled, currentPRs: viewStates[viewID]?.pullRequests ?? [])
+    }
+
+    func markBadgeAsSeen() {
+        badgeTracker.markAsSeen()
+    }
+
+    var systemNotificationsAuthorized: Bool { notificationService.systemAuthorized }
+
+    func isNotificationEnabled(for viewID: UUID) -> Bool {
+        notificationService.isEnabled(for: viewID)
+    }
+
+    func setNotification(for viewID: UUID, enabled: Bool) {
+        notificationService.setEnabled(for: viewID, enabled: enabled)
+    }
+
+    func ensureNotificationPermission(for viewID: UUID) async {
+        await notificationService.ensurePermission(for: viewID)
+    }
+
+    func refreshNotificationAuthorization() async {
+        await notificationService.refreshAuthorization()
+    }
+
+    func requestNotificationPermissionAndOpenSettings() async {
+        await notificationService.requestPermissionAndOpenSettings()
+    }
+
+    // MARK: - Grouping Forwarding
+
+    typealias PRStack = PRGrouping.PRStack
+    typealias OrgGroup = PRGrouping.OrgGroup
+    typealias RepoGroup = PRGrouping.RepoGroup
+
+    func groupedByOrgAndRepo(_ pullRequests: [PullRequest]) -> [OrgGroup] {
+        PRGrouping.groupedByOrgAndRepo(pullRequests)
     }
 
     // MARK: - Refresh
@@ -186,81 +242,19 @@ final class DashboardViewModel {
                 group.addTask { await self.refresh(viewID: view.id) }
             }
         }
-        pruneUnseenBadgePRIDs()
+        guard !Task.isCancelled else { return }
+        badgeTracker.pruneUnseen(viewStates: viewStates)
         updateWidgetData()
     }
 
     /// Clears the cached viewer login so the next refresh re-fetches it from the API.
-    /// Must be called when the GitHub token changes (e.g. after saving a new token in Settings).
     func resetViewerLogin() {
         viewerLogin = nil
         viewerLoginTask?.cancel()
         viewerLoginTask = nil
     }
 
-    private var viewerLoginTask: Task<Void, Never>?
-
-    private func fetchViewerLoginIfNeeded() async {
-        if let existing = viewerLoginTask {
-            await existing.value
-        }
-        guard viewerLogin == nil else { return }
-        // Another caller may have started a new task while we were awaiting
-        guard viewerLoginTask == nil else { return }
-        let task = Task {
-            do {
-                let viewer = try await gitHubClient.fetchViewer()
-                viewerLogin = viewer.login
-            } catch {
-                logger.warning("Failed to fetch viewer login: \(error, privacy: .public)")
-            }
-        }
-        viewerLoginTask = task
-        await task.value
-        viewerLoginTask = nil
-    }
-
-    private func filterReviewedPRs(_ prs: [PullRequest], for view: DashboardView) -> [PullRequest] {
-        guard view.hideReviewed, let login = viewerLogin else { return prs }
-        return prs.filter { pr in
-            guard let viewerReview = pr.latestReviews.first(where: { $0.login == login }) else {
-                return true
-            }
-            // Keep the PR if the viewer's review was dismissed (needs re-review)
-            return viewerReview.state == .dismissed
-        }
-    }
-
-    private func updateWidgetData() {
-        let widgetViews = views.map { view in
-            let prs = viewStates[view.id]?.pullRequests ?? []
-            let widgetPRs = prs.prefix(10).map { pr in
-                WidgetPullRequest(
-                    id: pr.id,
-                    number: pr.number,
-                    title: pr.title,
-                    url: pr.url,
-                    repositoryName: pr.repository.nameWithOwner,
-                    authorLogin: pr.author.login,
-                    createdAt: pr.createdAt,
-                    reviewDecision: pr.reviewDecision?.rawValue,
-                    checkStatus: pr.checkStatus?.rawValue,
-                    isDraft: pr.isDraft,
-                    state: pr.state.rawValue
-                )
-            }
-            return WidgetViewData(
-                id: view.id.uuidString,
-                title: view.title,
-                count: prs.count,
-                approvedCount: prs.filter { $0.reviewDecision == .approved }.count,
-                changesRequestedCount: prs.filter { $0.reviewDecision == .changesRequested }.count,
-                pullRequests: Array(widgetPRs)
-            )
-        }
-        WidgetData(views: widgetViews, lastUpdated: .now).save()
-        WidgetCenter.shared.reloadAllTimelines()
-    }
+    // MARK: - Auto-Refresh
 
     func startAutoRefresh() {
         guard refreshTask == nil else { return }
@@ -271,25 +265,22 @@ final class DashboardViewModel {
                 let hasAnyData = self?.viewStates.values.contains(where: \.hasData) ?? false
                 let hasAnyError = self?.viewStates.values.contains(where: { $0.error != nil }) ?? false
                 let seconds: Double
-                if hasAnyData && !hasAnyError {
+                if hasAnyData {
                     consecutiveEmptyFetches = 0
                     let interval = self?.defaults.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval) ?? 0
                     seconds = interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
                 } else if hasAnyError {
                     let rateLimitWait = self?.viewStates.values.compactMap(\.rateLimitRetryAfter).max()
                     if let wait = rateLimitWait, wait > 0 {
-                        seconds = min(max(wait, 10), 3600) // At least 10s, cap at 1 hour
+                        seconds = min(max(wait, 10), 3600)
                     } else {
-                        // Exponential backoff on errors: 10s, 20s, 40s, capped at 60s
                         consecutiveEmptyFetches += 1
                         seconds = min(10 * pow(2.0, Double(consecutiveEmptyFetches - 1)), 60)
                     }
                 } else if self?.views.isEmpty == true {
-                    // No views configured — use normal interval, nothing to fetch
                     let interval = self?.defaults.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval) ?? 0
                     seconds = interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
                 } else {
-                    // No data yet, no errors — initial load, use moderate interval
                     seconds = 30
                 }
                 do {
@@ -307,41 +298,6 @@ final class DashboardViewModel {
         refreshTask = nil
         refreshIntervalTask?.cancel()
         refreshIntervalTask = nil
-    }
-
-    private func restartAutoRefresh() {
-        stopAutoRefresh()
-        startAutoRefresh()
-    }
-
-    private func observeRefreshIntervalChanges() {
-        refreshIntervalTask = Task { [weak self] in
-            for await _ in NotificationCenter.default.notifications(named: Constants.Notifications.prRefreshIntervalChanged) {
-                self?.restartAutoRefresh()
-            }
-        }
-    }
-
-    // MARK: - Sign Out
-
-    func clearAllData() {
-        stopAutoRefresh()
-        localRepositoryService.stopPeriodicRefresh()
-        views = []
-        viewStates = [:]
-        selectedViewID = nil
-        previousPRIDs = [:]
-        hasCompletedInitialLoad = []
-        viewerLogin = nil
-        notifiedViewIDs = []
-        badgeViewIDs = []
-        unseenBadgePRIDs = []
-        collapsedOrgs = []
-        collapsedRepos = []
-        defaults.removeObject(forKey: Constants.UserDefaultsKeys.selectedViewID)
-        viewsStore.save([])
-        WidgetData(views: [], lastUpdated: .now).save()
-        WidgetCenter.shared.reloadAllTimelines()
     }
 
     // MARK: - CRUD
@@ -378,8 +334,6 @@ final class DashboardViewModel {
         viewsStore.save(views)
     }
 
-    // MARK: - View Navigation
-
     func selectNextView() {
         guard let currentID = selectedViewID,
               let currentIndex = views.firstIndex(where: { $0.id == currentID }),
@@ -400,15 +354,14 @@ final class DashboardViewModel {
         views.removeAll { $0.id == id }
         viewStates.removeValue(forKey: id)
         viewsStore.save(views)
-        badgeViewIDs.remove(id.uuidString)
-        notifiedViewIDs.remove(id.uuidString)
-        pruneUnseenBadgePRIDs()
+        badgeTracker.removeView(id: id)
+        notificationService.removeView(id: id)
+        badgeTracker.pruneUnseen(viewStates: viewStates)
         if selectedViewID == id {
             selectedViewID = views.first?.id
         }
     }
 
-    /// Returns the titles of preset views that conflict with existing views.
     func presetConflicts() -> [String] {
         let existingTitles = Set(views.map(\.title))
         return DashboardView.presetViews
@@ -416,8 +369,6 @@ final class DashboardViewModel {
             .filter { existingTitles.contains($0) }
     }
 
-    /// Creates preset views. If `replacingConflicts` is true, existing views whose title
-    /// matches a preset are replaced. Otherwise conflicting presets are skipped.
     func createPresetViews(replacingConflicts: Bool) {
         for preset in DashboardView.presetViews {
             if let existingIndex = views.firstIndex(where: { $0.title == preset.title }) {
@@ -464,204 +415,23 @@ final class DashboardViewModel {
         }
     }
 
-    func openInBrowser(_ pr: PullRequest) {
-        NSWorkspace.shared.open(pr.url)
-    }
+    // MARK: - Sign Out
 
-    // MARK: - Badge Count
-
-    private(set) var badgeViewIDs: Set<String> = [] {
-        didSet {
-            defaults.set(Array(badgeViewIDs), forKey: Constants.UserDefaultsKeys.badgeViewIDs)
-            notifyBadgeCount()
-        }
-    }
-
-    private(set) var unseenBadgePRIDs: Set<String> = []
-
-    var badgeCount: Int { unseenBadgePRIDs.count }
-
-    func isBadgeEnabled(for viewID: UUID) -> Bool {
-        badgeViewIDs.contains(viewID.uuidString)
-    }
-
-    func setBadge(for viewID: UUID, enabled: Bool) {
-        var ids = badgeViewIDs
-        if enabled {
-            ids.insert(viewID.uuidString)
-            // Set baseline from existing PRs so they aren't counted as "new"
-            if previousPRIDs[viewID] == nil,
-               let prs = viewStates[viewID]?.pullRequests, !prs.isEmpty {
-                previousPRIDs[viewID] = Set(prs.map(\.id))
-                hasCompletedInitialLoad.insert(viewID)
-            }
-        } else {
-            ids.remove(viewID.uuidString)
-            previousPRIDs.removeValue(forKey: viewID)
-            hasCompletedInitialLoad.remove(viewID)
-        }
-        badgeViewIDs = ids
-    }
-
-    func markBadgeAsSeen() {
-        guard !unseenBadgePRIDs.isEmpty else { return }
-        unseenBadgePRIDs.removeAll()
-        notifyBadgeCount()
-    }
-
-    /// Remove IDs from `unseenBadgePRIDs` that no longer appear in any badge-enabled view.
-    private func pruneUnseenBadgePRIDs() {
-        guard !unseenBadgePRIDs.isEmpty else { return }
-        var allCurrentIDs = Set<String>()
-        for viewIDString in badgeViewIDs {
-            guard let uuid = UUID(uuidString: viewIDString) else { continue }
-            let prs = viewStates[uuid]?.pullRequests ?? []
-            allCurrentIDs.formUnion(prs.map(\.id))
-        }
-        let pruned = unseenBadgePRIDs.intersection(allCurrentIDs)
-        if pruned.count != unseenBadgePRIDs.count {
-            unseenBadgePRIDs = pruned
-            notifyBadgeCount()
-        }
-    }
-
-    private func notifyBadgeCount() {
-        onBadgeCountChanged?(badgeCount)
-    }
-
-    // MARK: - Notifications
-
-    private(set) var notifiedViewIDs: Set<String> = [] {
-        didSet {
-            defaults.set(Array(notifiedViewIDs), forKey: Constants.UserDefaultsKeys.notifiedViewIDs)
-        }
-    }
-
-    private(set) var systemNotificationsAuthorized = false
-
-    func isNotificationEnabled(for viewID: UUID) -> Bool {
-        notifiedViewIDs.contains(viewID.uuidString)
-    }
-
-    func refreshNotificationAuthorization() async {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        systemNotificationsAuthorized = settings.authorizationStatus == .authorized
-        if !systemNotificationsAuthorized {
-            // Disable all view toggles when system permission is revoked
-            notifiedViewIDs = []
-        }
-    }
-
-    func setNotification(for viewID: UUID, enabled: Bool) {
-        var ids = notifiedViewIDs
-        if enabled {
-            ids.insert(viewID.uuidString)
-        } else {
-            ids.remove(viewID.uuidString)
-        }
-        notifiedViewIDs = ids
-    }
-
-    func ensureNotificationPermission(for viewID: UUID) async {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-
-        switch settings.authorizationStatus {
-        case .notDetermined:
-            let granted = await requestNotificationPermission()
-            systemNotificationsAuthorized = granted
-            if !granted {
-                setNotification(for: viewID, enabled: false)
-            }
-        case .denied:
-            systemNotificationsAuthorized = false
-            setNotification(for: viewID, enabled: false)
-        case .authorized, .provisional, .ephemeral:
-            systemNotificationsAuthorized = true
-        @unknown default:
-            break
-        }
-    }
-
-    func requestNotificationPermissionAndOpenSettings() async {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        if settings.authorizationStatus == .notDetermined {
-            let granted = await requestNotificationPermission()
-            systemNotificationsAuthorized = granted
-        }
-        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    private func requestNotificationPermission() async -> Bool {
-        do {
-            return try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
-        } catch {
-            logger.error("Notification permission error: \(error, privacy: .public)")
-            return false
-        }
-    }
-
-    private func checkAndNotify(viewID: UUID, newPRs: [PullRequest]) async {
-        let notifyEnabled = isNotificationEnabled(for: viewID)
-        let badgeEnabled = isBadgeEnabled(for: viewID)
-        guard notifyEnabled || badgeEnabled else { return }
-
-        let newIDs = Set(newPRs.map(\.id))
-
-        guard hasCompletedInitialLoad.contains(viewID) else {
-            previousPRIDs[viewID] = newIDs
-            hasCompletedInitialLoad.insert(viewID)
-            return
-        }
-
-        let previousIDs = previousPRIDs[viewID] ?? []
-        let addedIDs = newIDs.subtracting(previousIDs)
-        previousPRIDs[viewID] = newIDs
-
-        guard !addedIDs.isEmpty else { return }
-
-        // Track unseen PRs for badge count
-        if badgeEnabled {
-            unseenBadgePRIDs.formUnion(addedIDs)
-            notifyBadgeCount()
-        }
-
-        guard notifyEnabled else { return }
-
-        // Skip delivering notifications during unit tests
-        guard NSClassFromString("XCTestCase") == nil else { return }
-
-        guard let view = views.first(where: { $0.id == viewID }) else { return }
-
-        let addedPRs = newPRs.filter { addedIDs.contains($0.id) }
-        let content = UNMutableNotificationContent()
-        content.title = view.title
-        content.sound = .default
-
-        if addedPRs.count == 1, let pr = addedPRs.first {
-            content.subtitle = pr.repository.nameWithOwner
-            content.body = "#\(pr.number) \(pr.title)"
-        } else {
-            let lines = addedPRs.prefix(4).map { "\($0.repository.nameWithOwner) #\($0.number) \($0.title)" }
-            let remaining = addedPRs.count - lines.count
-            let body = remaining > 0
-                ? lines.joined(separator: "\n") + "\n+\(remaining) more"
-                : lines.joined(separator: "\n")
-            content.body = body
-        }
-
-        let request = UNNotificationRequest(
-            identifier: "new-prs-\(viewID.uuidString)-\(Date.now.timeIntervalSince1970)",
-            content: content,
-            trigger: nil
-        )
-
-        do {
-            try await UNUserNotificationCenter.current().add(request)
-        } catch {
-            logger.error("Failed to deliver notification: \(error, privacy: .public)")
-        }
+    func clearAllData() {
+        stopAutoRefresh()
+        localRepositoryService.stopPeriodicRefresh()
+        views = []
+        viewStates = [:]
+        selectedViewID = nil
+        viewerLogin = nil
+        badgeTracker.reset()
+        notificationService.reset()
+        collapsedOrgs = []
+        collapsedRepos = []
+        defaults.removeObject(forKey: Constants.UserDefaultsKeys.selectedViewID)
+        viewsStore.save([])
+        WidgetData(views: [], lastUpdated: .now).save()
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     // MARK: - Open in Editor
@@ -671,6 +441,10 @@ final class DashboardViewModel {
 
     func localMatch(for pr: PullRequest) -> LocalRepoMatch? {
         localRepositoryService.findLocalDirectory(for: pr)
+    }
+
+    func openInBrowser(_ pr: PullRequest) {
+        NSWorkspace.shared.open(pr.url)
     }
 
     func openInEditor(_ pr: PullRequest) {
@@ -694,69 +468,113 @@ final class DashboardViewModel {
         Task { await refresh(viewID: viewID) }
     }
 
+    func queryContainsFilter(qualifier: String) -> Bool {
+        guard let viewID = selectedViewID,
+              let dashView = views.first(where: { $0.id == viewID }) else { return false }
+        return dashView.query.split(separator: " ").contains(where: { String($0) == qualifier })
+    }
+
     func appendFilter(viewID: UUID, qualifier: String) {
         guard let dashView = views.first(where: { $0.id == viewID }) else { return }
-        let existingTokens = Set(dashView.query.split(separator: " ").map(String.init))
-        guard !existingTokens.contains(qualifier) else { return }
+        guard !dashView.query.split(separator: " ").contains(where: { String($0) == qualifier }) else { return }
         let newQuery = dashView.query + " " + qualifier
         updateView(DashboardView(id: dashView.id, title: dashView.title, query: newQuery, hideReviewed: dashView.hideReviewed))
         viewStates[viewID] = ViewState()
         Task { await refresh(viewID: viewID) }
     }
 
-    // MARK: - Grouping & Stacking
+    // MARK: - Private
 
-    struct PRStack: Identifiable {
-        let root: PullRequest
-        let children: [PullRequest]
-        var id: String { root.id }
-        var totalCount: Int { 1 + children.count }
-    }
+    private var viewerLoginTask: Task<Void, Never>?
 
-    struct OrgGroup {
-        let org: String
-        let repos: [RepoGroup]
-    }
-
-    struct RepoGroup {
-        let repo: String
-        let stacks: [PRStack]
-    }
-
-    func groupedByOrgAndRepo(_ pullRequests: [PullRequest]) -> [OrgGroup] {
-        let byOrg = Dictionary(grouping: pullRequests) { $0.repository.owner }
-        return byOrg.keys.sorted().compactMap { org in
-            guard let orgPRs = byOrg[org] else { return nil }
-            let byRepo = Dictionary(grouping: orgPRs) { $0.repository.name }
-            let repoGroups = byRepo.keys.sorted().compactMap { repo -> RepoGroup? in
-                guard let repoPRs = byRepo[repo] else { return nil }
-                return RepoGroup(repo: repo, stacks: buildStacks(repoPRs))
+    private func fetchViewerLoginIfNeeded() async {
+        if let existing = viewerLoginTask {
+            await existing.value
+        }
+        guard viewerLogin == nil else { return }
+        guard viewerLoginTask == nil else { return }
+        let task = Task {
+            do {
+                let viewer = try await gitHubClient.fetchViewer()
+                viewerLogin = viewer.login
+            } catch {
+                logger.warning("Failed to fetch viewer login: \(error, privacy: .public)")
             }
-            return OrgGroup(org: org, repos: repoGroups)
+        }
+        viewerLoginTask = task
+        await task.value
+        viewerLoginTask = nil
+    }
+
+    private func filterReviewedPRs(_ prs: [PullRequest], for view: DashboardView) -> [PullRequest] {
+        guard view.hideReviewed, let login = viewerLogin else { return prs }
+        return prs.filter { pr in
+            guard let viewerReview = pr.latestReviews.first(where: { $0.login == login }) else {
+                return true
+            }
+            return viewerReview.state == .dismissed
         }
     }
 
-    private func buildStacks(_ pullRequests: [PullRequest]) -> [PRStack] {
-        let headToPR = Dictionary(pullRequests.map { ($0.headRefName, $0) }, uniquingKeysWith: { first, _ in first })
-        let childIDs = Set(pullRequests.compactMap { pr -> String? in
-            guard headToPR[pr.baseRefName] != nil else { return nil }
-            return pr.id
-        })
-        let roots = pullRequests.filter { !childIDs.contains($0.id) }
+    private func checkAndNotify(viewID: UUID, newPRs: [PullRequest]) async {
+        let notifyEnabled = notificationService.isEnabled(for: viewID)
+        let badgeEnabled = badgeTracker.isEnabled(for: viewID)
+        guard notifyEnabled || badgeEnabled else { return }
 
-        return roots.map { root in
-            var children: [PullRequest] = []
-            var currentHead = root.headRefName
-            var visited: Set<String> = [root.id]
-            // Cap depth to prevent infinite loops from circular branch dependencies
-            let maxDepth = pullRequests.count
-            while children.count < maxDepth,
-                  let next = pullRequests.first(where: { $0.baseRefName == currentHead && !visited.contains($0.id) }) {
-                children.append(next)
-                visited.insert(next.id)
-                currentHead = next.headRefName
+        let addedIDs = badgeTracker.detectNewPRs(viewID: viewID, currentPRs: newPRs)
+        guard !addedIDs.isEmpty else { return }
+
+        if badgeEnabled {
+            badgeTracker.trackUnseen(addedIDs)
+        }
+
+        guard notifyEnabled else { return }
+        guard let view = views.first(where: { $0.id == viewID }) else { return }
+        let addedPRs = newPRs.filter { addedIDs.contains($0.id) }
+        await notificationService.deliver(viewTitle: view.title, viewID: viewID, addedPRs: addedPRs)
+    }
+
+    private func updateWidgetData() {
+        let widgetViews = views.map { view in
+            let prs = viewStates[view.id]?.pullRequests ?? []
+            let widgetPRs = prs.prefix(10).map { pr in
+                WidgetPullRequest(
+                    id: pr.id,
+                    number: pr.number,
+                    title: pr.title,
+                    url: pr.url,
+                    repositoryName: pr.repository.nameWithOwner,
+                    authorLogin: pr.author.login,
+                    createdAt: pr.createdAt,
+                    reviewDecision: pr.reviewDecision?.rawValue,
+                    checkStatus: pr.checkStatus?.rawValue,
+                    isDraft: pr.isDraft,
+                    state: pr.state.rawValue
+                )
             }
-            return PRStack(root: root, children: children)
+            return WidgetViewData(
+                id: view.id.uuidString,
+                title: view.title,
+                count: prs.count,
+                approvedCount: prs.filter { $0.reviewDecision == .approved }.count,
+                changesRequestedCount: prs.filter { $0.reviewDecision == .changesRequested }.count,
+                pullRequests: Array(widgetPRs)
+            )
+        }
+        WidgetData(views: widgetViews, lastUpdated: .now).save()
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    private func restartAutoRefresh() {
+        stopAutoRefresh()
+        startAutoRefresh()
+    }
+
+    private func observeRefreshIntervalChanges() {
+        refreshIntervalTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: Constants.Notifications.prRefreshIntervalChanged) {
+                self?.restartAutoRefresh()
+            }
         }
     }
 }

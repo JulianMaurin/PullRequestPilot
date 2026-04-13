@@ -1,8 +1,18 @@
 import Foundation
 import os
 
+// MARK: - Protocol
+
 @MainActor
-final class ViewsStore {
+protocol ViewsStoreProtocol {
+    func load() -> [DashboardView]
+    func save(_ views: [DashboardView])
+}
+
+// MARK: - Implementation
+
+@MainActor
+final class ViewsStore: ViewsStoreProtocol {
     private static let key = "dashboard_views"
     private let defaults: UserDefaults
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "ViewsStore")

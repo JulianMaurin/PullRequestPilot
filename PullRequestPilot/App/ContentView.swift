@@ -21,7 +21,7 @@ struct ContentView: View {
             if dashboardViewModel.showingSettings || needsInitialSetup {
                 SettingsView(
                     viewModel: settingsViewModel,
-                    dashboardViewModel: dashboardViewModel,
+                    dashboard: dashboardViewModel,
                     isInitialSetup: needsInitialSetup,
                     onDismiss: {
                         needsInitialSetup = false

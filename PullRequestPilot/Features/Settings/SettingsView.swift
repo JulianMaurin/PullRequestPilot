@@ -1,8 +1,8 @@
 import SwiftUI
 
-struct SettingsView: View {
+struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
     @Bindable var viewModel: SettingsViewModel
-    var dashboardViewModel: DashboardViewModel
+    var dashboard: Dashboard
     var isInitialSetup: Bool = false
     var onDismiss: (() -> Void)?
     @State private var showResetConfirmation = false
@@ -14,7 +14,7 @@ struct SettingsView: View {
                 if let login = viewModel.viewerLogin {
                     LabeledContent {
                         Button("Sign Out", role: .destructive) {
-                            dashboardViewModel.clearAllData()
+                            dashboard.clearAllData()
                             viewModel.clearToken()
                         }
                     } label: {
@@ -46,8 +46,9 @@ struct SettingsView: View {
                             Task {
                                 await viewModel.save()
                                 if viewModel.validationState == .valid {
-                                    dashboardViewModel.startAutoRefresh()
-                                    await dashboardViewModel.refreshAll()
+                                    dashboard.startAutoRefresh()
+                                    viewModel.restartRepoScan()
+                                    await dashboard.refreshAll()
                                 }
                             }
                         }
@@ -81,8 +82,9 @@ struct SettingsView: View {
                 if viewModel.hasSavedToken, viewModel.viewerLogin == nil, viewModel.validationState == .idle {
                     await viewModel.save()
                     if viewModel.validationState == .valid {
-                        dashboardViewModel.startAutoRefresh()
-                        await dashboardViewModel.refreshAll()
+                        dashboard.startAutoRefresh()
+                        viewModel.restartRepoScan()
+                        await dashboard.refreshAll()
                     }
                 }
             }
@@ -126,14 +128,14 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) { presetToReset = nil }
                 Button("Reset") {
                     if let preset = presetToReset,
-                       let existing = dashboardViewModel.views.first(where: { $0.title == preset.title }) {
-                        dashboardViewModel.updateView(DashboardView(
+                       let existing = dashboard.views.first(where: { $0.title == preset.title }) {
+                        dashboard.updateView(DashboardView(
                             id: existing.id,
                             title: preset.title,
                             query: preset.query,
                             hideReviewed: preset.hideReviewed
                         ))
-                        Task { await dashboardViewModel.refresh(viewID: existing.id) }
+                        Task { await dashboard.refresh(viewID: existing.id) }
                     }
                     presetToReset = nil
                 }
@@ -142,11 +144,11 @@ struct SettingsView: View {
             }
 
             Section {
-                if !dashboardViewModel.systemNotificationsAuthorized {
+                if !dashboard.systemNotificationsAuthorized {
                     LabeledContent {
                         Button("Open Settings") {
                             Task {
-                                await dashboardViewModel.requestNotificationPermissionAndOpenSettings()
+                                await dashboard.requestNotificationPermissionAndOpenSettings()
                             }
                         }
                     } label: {
@@ -169,9 +171,9 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             .task {
-                await dashboardViewModel.refreshNotificationAuthorization()
+                await dashboard.refreshNotificationAuthorization()
                 for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) {
-                    await dashboardViewModel.refreshNotificationAuthorization()
+                    await dashboard.refreshNotificationAuthorization()
                 }
             }
 
@@ -272,7 +274,7 @@ struct SettingsView: View {
     }
 
     private func presetRow(_ preset: DashboardView) -> some View {
-        let existing = dashboardViewModel.views.first(where: { $0.title == preset.title })
+        let existing = dashboard.views.first(where: { $0.title == preset.title })
         let isAdded = existing != nil
         let isModified = isAdded && existing?.query != preset.query
 
@@ -309,8 +311,8 @@ struct SettingsView: View {
                         query: preset.query,
                         hideReviewed: preset.hideReviewed
                     )
-                    dashboardViewModel.addView(newView)
-                    Task { await dashboardViewModel.refresh(viewID: newView.id) }
+                    dashboard.addView(newView)
+                    Task { await dashboard.refresh(viewID: newView.id) }
                 }
                 .controlSize(.small)
             }
