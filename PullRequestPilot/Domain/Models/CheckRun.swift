@@ -77,6 +77,25 @@ enum CheckRunStatus: String, Sendable {
     }
 }
 
+extension Array where Element == CheckRun {
+    /// Deduplicates check runs by name, keeping the run with the highest `conclusionPriority`.
+    func deduplicatedByName() -> [CheckRun] {
+        var bestByName: [String: CheckRun] = [:]
+        var nameOrder: [String] = []
+        for run in self {
+            if let existing = bestByName[run.name] {
+                if run.conclusionPriority > existing.conclusionPriority {
+                    bestByName[run.name] = run
+                }
+            } else {
+                nameOrder.append(run.name)
+                bestByName[run.name] = run
+            }
+        }
+        return nameOrder.compactMap { bestByName[$0] }
+    }
+}
+
 enum CheckRunConclusion: String, Sendable {
     case success = "SUCCESS"
     case failure = "FAILURE"

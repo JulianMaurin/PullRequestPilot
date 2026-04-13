@@ -222,3 +222,60 @@ struct CheckRunDTOMappingTests {
         #expect(results.isEmpty)
     }
 }
+
+@Suite("CheckRun deduplicatedByName")
+struct CheckRunDeduplicationTests {
+
+    private func make(name: String, conclusion: CheckRunConclusion?) -> CheckRun {
+        CheckRun(id: UUID().uuidString, name: name, status: .completed, conclusion: conclusion, detailsURL: nil, isRequired: false)
+    }
+
+    @Test("empty input returns empty")
+    func emptyInput() {
+        let result: [CheckRun] = [].deduplicatedByName()
+        #expect(result.isEmpty)
+    }
+
+    @Test("single run passes through")
+    func singleRun() {
+        let run = make(name: "CI", conclusion: .success)
+        let result = [run].deduplicatedByName()
+        #expect(result.count == 1)
+        #expect(result[0].name == "CI")
+    }
+
+    @Test("keeps higher priority run when duplicated by name")
+    func keepsBetterConclusion() {
+        let failed = make(name: "CI", conclusion: .failure)
+        let success = make(name: "CI", conclusion: .success)
+        let result = [failed, success].deduplicatedByName()
+        #expect(result.count == 1)
+        #expect(result[0].conclusion == .success)
+    }
+
+    @Test("in-progress beats success")
+    func inProgressBeatsSuccess() {
+        let success = make(name: "CI", conclusion: .success)
+        let inProgress = CheckRun(id: "ip", name: "CI", status: .inProgress, conclusion: nil, detailsURL: nil, isRequired: false)
+        let result = [success, inProgress].deduplicatedByName()
+        #expect(result.count == 1)
+        #expect(result[0].conclusion == nil)
+    }
+
+    @Test("preserves insertion order of names")
+    func preservesOrder() {
+        let a = make(name: "Alpha", conclusion: .success)
+        let b = make(name: "Beta", conclusion: .success)
+        let c = make(name: "Charlie", conclusion: .success)
+        let result = [a, b, c].deduplicatedByName()
+        #expect(result.map(\.name) == ["Alpha", "Beta", "Charlie"])
+    }
+
+    @Test("different names are all kept")
+    func differentNamesKept() {
+        let a = make(name: "CI", conclusion: .success)
+        let b = make(name: "Lint", conclusion: .failure)
+        let result = [a, b].deduplicatedByName()
+        #expect(result.count == 2)
+    }
+}

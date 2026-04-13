@@ -52,22 +52,6 @@ final class PRDetailViewModel {
 
     // MARK: - Private
 
-    private func deduplicateCheckRuns(_ runs: [CheckRun]) -> [CheckRun] {
-        var bestByName: [String: CheckRun] = [:]
-        var nameOrder: [String] = []
-        for run in runs {
-            if let existing = bestByName[run.name] {
-                if run.conclusionPriority > existing.conclusionPriority {
-                    bestByName[run.name] = run
-                }
-            } else {
-                nameOrder.append(run.name)
-                bestByName[run.name] = run
-            }
-        }
-        return nameOrder.compactMap { bestByName[$0] }
-    }
-
     private func fetchTimeline() {
         guard let pr = selectedPR else { return }
         fetchTask = Task {
@@ -130,7 +114,7 @@ final class PRDetailViewModel {
                 }
 
                 // Deduplicate check runs across pages by name, keeping the best conclusion
-                let deduplicatedCheckRuns = deduplicateCheckRuns(allCheckRuns)
+                let deduplicatedCheckRuns = allCheckRuns.deduplicatedByName()
 
                 // Deduplicate reviewers across pages, keeping last occurrence (latest state)
                 var seenReviewerIDs = Set<String>()
