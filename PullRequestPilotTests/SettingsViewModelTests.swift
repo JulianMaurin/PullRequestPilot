@@ -361,18 +361,20 @@ struct SettingsViewModelTests {
         await vm.save()
 
         #expect(vm.validationState == .valid)
+        #expect(vm.viewerLogin == "octocat")
     }
 
-    @Test("clearToken clears viewerLogin")
+    @Test("clearToken clears viewerLogin and resets state")
     func clearTokenClearsViewerLogin() async {
         let (vm, _, _, _, _) = makeViewModel(storedToken: "ghp_token", suiteName: "ClearViewerLogin")
         mockClient.viewerLoginToReturn = "octocat"
         vm.token = "ghp_token"
         await vm.save()
+        #expect(vm.viewerLogin == "octocat")
 
         vm.clearToken()
 
-        // viewerLogin is private(set), but we can verify through the state reset
+        #expect(vm.viewerLogin == nil)
         #expect(vm.validationState == .idle)
     }
 

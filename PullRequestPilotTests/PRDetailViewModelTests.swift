@@ -226,4 +226,41 @@ struct PRDetailViewModelTests {
         #expect(vm.checkRuns[2].name == "test")
         #expect(client.fetchChecksCallCount == 1)
     }
+
+    // MARK: - updateSelectedPR
+
+    @Test("updateSelectedPR updates when ID matches")
+    func updateSelectedPRMatching() async throws {
+        let (vm, _) = makeViewModel()
+        let pr = makePR(id: "PR_1")
+        vm.selectPR(pr)
+        try await waitForLoad(vm)
+
+        let updatedPR = TestPullRequestFactory.make(id: "PR_1", title: "Updated Title")
+        vm.updateSelectedPR(updatedPR)
+
+        #expect(vm.selectedPR?.title == "Updated Title")
+    }
+
+    @Test("updateSelectedPR is no-op when ID does not match")
+    func updateSelectedPRNonMatching() async throws {
+        let (vm, _) = makeViewModel()
+        let pr = makePR(id: "PR_1")
+        vm.selectPR(pr)
+        try await waitForLoad(vm)
+
+        let otherPR = TestPullRequestFactory.make(id: "PR_OTHER", title: "Other")
+        vm.updateSelectedPR(otherPR)
+
+        #expect(vm.selectedPR?.id == "PR_1")
+        #expect(vm.selectedPR?.title != "Other")
+    }
+
+    @Test("updateSelectedPR is no-op when nothing selected")
+    func updateSelectedPRNoSelection() {
+        let (vm, _) = makeViewModel()
+        let pr = TestPullRequestFactory.make(id: "PR_1")
+        vm.updateSelectedPR(pr)
+        #expect(vm.selectedPR == nil)
+    }
 }

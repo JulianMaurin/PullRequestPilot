@@ -80,4 +80,27 @@ struct QueryEditTests {
         vm.appendFilter(viewID: UUID(), qualifier: "org:acme")
         #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr is:open")
     }
+
+    // MARK: - queryContainsFilter
+
+    @Test("queryContainsFilter returns true when qualifier exists")
+    func queryContainsFilterTrue() {
+        let (vm, viewID) = makeViewModel(suiteName: "ContainsFilterTrue")
+        vm.selectedViewID = viewID
+        #expect(vm.queryContainsFilter(qualifier: "is:pr"))
+    }
+
+    @Test("queryContainsFilter returns false when qualifier absent")
+    func queryContainsFilterFalse() {
+        let (vm, viewID) = makeViewModel(suiteName: "ContainsFilterFalse")
+        vm.selectedViewID = viewID
+        #expect(!vm.queryContainsFilter(qualifier: "org:acme"))
+    }
+
+    @Test("queryContainsFilter returns false when no view selected")
+    func queryContainsFilterNoSelection() {
+        let (vm, _) = makeViewModel(suiteName: "ContainsFilterNone")
+        vm.selectedViewID = nil
+        #expect(!vm.queryContainsFilter(qualifier: "is:pr"))
+    }
 }
