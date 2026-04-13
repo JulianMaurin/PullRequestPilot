@@ -147,13 +147,17 @@ struct PullRequestNode: Decodable {
     }
 
     struct TimelineItemNode: Decodable {
-        // swiftlint:disable:next identifier_name
-        let __typename: String
+        let typename: String
         let createdAt: String?
         let author: AuthorNode?
         let actor: AuthorNode?
         let state: String?
         let commit: CommitNode?
+
+        private enum CodingKeys: String, CodingKey {
+            case typename = "__typename"
+            case createdAt, author, actor, state, commit
+        }
 
         struct CommitNode: Decodable {
             let author: CommitAuthorNode?
@@ -203,11 +207,15 @@ struct ReviewRequestNode: Decodable {
 }
 
 struct RequestedReviewerNode: Decodable {
-    // swiftlint:disable:next identifier_name
-    let __typename: String
+    let typename: String
     let login: String?
     let name: String?
     let avatarUrl: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case typename = "__typename"
+        case login, name, avatarUrl
+    }
 }
 
 struct ReviewsConnection: Decodable {
@@ -257,7 +265,7 @@ extension TimelinePullRequestNode {
         // Then, add requested reviewers who haven't reviewed yet
         for node in (reviewRequests?.nodes ?? []) {
             guard let requested = node.requestedReviewer else { continue }
-            let isTeam = requested.__typename == "Team"
+            let isTeam = requested.typename == "Team"
             let displayName = isTeam ? (requested.name ?? "team") : (requested.login ?? "user")
             let id = isTeam ? "team-\(displayName)" : displayName
             guard seen.insert(id).inserted else { continue }
@@ -293,18 +301,21 @@ struct CheckRunCommitsConnection: Decodable {
 }
 
 struct CheckRunContextNode: Decodable {
-    // swiftlint:disable:next identifier_name
-    let __typename: String
-    // CheckRun fields
+    let typename: String
     let name: String?
     let status: String?
     let conclusion: String?
     let detailsUrl: String?
     let isRequired: Bool?
-    // StatusContext fields
     let context: String?
     let state: String?
     let targetUrl: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case typename = "__typename"
+        case name, status, conclusion, detailsUrl, isRequired
+        case context, state, targetUrl
+    }
 }
 
 extension CheckRunCommitsConnection {
@@ -313,8 +324,8 @@ extension CheckRunCommitsConnection {
         let allNodes = rollup.contexts.nodes
 
         // Process CheckRun first (richer data), then StatusContext for any not already seen
-        let checkRunNodes = allNodes.filter { $0.__typename == "CheckRun" }
-        let statusContextNodes = allNodes.filter { $0.__typename == "StatusContext" }
+        let checkRunNodes = allNodes.filter { $0.typename == "CheckRun" }
+        let statusContextNodes = allNodes.filter { $0.typename == "StatusContext" }
 
         // Collect all entries per name, keeping the best one (success > in-progress > other > cancelled/stale)
         var bestByName: [String: CheckRun] = [:]
@@ -370,8 +381,7 @@ struct TimelineItemsConnection: Decodable {
 }
 
 struct TimelineItemDetailNode: Decodable {
-    // swiftlint:disable:next identifier_name
-    let __typename: String
+    let typename: String
     let createdAt: String?
     let author: PullRequestNode.AuthorNode?
     let actor: PullRequestNode.AuthorNode?
@@ -380,6 +390,11 @@ struct TimelineItemDetailNode: Decodable {
     let commit: CommitDetailNode?
     let assignee: AssigneeNode?
     let requestedReviewer: RequestedReviewerNode?
+
+    private enum CodingKeys: String, CodingKey {
+        case typename = "__typename"
+        case createdAt, author, actor, state, body, commit, assignee, requestedReviewer
+    }
 
     struct CommitDetailNode: Decodable {
         let committedDate: String?
@@ -410,7 +425,7 @@ extension TimelineItemsConnection {
             let dateString: String?
             let body: String?
 
-            switch node.__typename {
+            switch node.typename {
             case "IssueComment":
                 kind = .comment
                 actorNode = node.author
@@ -479,7 +494,7 @@ extension TimelineItemsConnection {
 
             let actor = actorNode.map { Author(login: $0.login, avatarURL: $0.avatarUrl.flatMap(URL.init(string:))) }
             return TimelineEvent(
-                id: "\(globalIndex)-\(node.__typename)-\(dateStr)-\(actorNode?.login ?? "")",
+                id: "\(globalIndex)-\(node.typename)-\(dateStr)-\(actorNode?.login ?? "")",
                 kind: kind,
                 actor: actor,
                 timestamp: date,
@@ -569,7 +584,7 @@ extension PullRequestNode {
         let actorNode: AuthorNode?
         let dateString: String?
 
-        switch node.__typename {
+        switch node.typename {
         case "IssueComment":
             kind = .comment
             actorNode = node.author

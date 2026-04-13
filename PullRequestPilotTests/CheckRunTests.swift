@@ -105,7 +105,7 @@ struct CheckRunDTOMappingTests {
 
     private func makeCheckRunNode(name: String, status: String, conclusion: String? = nil, detailsUrl: String? = nil, isRequired: Bool? = nil) -> CheckRunContextNode {
         CheckRunContextNode(
-            __typename: "CheckRun",
+            typename: "CheckRun",
             name: name,
             status: status,
             conclusion: conclusion,
@@ -119,7 +119,7 @@ struct CheckRunDTOMappingTests {
 
     private func makeStatusContextNode(context: String, state: String, targetUrl: String? = nil) -> CheckRunContextNode {
         CheckRunContextNode(
-            __typename: "StatusContext",
+            typename: "StatusContext",
             name: nil,
             status: nil,
             conclusion: nil,
@@ -213,7 +213,7 @@ struct CheckRunDTOMappingTests {
     @Test("skips unknown typename")
     func skipsUnknownTypename() {
         let node = CheckRunContextNode(
-            __typename: "Unknown",
+            typename: "Unknown",
             name: nil, status: nil, conclusion: nil, detailsUrl: nil, isRequired: nil,
             context: nil, state: nil, targetUrl: nil
         )

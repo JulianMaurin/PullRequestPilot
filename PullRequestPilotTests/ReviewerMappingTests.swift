@@ -15,7 +15,7 @@ struct ReviewerMappingTests {
     private func makeRequestNode(typename: String = "User", login: String? = nil, name: String? = nil, avatarUrl: String? = nil) -> ReviewRequestNode {
         ReviewRequestNode(
             requestedReviewer: RequestedReviewerNode(
-                __typename: typename,
+                typename: typename,
                 login: login,
                 name: name,
                 avatarUrl: avatarUrl

@@ -16,6 +16,10 @@ struct PullRequestPilotWidgets: WidgetBundle {
 struct SummaryEntry: TimelineEntry {
     let date: Date
     let views: [WidgetViewData]
+
+    var totalCount: Int {
+        views.reduce(0) { $0 + $1.count }
+    }
 }
 
 struct SummaryProvider: TimelineProvider {
@@ -84,15 +88,11 @@ struct SummaryWidgetEntryView: View {
 struct SummarySmallView: View {
     let entry: SummaryEntry
 
-    private var totalCount: Int {
-        entry.views.reduce(0) { $0 + $1.count }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(totalCount)")
+                    Text("\(entry.totalCount)")
                         .font(.system(size: 42, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                     Text("Pull Requests")
@@ -142,10 +142,6 @@ struct SummarySmallView: View {
 struct SummaryMediumView: View {
     let entry: SummaryEntry
 
-    private var totalCount: Int {
-        entry.views.reduce(0) { $0 + $1.count }
-    }
-
     var body: some View {
         GeometryReader { geo in
             VStack(alignment: .leading, spacing: 4) {
@@ -158,7 +154,7 @@ struct SummaryMediumView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("\(totalCount)")
+                    Text("\(entry.totalCount)")
                         .font(.system(size: 18, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary)
                 }
@@ -198,10 +194,6 @@ struct SummaryMediumView: View {
 struct SummaryLargeView: View {
     let entry: SummaryEntry
 
-    private var totalCount: Int {
-        entry.views.reduce(0) { $0 + $1.count }
-    }
-
     var body: some View {
         GeometryReader { geo in
             VStack(alignment: .leading, spacing: 6) {
@@ -214,7 +206,7 @@ struct SummaryLargeView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("\(totalCount)")
+                    Text("\(entry.totalCount)")
                         .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary)
                 }

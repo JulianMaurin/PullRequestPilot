@@ -34,7 +34,7 @@ struct TimelineResponseMappingTests {
             : nil
 
         return TimelineItemDetailNode(
-            __typename: typename,
+            typename: typename,
             createdAt: createdAt,
             author: author,
             actor: actor,

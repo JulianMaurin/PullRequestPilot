@@ -13,6 +13,7 @@
 		10B00C7E1FFC9F019FD5B701 /* LocalRepositoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B919383AC965AD29C544D35C /* LocalRepositoryService.swift */; };
 		1B60D5C21D449ECB5263957A /* PRDetailViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F98F49D6E2E1D2D31F361C09 /* PRDetailViewModelTests.swift */; };
 		1F75140CC674B3E42CE4086A /* ParseRetryAfterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D5ED32D4C27CF6A44551B32 /* ParseRetryAfterTests.swift */; };
+		2415DBE7BFC8D98B6FA254CB /* ColorHex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74B7F64073264795345D5328 /* ColorHex.swift */; };
 		25D44A863F8B2285EE0177E2 /* ReviewerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEE9B03750909980C0F4AD79 /* ReviewerTests.swift */; };
 		272F7022C5B6AF134DD38A28 /* BadgeTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C4F7992A6CFECC8528BDF15 /* BadgeTracker.swift */; };
 		2FA559C93493745F8151E166 /* PullRequestPilotWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AE7DBBCDED1A5D00DF910CA4 /* PullRequestPilotWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -50,6 +51,7 @@
 		89D3CBDB6E2B784D8202E0E3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9D6EDC17C7FDDD59B016359F /* PrivacyInfo.xcprivacy */; };
 		8C57202DD8D6D03A71B53676 /* TimelineResponseMappingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4FAD5E316A5839F8E3322E9 /* TimelineResponseMappingTests.swift */; };
 		8FB3F76F08D7C539BF8F21FE /* WidgetHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13E5BEDC8EE487B02730A1E5 /* WidgetHelpers.swift */; };
+		922A6D7DEFF8692D47D66AB7 /* ErrorNetworkCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = E26A5AF825EB8FAF98E1A3F2 /* ErrorNetworkCheck.swift */; };
 		927A5FB9F3851EB18357ED5E /* DashboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94124D1030494DC9A3DCDDE1 /* DashboardViewModel.swift */; };
 		931A44F36A86E90462B5D5DB /* PullRequestStateIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5732C4703E370BEBAF05544B /* PullRequestStateIconView.swift */; };
 		964ADE8F02C6BD934DF5B96D /* TestPullRequestFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 764B9FE62E6225465AD80999 /* TestPullRequestFactory.swift */; };
@@ -155,6 +157,7 @@
 		6B8BDE16E235A1F6B8BF97E7 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		6C4F7992A6CFECC8528BDF15 /* BadgeTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeTracker.swift; sourceTree = "<group>"; };
 		6D1DB214BC50D97E3CD1F5DA /* LocalRepositoryServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRepositoryServiceTests.swift; sourceTree = "<group>"; };
+		74B7F64073264795345D5328 /* ColorHex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorHex.swift; sourceTree = "<group>"; };
 		75A62AC3B6383F18C309DDA3 /* TokenCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenCache.swift; sourceTree = "<group>"; };
 		764B9FE62E6225465AD80999 /* TestPullRequestFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestPullRequestFactory.swift; sourceTree = "<group>"; };
 		77412D15C854BB2FFB5413F8 /* CheckRunTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckRunTests.swift; sourceTree = "<group>"; };
@@ -189,6 +192,7 @@
 		CF59345098F5CC8904F67224 /* PullRequestRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullRequestRowView.swift; sourceTree = "<group>"; };
 		D15F556448815396EF8A8ED2 /* GitDirectoriesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitDirectoriesStore.swift; sourceTree = "<group>"; };
 		D4637988807C67722E35819C /* GitHubResponses.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubResponses.swift; sourceTree = "<group>"; };
+		E26A5AF825EB8FAF98E1A3F2 /* ErrorNetworkCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorNetworkCheck.swift; sourceTree = "<group>"; };
 		E4FAD5E316A5839F8E3322E9 /* TimelineResponseMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineResponseMappingTests.swift; sourceTree = "<group>"; };
 		E95397D0E5E86B354D58214A /* ReviewerMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewerMappingTests.swift; sourceTree = "<group>"; };
 		EA99630A67726BEAA7144942 /* PRDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PRDetailView.swift; sourceTree = "<group>"; };
@@ -464,7 +468,9 @@
 		E07D91C9CE1F1D2F4D90452F /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				74B7F64073264795345D5328 /* ColorHex.swift */,
 				7C83023DF097641FF1879968 /* Constants.swift */,
+				E26A5AF825EB8FAF98E1A3F2 /* ErrorNetworkCheck.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -635,10 +641,12 @@
 				272F7022C5B6AF134DD38A28 /* BadgeTracker.swift in Sources */,
 				DCD1CFE35CD62E236666DEE4 /* CachedAvatarView.swift in Sources */,
 				7E49881AE6BD836AA1137F39 /* CheckRun.swift in Sources */,
+				2415DBE7BFC8D98B6FA254CB /* ColorHex.swift in Sources */,
 				7311E24679EF4F3FA32D1E53 /* Constants.swift in Sources */,
 				358D1ADD83ADD8E90DEE16BB /* DashboardActionsProtocol.swift in Sources */,
 				850A3ABA22A0EDCB05798B9D /* DashboardView.swift in Sources */,
 				927A5FB9F3851EB18357ED5E /* DashboardViewModel.swift in Sources */,
+				922A6D7DEFF8692D47D66AB7 /* ErrorNetworkCheck.swift in Sources */,
 				BE07D374871AC955C82F0FD8 /* GitDirectoriesStore.swift in Sources */,
 				4BF65FE47E41530BBA41AB3E /* GitHubClient.swift in Sources */,
 				83F51C31BD66971C931E7092 /* GitHubGraphQL.swift in Sources */,
