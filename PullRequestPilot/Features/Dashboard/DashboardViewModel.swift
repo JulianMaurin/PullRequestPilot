@@ -14,6 +14,7 @@ struct ViewState: Sendable {
     var rateLimitRetryAfter: TimeInterval?
     var reachedLimit = false
     var rawFetchedCount = 0
+    var skippedPRCount = 0
 
     var isEmpty: Bool { pullRequests.isEmpty && !isLoading }
     var hasData: Bool { !pullRequests.isEmpty }
@@ -49,6 +50,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
     private var refreshTask: Task<Void, Never>?
     private var refreshIntervalTask: Task<Void, Never>?
     private var hideReviewedTask: Task<Void, Never>?
+    private var pendingRefreshTasks: [UUID: Task<Void, Never>] = [:]
     private var refreshingViewIDs: Set<UUID> = []
     private var viewerLogin: String?
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Dashboard")
@@ -183,6 +185,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
             viewStates[viewID]?.nextCursor = page.nextCursor
             viewStates[viewID]?.rawFetchedCount = uniquePRs.count
             viewStates[viewID]?.reachedLimit = uniquePRs.count >= Constants.App.maxPullRequests
+            viewStates[viewID]?.skippedPRCount = page.skippedNodeCount
             logger.info("Fetched \(uniquePRs.count, privacy: .public) PR(s) for '\(view.title, privacy: .public)'")
         } catch is CancellationError {
             viewStates[viewID]?.isLoading = false
@@ -197,6 +200,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
         }
 
         viewStates[viewID]?.isLoading = false
+        updateWidgetData()
     }
 
     func loadMore(viewID: UUID) async {
@@ -250,6 +254,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
     /// Clears the cached viewer login so the next refresh re-fetches it from the API.
     func resetViewerLogin() {
         viewerLogin = nil
+        viewerLoginFetchFailed = false
         viewerLoginTask?.cancel()
         viewerLoginTask = nil
     }
@@ -298,6 +303,12 @@ final class DashboardViewModel: DashboardActionsProtocol {
         refreshTask = nil
         refreshIntervalTask?.cancel()
         refreshIntervalTask = nil
+        hideReviewedTask?.cancel()
+        hideReviewedTask = nil
+        for task in pendingRefreshTasks.values {
+            task.cancel()
+        }
+        pendingRefreshTasks.removeAll()
     }
 
     // MARK: - CRUD
@@ -370,6 +381,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
     }
 
     func createPresetViews(replacingConflicts: Bool) {
+        var viewsToRefresh: [UUID] = []
         for preset in DashboardView.presetViews {
             if let existingIndex = views.firstIndex(where: { $0.title == preset.title }) {
                 if replacingConflicts {
@@ -381,6 +393,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
                         hideReviewed: preset.hideReviewed
                     )
                     views[existingIndex] = replacement
+                    viewsToRefresh.append(oldID)
                 }
             } else {
                 let newView = DashboardView(
@@ -391,11 +404,15 @@ final class DashboardViewModel: DashboardActionsProtocol {
                 )
                 views.append(newView)
                 viewStates[newView.id] = ViewState()
+                viewsToRefresh.append(newView.id)
             }
         }
         viewsStore.save(views)
         if selectedViewID == nil {
             selectedViewID = views.first?.id
+        }
+        for viewID in viewsToRefresh {
+            scheduleRefresh(viewID: viewID)
         }
     }
 
@@ -424,6 +441,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
         viewStates = [:]
         selectedViewID = nil
         viewerLogin = nil
+        viewerLoginFetchFailed = false
         badgeTracker.reset()
         notificationService.reset()
         collapsedOrgs = []
@@ -465,7 +483,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
         guard !trimmed.isEmpty, trimmed != dashView.query else { return }
         updateView(DashboardView(id: dashView.id, title: dashView.title, query: trimmed, hideReviewed: dashView.hideReviewed))
         viewStates[viewID] = ViewState()
-        Task { await refresh(viewID: viewID) }
+        scheduleRefresh(viewID: viewID)
     }
 
     func queryContainsFilter(qualifier: String) -> Bool {
@@ -480,24 +498,34 @@ final class DashboardViewModel: DashboardActionsProtocol {
         let newQuery = dashView.query + " " + qualifier
         updateView(DashboardView(id: dashView.id, title: dashView.title, query: newQuery, hideReviewed: dashView.hideReviewed))
         viewStates[viewID] = ViewState()
-        Task { await refresh(viewID: viewID) }
+        scheduleRefresh(viewID: viewID)
     }
 
     // MARK: - Private
 
     private var viewerLoginTask: Task<Void, Never>?
+    private var viewerLoginFetchFailed = false
+
+    private func scheduleRefresh(viewID: UUID) {
+        pendingRefreshTasks[viewID]?.cancel()
+        pendingRefreshTasks[viewID] = Task {
+            await refresh(viewID: viewID)
+            pendingRefreshTasks.removeValue(forKey: viewID)
+        }
+    }
 
     private func fetchViewerLoginIfNeeded() async {
         if let existing = viewerLoginTask {
             await existing.value
+            return
         }
-        guard viewerLogin == nil else { return }
-        guard viewerLoginTask == nil else { return }
+        guard viewerLogin == nil, !viewerLoginFetchFailed else { return }
         let task = Task {
             do {
                 let viewer = try await gitHubClient.fetchViewer()
                 viewerLogin = viewer.login
             } catch {
+                viewerLoginFetchFailed = true
                 logger.warning("Failed to fetch viewer login: \(error, privacy: .public)")
             }
         }

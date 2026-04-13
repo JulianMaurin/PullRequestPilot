@@ -206,13 +206,13 @@ struct DashboardViewModelExtendedTests {
     // MARK: - CancellationError handling
 
     @Test("refresh ignores CancellationError")
-    func refreshIgnoresCancellation() async {
+    func refreshIgnoresCancellation() async throws {
         mockClient.errorToThrow = CancellationError()
 
         let (viewModel, viewID) = makeViewModel(suiteName: "CancelRefresh")
         await viewModel.refresh(viewID: viewID)
 
-        let state = viewModel.viewStates[viewID]!
+        let state = try #require(viewModel.viewStates[viewID])
         #expect(state.error == nil)
     }
 
@@ -295,7 +295,7 @@ struct DashboardViewModelExtendedTests {
     // MARK: - loadMore error handling
 
     @Test("loadMore surfaces error on failure")
-    func loadMoreError() async {
+    func loadMoreError() async throws {
         let pr = TestPullRequestFactory.make(id: "PR_1", title: "PR 1")
         mockClient.pullRequestsToReturn = [pr]
         mockClient.nextCursorToReturn = "cursor_1"
@@ -306,14 +306,14 @@ struct DashboardViewModelExtendedTests {
         mockClient.errorToThrow = GitHubClientError.networkError(URLError(.timedOut))
         await viewModel.loadMore(viewID: viewID)
 
-        let state = viewModel.viewStates[viewID]!
+        let state = try #require(viewModel.viewStates[viewID])
         #expect(state.error != nil)
         // Original PRs should still be there
         #expect(state.pullRequests.count == 1)
     }
 
     @Test("loadMore ignores CancellationError")
-    func loadMoreIgnoresCancellation() async {
+    func loadMoreIgnoresCancellation() async throws {
         let pr = TestPullRequestFactory.make(id: "PR_1", title: "PR 1")
         mockClient.pullRequestsToReturn = [pr]
         mockClient.nextCursorToReturn = "cursor_1"
@@ -324,7 +324,7 @@ struct DashboardViewModelExtendedTests {
         mockClient.errorToThrow = CancellationError()
         await viewModel.loadMore(viewID: viewID)
 
-        let state = viewModel.viewStates[viewID]!
+        let state = try #require(viewModel.viewStates[viewID])
         #expect(state.error == nil)
     }
 
@@ -599,10 +599,10 @@ struct DashboardViewModelExtendedTests {
     // MARK: - refresh CancellationError handling
 
     @Test("refresh ignores CancellationError")
-    func refreshIgnoresCancellationError() async {
+    func refreshIgnoresCancellationError() async throws {
         mockClient.errorToThrow = CancellationError()
 
-        let (viewModel, viewID) = makeViewModel(suiteName: "CancelRefresh")
+        let (viewModel, viewID) = makeViewModel(suiteName: "CancelRefresh2")
         await viewModel.refresh(viewID: viewID)
 
         let state = viewModel.viewStates[viewID]!
@@ -769,7 +769,7 @@ struct DashboardViewModelExtendedTests {
     // MARK: - hideReviewed with dismissed reviews
 
     @Test("hideReviewed keeps PRs with CHANGES_REQUESTED review from viewer")
-    func hideReviewedChangesRequested() async {
+    func hideReviewedChangesRequested() async throws {
         let defaults = UserDefaults(suiteName: "HideReviewedCR")!
         defaults.removePersistentDomain(forName: "HideReviewedCR")
         let store = ViewsStore(defaults: defaults)
@@ -785,12 +785,12 @@ struct DashboardViewModelExtendedTests {
         mockClient.pullRequestsToReturn = [changesRequestedPR]
         await viewModel.refresh(viewID: testView.id)
 
-        let titles = viewModel.viewStates[testView.id]!.pullRequests.map(\.title)
+        let titles = try #require(viewModel.viewStates[testView.id]).pullRequests.map(\.title)
         #expect(!titles.contains("Changes Requested"))
     }
 
     @Test("hideReviewed keeps PRs with COMMENTED review from viewer")
-    func hideReviewedCommented() async {
+    func hideReviewedCommented() async throws {
         let defaults = UserDefaults(suiteName: "HideReviewedComment")!
         defaults.removePersistentDomain(forName: "HideReviewedComment")
         let store = ViewsStore(defaults: defaults)
@@ -806,14 +806,14 @@ struct DashboardViewModelExtendedTests {
         mockClient.pullRequestsToReturn = [commentedPR]
         await viewModel.refresh(viewID: testView.id)
 
-        let titles = viewModel.viewStates[testView.id]!.pullRequests.map(\.title)
+        let titles = try #require(viewModel.viewStates[testView.id]).pullRequests.map(\.title)
         #expect(!titles.contains("Commented"))
     }
 
     // MARK: - hideReviewed disabled doesn't filter
 
     @Test("refresh does not filter when hideReviewed is false")
-    func refreshNoFilterWhenHideReviewedOff() async {
+    func refreshNoFilterWhenHideReviewedOff() async throws {
         let defaults = UserDefaults(suiteName: "NoFilterOff")!
         defaults.removePersistentDomain(forName: "NoFilterOff")
         let store = ViewsStore(defaults: defaults)
@@ -829,7 +829,7 @@ struct DashboardViewModelExtendedTests {
         mockClient.pullRequestsToReturn = [approvedPR]
         await viewModel.refresh(viewID: testView.id)
 
-        let titles = viewModel.viewStates[testView.id]!.pullRequests.map(\.title)
+        let titles = try #require(viewModel.viewStates[testView.id]).pullRequests.map(\.title)
         #expect(titles.contains("Approved"))
     }
 
@@ -920,7 +920,7 @@ struct DashboardViewModelExtendedTests {
     // MARK: - checkAndNotify does not notify when notifications disabled
 
     @Test("checkAndNotify skips when notifications disabled for view")
-    func checkAndNotifySkipsWhenDisabled() async {
+    func checkAndNotifySkipsWhenDisabled() async throws {
         let defaults = UserDefaults(suiteName: "NotifyDisabled")!
         defaults.removePersistentDomain(forName: "NotifyDisabled")
         let store = ViewsStore(defaults: defaults)
@@ -940,7 +940,7 @@ struct DashboardViewModelExtendedTests {
         mockClient.pullRequestsToReturn = [pr, pr2]
         await viewModel.refresh(viewID: testView.id)
 
-        #expect(viewModel.viewStates[testView.id]!.pullRequests.count == 2)
+        #expect(try #require(viewModel.viewStates[testView.id]).pullRequests.count == 2)
     }
 
     // MARK: - refresh with view that was added externally via store
@@ -968,7 +968,7 @@ struct DashboardViewModelExtendedTests {
     // MARK: - Multiple notification: single PR vs multi PR
 
     @Test("checkAndNotify handles single new PR on second load")
-    func notifySingleNewPR() async {
+    func notifySingleNewPR() async throws {
         let defaults = UserDefaults(suiteName: "NotifySingle")!
         defaults.removePersistentDomain(forName: "NotifySingle")
         let store = ViewsStore(defaults: defaults)
@@ -988,11 +988,11 @@ struct DashboardViewModelExtendedTests {
         mockClient.pullRequestsToReturn = [pr1, pr2]
         await viewModel.refresh(viewID: testView.id)
 
-        #expect(viewModel.viewStates[testView.id]!.pullRequests.count == 2)
+        #expect(try #require(viewModel.viewStates[testView.id]).pullRequests.count == 2)
     }
 
     @Test("checkAndNotify handles multiple new PRs on second load")
-    func notifyMultipleNewPRs() async {
+    func notifyMultipleNewPRs() async throws {
         let defaults = UserDefaults(suiteName: "NotifyMultiple")!
         defaults.removePersistentDomain(forName: "NotifyMultiple")
         let store = ViewsStore(defaults: defaults)
@@ -1014,7 +1014,7 @@ struct DashboardViewModelExtendedTests {
         mockClient.pullRequestsToReturn = prs
         await viewModel.refresh(viewID: testView.id)
 
-        #expect(viewModel.viewStates[testView.id]!.pullRequests.count == 6)
+        #expect(try #require(viewModel.viewStates[testView.id]).pullRequests.count == 6)
     }
 
     // MARK: - isVSCodeAvailable / isITermAvailable delegation
