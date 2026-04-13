@@ -23,7 +23,7 @@ struct PRDetailView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if let pr = viewModel.selectedPR {
                         HStack(spacing: 6) {
-                            PullRequestStateIcon(
+                            PullRequestStateIconView(
                                 state: pr.state,
                                 isDraft: pr.isDraft,
                                 size: 14

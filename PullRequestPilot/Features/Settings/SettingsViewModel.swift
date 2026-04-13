@@ -32,7 +32,7 @@ final class SettingsViewModel {
     }
 
     /// Whether a token has been persisted to the Keychain (not just typed in the field).
-    /// Used by ContentView to decide whether to show settings or the dashboard.
+    /// Used by RootContentView to decide whether to show settings or the dashboard.
     private(set) var hasSavedToken: Bool = false
 
     init(keychain: KeychainService, gitHubClient: GitHubClientProtocol, tokenCache: TokenCache, gitDirectoriesStore: GitDirectoriesStore, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard) {

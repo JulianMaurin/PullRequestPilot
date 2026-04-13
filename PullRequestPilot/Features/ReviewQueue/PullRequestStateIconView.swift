@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-struct PullRequestStateIcon: View {
+struct PullRequestStateIconView: View {
     let state: PullRequestState
     let isDraft: Bool
     let size: CGFloat

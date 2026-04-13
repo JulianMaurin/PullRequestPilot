@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct PullRequestRow<RowMenu: View>: View {
+struct PullRequestRowView<RowMenu: View>: View {
     let pullRequest: PullRequest
     var stackSize: Int = 0
     var now: Date = .now
@@ -152,7 +152,7 @@ struct PullRequestRow<RowMenu: View>: View {
     }
 
     private var statusIndicator: some View {
-        PullRequestStateIcon(
+        PullRequestStateIconView(
             state: pullRequest.state,
             isDraft: pullRequest.isDraft,
             size: 10

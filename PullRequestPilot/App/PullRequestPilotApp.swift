@@ -16,7 +16,7 @@ struct PullRequestPilotApp: App {
     var body: some Scene {
         Window("Pull Request Pilot", id: "main") {
             if let appState {
-                ContentView(
+                RootContentView(
                     dashboardViewModel: appState.dashboardViewModel,
                     prDetailViewModel: appState.prDetailViewModel,
                     settingsViewModel: appState.settingsViewModel

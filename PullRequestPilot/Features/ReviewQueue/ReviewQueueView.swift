@@ -616,7 +616,7 @@ struct ReviewQueueView: View {
                 }
                 .frame(width: 24)
             }
-            PullRequestRow(pullRequest: pr, stackSize: stackSize, now: now, onToggleStack: onToggleStack, onFilterBy: appendFilter) {
+            PullRequestRowView(pullRequest: pr, stackSize: stackSize, now: now, onToggleStack: onToggleStack, onFilterBy: appendFilter) {
                 Button("Open in Browser") {
                     viewModel.openInBrowser(pr)
                 }

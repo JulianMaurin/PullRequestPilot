@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Content View
 
-struct ContentView: View {
+struct RootContentView: View {
     let dashboardViewModel: DashboardViewModel
     let prDetailViewModel: PRDetailViewModel
     let settingsViewModel: SettingsViewModel
