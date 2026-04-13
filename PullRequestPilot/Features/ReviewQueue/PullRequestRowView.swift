@@ -59,7 +59,8 @@ struct PullRequestRowView<RowMenu: View>: View {
 
         if pullRequest.labels.count == 1, let label = pullRequest.labels.first {
             Button {
-                let value = label.name.contains(" ") ? "\"\(label.name)\"" : label.name
+                let escaped = label.name.replacingOccurrences(of: "\"", with: "\\\"")
+                let value = label.name.contains(" ") ? "\"\(escaped)\"" : escaped
                 onFilterBy("label:\(value)")
             } label: {
                 SwiftUI.Label(
@@ -71,7 +72,8 @@ struct PullRequestRowView<RowMenu: View>: View {
             Menu {
                 ForEach(Array(pullRequest.labels.prefix(10)), id: \.name) { label in
                     Button {
-                        let value = label.name.contains(" ") ? "\"\(label.name)\"" : label.name
+                        let escaped = label.name.replacingOccurrences(of: "\"", with: "\\\"")
+                let value = label.name.contains(" ") ? "\"\(escaped)\"" : escaped
                         onFilterBy("label:\(value)")
                     } label: {
                         SwiftUI.Label(
