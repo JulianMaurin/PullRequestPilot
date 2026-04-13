@@ -1,5 +1,8 @@
 import Foundation
 
+/// Thread-safe mock URL protocol for tests.
+/// Tests using this protocol must run with `.serialized` trait to prevent
+/// concurrent access to the shared `requestHandler`.
 final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
 

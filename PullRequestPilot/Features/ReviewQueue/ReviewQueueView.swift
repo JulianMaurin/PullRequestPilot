@@ -509,7 +509,7 @@ struct ReviewQueueView: View {
                     systemImage: "line.3.horizontal.decrease.circle"
                 )
             }
-            .disabled(viewModel.views.first(where: { $0.id == viewModel.selectedViewID })?.query.contains("org:\(orgGroup.org)") ?? true)
+            .disabled(viewModel.queryContainsFilter(qualifier: "org:\(orgGroup.org)"))
         }
 
         if !isOrgCollapsed {
@@ -563,7 +563,7 @@ struct ReviewQueueView: View {
                     systemImage: "line.3.horizontal.decrease.circle"
                 )
             }
-            .disabled(viewModel.views.first(where: { $0.id == viewModel.selectedViewID })?.query.contains("repo:\(org)/\(repoGroup.repo)") ?? true)
+            .disabled(viewModel.queryContainsFilter(qualifier: "repo:\(org)/\(repoGroup.repo)"))
         }
 
         if !isRepoCollapsed {

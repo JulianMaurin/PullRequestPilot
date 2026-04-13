@@ -233,8 +233,11 @@ struct SettingsViewModelTests {
     func rescanTriggersScan() async {
         let (vm, _, _, _, _) = makeViewModel(suiteName: "Rescan")
         vm.rescan()
-        // Give the async Task inside triggerRescan a chance to start
-        try? await Task.sleep(for: .milliseconds(100))
+        // Wait for the async Task inside triggerRescan to complete (poll with deadline)
+        let deadline = ContinuousClock.now + .seconds(2)
+        while localRepoService.isScanning, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
         // No crash, scan was triggered
     }
 

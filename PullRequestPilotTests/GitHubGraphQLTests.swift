@@ -47,6 +47,17 @@ struct GitHubGraphQLTests {
         }
     }
 
+    // The GitHub search uses `type: ISSUE` which returns both Issues and PRs.
+    // Non-PR nodes are silently skipped by SearchResult's custom decoder.
+    // This is intentional: the app can be used to track issues too — do NOT
+    // auto-prepend `is:pr` to user queries.
+    @Test("searchQuery preserves user query verbatim — does not inject is:pr")
+    func searchQueryDoesNotInjectIsPR() {
+        let query = GitHubGraphQL.searchQuery(query: "is:open author:@me")
+        #expect(query.contains("is:open author:@me"))
+        #expect(!query.contains("is:pr"))
+    }
+
     // MARK: - Timeline Query
 
     @Test("timelineQuery includes nodeID")

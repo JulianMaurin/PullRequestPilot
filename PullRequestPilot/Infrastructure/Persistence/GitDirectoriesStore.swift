@@ -1,16 +1,11 @@
 import Foundation
 import os
 
-final class GitDirectoriesStore: @unchecked Sendable {
+@MainActor
+final class GitDirectoriesStore {
     private static let key = "git_directory_bookmarks"
     private static let legacyKey = "git_directories"
-    private var _lastPrunedStaleCount = 0
-    private let lock = NSLock()
-    var lastPrunedStaleCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return _lastPrunedStaleCount
-    }
+    private(set) var lastPrunedStaleCount = 0
     private let defaults: UserDefaults
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot",
@@ -38,9 +33,7 @@ final class GitDirectoriesStore: @unchecked Sendable {
         }
         // Prune stale or unresolvable bookmarks
         let prunedCount = bookmarksData.count - validBookmarks.count
-        lock.lock()
-        _lastPrunedStaleCount = prunedCount
-        lock.unlock()
+        lastPrunedStaleCount = prunedCount
         if prunedCount > 0 {
             defaults.set(validBookmarks, forKey: Self.key)
         }

@@ -6,7 +6,7 @@ import Testing
 
 // MARK: - Avatar Cache Tests
 
-@Suite("AvatarCache")
+@Suite("AvatarCache", .serialized)
 @MainActor
 struct AvatarCacheTests {
 

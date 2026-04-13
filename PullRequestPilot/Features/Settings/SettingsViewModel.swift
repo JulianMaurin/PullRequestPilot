@@ -173,7 +173,7 @@ final class SettingsViewModel {
         ("30 minutes", 1800),
     ]
 
-    private func restartRepoScan() {
+    func restartRepoScan() {
         localRepositoryService.stopPeriodicRefresh()
         let store = gitDirectoriesStore
         localRepositoryService.startPeriodicRefresh(

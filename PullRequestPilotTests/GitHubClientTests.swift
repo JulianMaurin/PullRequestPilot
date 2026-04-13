@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import PullRequestPilot
 
-@Suite("GitHubClient")
+@Suite("GitHubClient", .serialized)
 struct GitHubClientTests {
 
     private func makeSession() -> URLSession {

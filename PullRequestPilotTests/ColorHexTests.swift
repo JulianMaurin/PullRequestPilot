@@ -1,3 +1,4 @@
+import AppKit
 import Testing
 import SwiftUI
 @testable import PullRequestPilot
@@ -5,55 +6,84 @@ import SwiftUI
 @Suite("Color(hex:)")
 struct ColorHexTests {
 
+    /// Resolves a SwiftUI Color to its sRGB components for assertion.
+    private func sRGBComponents(_ color: Color) -> (r: Double, g: Double, b: Double)? {
+        guard let nsColor = NSColor(color).usingColorSpace(.sRGB) else { return nil }
+        return (Double(nsColor.redComponent), Double(nsColor.greenComponent), Double(nsColor.blueComponent))
+    }
+
     @Test("parses valid 6-character hex without hash")
-    func validHexNoHash() {
+    func validHexNoHash() throws {
         let color = Color(hex: "FF0000")
-        // Should not crash and should produce a valid color
-        #expect(color.description.isEmpty == false)
+        let c = try #require(sRGBComponents(color))
+        #expect(abs(c.r - 1.0) < 0.01)
+        #expect(abs(c.g - 0.0) < 0.01)
+        #expect(abs(c.b - 0.0) < 0.01)
     }
 
     @Test("parses valid 6-character hex with hash")
-    func validHexWithHash() {
+    func validHexWithHash() throws {
         let color = Color(hex: "#00FF00")
-        #expect(color.description.isEmpty == false)
+        let c = try #require(sRGBComponents(color))
+        #expect(abs(c.r - 0.0) < 0.01)
+        #expect(abs(c.g - 1.0) < 0.01)
+        #expect(abs(c.b - 0.0) < 0.01)
     }
 
     @Test("returns gray for invalid hex length")
-    func invalidLength() {
-        // Short hex string should fall back to gray
+    func invalidLength() throws {
         let color = Color(hex: "FFF")
-        #expect(color.description.isEmpty == false)
+        let c = try #require(sRGBComponents(color))
+        // Falls back to gray (0.5, 0.5, 0.5)
+        #expect(abs(c.r - 0.5) < 0.01)
+        #expect(abs(c.g - 0.5) < 0.01)
+        #expect(abs(c.b - 0.5) < 0.01)
     }
 
     @Test("returns gray for empty string")
-    func emptyString() {
+    func emptyString() throws {
         let color = Color(hex: "")
-        #expect(color.description.isEmpty == false)
+        let c = try #require(sRGBComponents(color))
+        #expect(abs(c.r - 0.5) < 0.01)
+        #expect(abs(c.g - 0.5) < 0.01)
+        #expect(abs(c.b - 0.5) < 0.01)
     }
 
     @Test("parses black correctly")
-    func blackHex() {
+    func blackHex() throws {
         let color = Color(hex: "000000")
-        #expect(color.description.isEmpty == false)
+        let c = try #require(sRGBComponents(color))
+        #expect(abs(c.r - 0.0) < 0.01)
+        #expect(abs(c.g - 0.0) < 0.01)
+        #expect(abs(c.b - 0.0) < 0.01)
     }
 
     @Test("parses white correctly")
-    func whiteHex() {
+    func whiteHex() throws {
         let color = Color(hex: "FFFFFF")
-        #expect(color.description.isEmpty == false)
+        let c = try #require(sRGBComponents(color))
+        #expect(abs(c.r - 1.0) < 0.01)
+        #expect(abs(c.g - 1.0) < 0.01)
+        #expect(abs(c.b - 1.0) < 0.01)
     }
 
     @Test("handles lowercase hex")
-    func lowercaseHex() {
+    func lowercaseHex() throws {
         let color = Color(hex: "abcdef")
-        #expect(color.description.isEmpty == false)
+        let c = try #require(sRGBComponents(color))
+        #expect(abs(c.r - 0xAB / 255.0) < 0.01)
+        #expect(abs(c.g - 0xCD / 255.0) < 0.01)
+        #expect(abs(c.b - 0xEF / 255.0) < 0.01)
     }
 
     @Test("strips hash prefix before parsing")
-    func hashStripping() {
-        // Both should produce the same color
+    func hashStripping() throws {
         let withHash = Color(hex: "#FF0000")
         let withoutHash = Color(hex: "FF0000")
-        #expect(withHash.description == withoutHash.description)
+        let c1 = try #require(sRGBComponents(withHash))
+        let c2 = try #require(sRGBComponents(withoutHash))
+        #expect(abs(c1.r - c2.r) < 0.001)
+        #expect(abs(c1.g - c2.g) < 0.001)
+        #expect(abs(c1.b - c2.b) < 0.001)
     }
 }

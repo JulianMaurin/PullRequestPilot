@@ -1,0 +1,138 @@
+import AppKit
+import Foundation
+import os
+import UserNotifications
+
+@MainActor
+@Observable
+final class NotificationService {
+
+    // MARK: - Properties
+
+    private(set) var enabledViewIDs: Set<String> = []
+    private(set) var systemAuthorized: Bool = false
+
+    private let defaults: UserDefaults
+    private let logger: Logger
+
+    // MARK: - Init
+
+    init(defaults: UserDefaults) {
+        self.defaults = defaults
+        self.logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Notifications")
+        self.enabledViewIDs = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.notifiedViewIDs) ?? [])
+    }
+
+    // MARK: - Public
+
+    func isEnabled(for viewID: UUID) -> Bool {
+        enabledViewIDs.contains(viewID.uuidString)
+    }
+
+    func setEnabled(for viewID: UUID, enabled: Bool) {
+        if enabled {
+            enabledViewIDs.insert(viewID.uuidString)
+        } else {
+            enabledViewIDs.remove(viewID.uuidString)
+        }
+        persistEnabledViewIDs()
+    }
+
+    func refreshAuthorization() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        systemAuthorized = settings.authorizationStatus == .authorized
+        if !systemAuthorized {
+            enabledViewIDs = []
+            persistEnabledViewIDs()
+        }
+    }
+
+    func ensurePermission(for viewID: UUID) async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+
+        switch settings.authorizationStatus {
+        case .notDetermined:
+            let granted = await requestPermission()
+            systemAuthorized = granted
+            if !granted {
+                setEnabled(for: viewID, enabled: false)
+            }
+        case .denied:
+            systemAuthorized = false
+            setEnabled(for: viewID, enabled: false)
+        case .authorized, .provisional, .ephemeral:
+            systemAuthorized = true
+        @unknown default:
+            break
+        }
+    }
+
+    func requestPermissionAndOpenSettings() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        if settings.authorizationStatus == .notDetermined {
+            let granted = await requestPermission()
+            systemAuthorized = granted
+        }
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    func deliver(viewTitle: String, viewID: UUID, addedPRs: [PullRequest]) async {
+        // Skip delivering notifications during unit tests
+        guard NSClassFromString("XCTestCase") == nil else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = viewTitle
+        content.sound = .default
+
+        if addedPRs.count == 1, let pr = addedPRs.first {
+            content.subtitle = pr.repository.nameWithOwner
+            content.body = "#\(pr.number) \(pr.title)"
+        } else {
+            let lines = addedPRs.prefix(4).map { "\($0.repository.nameWithOwner) #\($0.number) \($0.title)" }
+            let remaining = addedPRs.count - lines.count
+            let body = remaining > 0
+                ? lines.joined(separator: "\n") + "\n+\(remaining) more"
+                : lines.joined(separator: "\n")
+            content.body = body
+        }
+
+        let request = UNNotificationRequest(
+            identifier: "new-prs-\(viewID.uuidString)-\(Date.now.timeIntervalSince1970)",
+            content: content,
+            trigger: nil
+        )
+
+        do {
+            try await UNUserNotificationCenter.current().add(request)
+        } catch {
+            logger.error("Failed to deliver notification: \(error, privacy: .public)")
+        }
+    }
+
+    func removeView(id: UUID) {
+        enabledViewIDs.remove(id.uuidString)
+        persistEnabledViewIDs()
+    }
+
+    func reset() {
+        enabledViewIDs = []
+        persistEnabledViewIDs()
+    }
+
+    // MARK: - Private
+
+    private func requestPermission() async -> Bool {
+        do {
+            return try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+        } catch {
+            logger.error("Notification permission error: \(error, privacy: .public)")
+            return false
+        }
+    }
+
+    private func persistEnabledViewIDs() {
+        defaults.set(Array(enabledViewIDs), forKey: Constants.UserDefaultsKeys.notifiedViewIDs)
+    }
+}

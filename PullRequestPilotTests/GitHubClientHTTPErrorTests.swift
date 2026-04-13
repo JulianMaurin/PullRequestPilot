@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import PullRequestPilot
 
-@Suite("GitHubClient HTTP Error Handling")
+@Suite("GitHubClient HTTP Error Handling", .serialized)
 struct GitHubClientHTTPErrorTests {
 
     private func makeSession() -> URLSession {

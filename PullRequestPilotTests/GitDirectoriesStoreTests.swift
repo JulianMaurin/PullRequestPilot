@@ -3,6 +3,7 @@ import Foundation
 @testable import PullRequestPilot
 
 @Suite("GitDirectoriesStore")
+@MainActor
 struct GitDirectoriesStoreTests {
 
     private func makeStore(suiteName: String) -> (GitDirectoriesStore, UserDefaults) {

@@ -313,16 +313,18 @@ extension CheckRunCommitsConnection {
         let allNodes = rollup.contexts.nodes
 
         // Process CheckRun first (richer data), then StatusContext for any not already seen
-        let checkRunNodes = allNodes.enumerated().filter { $0.element.__typename == "CheckRun" }
-        let statusContextNodes = allNodes.enumerated().filter { $0.element.__typename == "StatusContext" }
+        let checkRunNodes = allNodes.filter { $0.__typename == "CheckRun" }
+        let statusContextNodes = allNodes.filter { $0.__typename == "StatusContext" }
 
         // Collect all entries per name, keeping the best one (success > in-progress > other > cancelled/stale)
         var bestByName: [String: CheckRun] = [:]
         var nameOrder: [String] = []
+        var nextIndex = pageOffset
 
-        for (index, node) in checkRunNodes {
+        for node in checkRunNodes {
             guard let name = node.name else { continue }
-            let globalIndex = pageOffset + index
+            let globalIndex = nextIndex
+            nextIndex += 1
             let status = node.status.flatMap { CheckRunStatus(rawValue: $0) } ?? .queued
             let conclusion = node.conclusion.flatMap { CheckRunConclusion(rawValue: $0) }
             let url = node.detailsUrl.flatMap { URL(string: $0) }
@@ -339,9 +341,10 @@ extension CheckRunCommitsConnection {
             }
         }
 
-        for (index, node) in statusContextNodes {
+        for node in statusContextNodes {
             guard let context = node.context, bestByName[context] == nil else { continue }
-            let globalIndex = pageOffset + index
+            let globalIndex = nextIndex
+            nextIndex += 1
             let conclusion: CheckRunConclusion? = node.state.flatMap {
                 switch $0 {
                 case "SUCCESS": return .success

@@ -279,8 +279,11 @@ struct DashboardViewModelExtendedTests {
         mockClient.pullRequestsToReturn = []
         viewModel.toggleHideReviewed(for: viewID)
 
-        // Give the Task inside toggleHideReviewed a chance to run
-        try? await Task.sleep(for: .milliseconds(100))
+        // Wait for the internal Task to complete (poll with deadline)
+        let deadline = ContinuousClock.now + .seconds(2)
+        while viewModel.viewStates[viewID]?.isLoading == true, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
 
         #expect(viewModel.views.first(where: { $0.id == viewID })?.hideReviewed == !initialValue)
 

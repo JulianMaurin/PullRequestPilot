@@ -174,9 +174,7 @@ extension Date {
         let dateStr = dayDifference > 1 ? Self.dateFormatter.string(from: self) : nil
         Self.timestampLock.unlock()
 
-        if dayDifference < 0 {
-            return "today at \(time)"
-        } else if dayDifference == 0 {
+        if dayDifference <= 0 {
             return "today at \(time)"
         } else if dayDifference == 1 {
             return "yesterday at \(time)"

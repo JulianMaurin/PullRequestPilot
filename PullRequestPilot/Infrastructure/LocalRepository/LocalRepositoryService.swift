@@ -73,7 +73,7 @@ final class LocalRepositoryService {
         logger.info("Scan complete: indexed \(entries.count, privacy: .public) repo(s)")
     }
 
-    func startPeriodicRefresh(directories: @escaping @Sendable () -> [URL], interval: TimeInterval = 120) {
+    func startPeriodicRefresh(directories: @MainActor @escaping @Sendable () -> [URL], interval: TimeInterval = 120) {
         stopPeriodicRefresh()
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {

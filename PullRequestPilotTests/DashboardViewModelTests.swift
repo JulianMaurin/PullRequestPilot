@@ -363,7 +363,7 @@ struct DashboardViewModelTests {
         viewModel.setBadge(for: view1.id, enabled: true)
 
         viewModel.clearAllData()
-        #expect(viewModel.badgeViewIDs.isEmpty)
+        #expect(viewModel.badgeTracker.enabledViewIDs.isEmpty)
         #expect(viewModel.badgeCount == 0)
     }
 
