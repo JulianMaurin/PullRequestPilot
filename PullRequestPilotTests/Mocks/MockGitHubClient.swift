@@ -24,7 +24,7 @@ final class MockGitHubClient: GitHubClientProtocol, @unchecked Sendable {
         receivedQueries.append(query)
         receivedCursors.append(cursor)
         if let error = errorToThrow { throw error }
-        return PullRequestPage(pullRequests: pullRequestsToReturn, nextCursor: nextCursorToReturn)
+        return PullRequestPage(pullRequests: pullRequestsToReturn, nextCursor: nextCursorToReturn, skippedNodeCount: 0)
     }
 
     var checkRunsToReturn: [CheckRun] = []

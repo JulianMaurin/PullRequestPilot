@@ -28,6 +28,7 @@ struct SearchData: Decodable {
 struct SearchResult: Decodable {
     let nodes: [PullRequestNode]
     let pageInfo: PageInfo
+    let skippedNodeCount: Int
 
     /// Custom decoding: the `type: ISSUE` search can return non-PR nodes that
     /// lack `... on PullRequest` fields. Decode each node individually and
@@ -38,19 +39,21 @@ struct SearchResult: Decodable {
 
         var nodesContainer = try container.nestedUnkeyedContainer(forKey: .nodes)
         var decoded: [PullRequestNode] = []
+        var skipped = 0
         while !nodesContainer.isAtEnd {
             if let node = try? nodesContainer.decode(PullRequestNode.self) {
                 decoded.append(node)
             } else {
                 // Advance past the undecodable node
-                let skipped = try? nodesContainer.decode(SkippedNode.self)
-                if skipped?.id != nil {
-                    // Node had an 'id' field — likely a PullRequest that failed to decode
+                let skippedNode = try? nodesContainer.decode(SkippedNode.self)
+                if skippedNode?.id != nil {
+                    skipped += 1
                     searchResultLogger.warning("Skipped node that had an id (possible PR decode failure)")
                 }
             }
         }
         nodes = decoded
+        skippedNodeCount = skipped
     }
 
     private enum CodingKeys: String, CodingKey {

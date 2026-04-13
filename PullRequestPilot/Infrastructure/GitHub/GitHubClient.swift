@@ -6,6 +6,7 @@ import os
 struct PullRequestPage: Sendable {
     let pullRequests: [PullRequest]
     let nextCursor: String?
+    let skippedNodeCount: Int
 }
 
 struct TimelinePage: Sendable {
@@ -98,11 +99,15 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         }
 
         let prs = data.search.nodes.compactMap { $0.toDomain() }
+        let skipped = data.search.skippedNodeCount
+        if skipped > 0 {
+            logger.warning("Skipped \(skipped, privacy: .public) node(s) that failed to decode as pull requests")
+        }
         logger.info("Page returned \(data.search.nodes.count, privacy: .public) node(s), mapped \(prs.count, privacy: .public) PR(s)")
 
         let rawCursor = data.search.pageInfo.hasNextPage ? data.search.pageInfo.endCursor : nil
         let nextCursor = rawCursor?.isEmpty == false ? rawCursor : nil
-        return PullRequestPage(pullRequests: prs, nextCursor: nextCursor)
+        return PullRequestPage(pullRequests: prs, nextCursor: nextCursor, skippedNodeCount: skipped)
     }
 
     func fetchTimeline(nodeID: String, cursor: String? = nil, eventPageOffset: Int = 0, checksPageOffset: Int = 0) async throws -> TimelinePage {
