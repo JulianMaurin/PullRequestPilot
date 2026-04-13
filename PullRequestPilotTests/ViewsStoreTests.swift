@@ -53,4 +53,38 @@ struct ViewsStoreTests {
         #expect(loaded.count == 1)
         #expect(loaded.first?.title == "Second")
     }
+
+    @Test("load returns defaults and sets loadError when data is corrupted")
+    func loadCorruptedData() {
+        let suiteName = "ViewsStoreCorrupted"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let store = ViewsStore(defaults: defaults)
+
+        // Write invalid JSON data
+        defaults.set(Data("not valid json".utf8), forKey: "dashboard_views")
+
+        let views = store.load()
+        #expect(views.isEmpty)
+        #expect(store.loadError != nil)
+    }
+
+    @Test("loadError is cleared on successful load")
+    func loadErrorClearedOnSuccess() {
+        let suiteName = "ViewsStoreErrorClear"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let store = ViewsStore(defaults: defaults)
+
+        // First corrupt, then fix
+        defaults.set(Data("bad".utf8), forKey: "dashboard_views")
+        _ = store.load()
+        #expect(store.loadError != nil)
+
+        // Save valid data, then reload
+        store.save([DashboardView(id: UUID(), title: "Valid", query: "q")])
+        let views = store.load()
+        #expect(views.count == 1)
+        #expect(store.loadError == nil)
+    }
 }
