@@ -1030,4 +1030,5 @@ struct DashboardViewModelExtendedTests {
         let (viewModel, _) = makeViewModel(suiteName: "ITermAvail")
         #expect(viewModel.isITermAvailable == localRepoService.isITermAvailable)
     }
+
 }
