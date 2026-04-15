@@ -810,6 +810,35 @@ struct DashboardViewModelExtendedTests {
         #expect(!titles.contains("Commented"))
     }
 
+    @Test("hideReviewed retries viewer login after cancellation error")
+    func hideReviewedRetriesAfterCancellation() async throws {
+        let defaults = UserDefaults(suiteName: "HideReviewedRetry")!
+        defaults.removePersistentDomain(forName: "HideReviewedRetry")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let testView = DashboardView(id: UUID(), title: "Review", query: "is:pr", hideReviewed: true)
+        viewModel.addView(testView)
+
+        let approvedPR = TestPullRequestFactory.make(
+            id: "PR_A", number: 1, title: "Approved",
+            latestReviews: [UserReview(login: "testuser", state: .approved)]
+        )
+        mockClient.pullRequestsToReturn = [approvedPR]
+
+        // First refresh: fetchViewer throws CancellationError — PR should NOT be filtered
+        mockClient.fetchViewerError = CancellationError()
+        await viewModel.refresh(viewID: testView.id)
+        var titles = try #require(viewModel.viewStates[testView.id]).pullRequests.map(\.title)
+        #expect(titles.contains("Approved"))
+
+        // Second refresh: fetchViewer succeeds — PR should be filtered out
+        mockClient.fetchViewerError = nil
+        mockClient.viewerLoginToReturn = "testuser"
+        await viewModel.refresh(viewID: testView.id)
+        titles = try #require(viewModel.viewStates[testView.id]).pullRequests.map(\.title)
+        #expect(!titles.contains("Approved"))
+    }
+
     // MARK: - hideReviewed disabled doesn't filter
 
     @Test("refresh does not filter when hideReviewed is false")

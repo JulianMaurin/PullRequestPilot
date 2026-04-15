@@ -30,7 +30,10 @@ final class DashboardViewModel: DashboardActionsProtocol {
     private(set) var views: [DashboardView]
     private(set) var viewStates: [UUID: ViewState] = [:]
     var selectedViewID: UUID? {
-        didSet { persistSelectedViewID() }
+        didSet {
+            persistSelectedViewID()
+            markBadgeAsSeenForSelectedView()
+        }
     }
     var showingSettings = false
     var collapsedOrgs: Set<String> {
@@ -117,6 +120,13 @@ final class DashboardViewModel: DashboardActionsProtocol {
 
     func markBadgeAsSeen() {
         badgeTracker.markAsSeen()
+    }
+
+    func markBadgeAsSeenForSelectedView() {
+        guard let viewID = selectedViewID else { return }
+        let prIDs = Set((viewStates[viewID]?.pullRequests ?? []).map(\.id))
+        guard !prIDs.isEmpty else { return }
+        badgeTracker.markAsSeen(prIDs: prIDs)
     }
 
     var systemNotificationsAuthorized: Bool { notificationService.systemAuthorized }
@@ -524,6 +534,8 @@ final class DashboardViewModel: DashboardActionsProtocol {
             do {
                 let viewer = try await gitHubClient.fetchViewer()
                 viewerLogin = viewer.login
+            } catch is CancellationError {
+                logger.info("Viewer login fetch cancelled — will retry on next refresh")
             } catch {
                 viewerLoginFetchFailed = true
                 logger.warning("Failed to fetch viewer login: \(error, privacy: .public)")
@@ -535,13 +547,22 @@ final class DashboardViewModel: DashboardActionsProtocol {
     }
 
     private func filterReviewedPRs(_ prs: [PullRequest], for view: DashboardView) -> [PullRequest] {
-        guard view.hideReviewed, let login = viewerLogin else { return prs }
-        return prs.filter { pr in
+        guard view.hideReviewed else { return prs }
+        guard let login = viewerLogin else {
+            logger.warning("hideReviewed enabled but viewerLogin is nil — skipping filter")
+            return prs
+        }
+        let filtered = prs.filter { pr in
             guard let viewerReview = pr.latestReviews.first(where: { $0.login == login }) else {
                 return true
             }
             return viewerReview.state == .dismissed
         }
+        let removedCount = prs.count - filtered.count
+        if removedCount > 0 {
+            logger.info("Filtered out \(removedCount, privacy: .public) reviewed PR(s) for '\(view.title, privacy: .public)'")
+        }
+        return filtered
     }
 
     private func checkAndNotify(viewID: UUID, newPRs: [PullRequest]) async {
