@@ -31,9 +31,14 @@ open PullRequestPilot.xcodeproj
 
 **After creating or deleting any Swift file**, you MUST run `xcodegen generate` before building — otherwise the Xcode project won't include the new files and builds will fail with "cannot find type" errors.
 
-**Stale Xcode errors**: If Xcode shows errors that don't reproduce on the command line (especially from `@Observable` macro-generated sources), clear DerivedData: `rm -rf ~/Library/Developer/Xcode/DerivedData/PullRequestPilot-*`
+### When the build seems wrong
 
-**Stale test binaries**: `make test` builds and runs tests from DerivedData, not `.build/`. If you see crash dialogs ("Pull Request Pilot quit unexpectedly") during tests that don't match current source, clear DerivedData before re-running: `rm -rf ~/Library/Developer/Xcode/DerivedData/PullRequestPilot-*`
+**Trust `make build`, not Xcode's in-editor errors.** SourceKit shows phantom errors with `@Observable`, cross-target types (`Shared/`), and after XcodeGen regenerations. Don't refactor to "fix" something only Xcode flags.
+
+**DerivedData reset** — use when CLI errors persist, `make test` crashes with stale binaries, or Xcode shows unreachable errors:
+```bash
+rm -rf ~/Library/Developer/Xcode/DerivedData/PullRequestPilot-*
+```
 
 ## Architecture
 
@@ -60,6 +65,7 @@ Shared/               — Cross-cutting constants
 - **`@Observable`** (Observation framework) for state — not `ObservableObject`/`@Published`.
 - **`async/await`** exclusively — no completion handlers, no Combine for new code.
 - **`Task` groups** for concurrent operations (e.g., refreshing multiple views).
+- **Classes that spawn `Task`s must implement `deinit`** and cancel them. Classes that observe `NotificationCenter` must remove observers. Bug history: `DashboardViewModel` leaked an observer and stranded refresh tasks; auto-refresh kept firing after the view was gone.
 
 ### Naming
 
@@ -77,11 +83,38 @@ Shared/               — Cross-cutting constants
 - Mark classes `final` unless designed for inheritance.
 - Group file contents: properties → init → public methods → private methods → extensions.
 
+### Prefer declarative SwiftUI over AppKit observers
+
+When adding menu items, window chrome, or lifecycle reactions, try SwiftUI scene modifiers **before** reaching for `NSWindowWillUpdateNotification`, KVO, or `NSApp.mainMenu` mutations.
+
+Observed pattern: building an `NSWindowWillUpdateNotification` observer to fix an empty Window menu, then the fix turning out to be a one-line `.navigationTitle("PR Views")`. If your first instinct is an observer, re-check the declarative API surface.
+
+Applies to: window title, dock menu, command menus, status bar item appearance, menu bar extras.
+
 ### Error Handling
 
 - Define error types as enums conforming to `LocalizedError` with user-facing `errorDescription`.
-- Surface errors in UI — never silently swallow. Never force-unwrap or `try!` in production code.
+- Surface errors in UI — never silently swallow.
 - Use `do/catch` with typed errors at the call site.
+
+#### Silent failures are forbidden
+
+The recurring bug pattern in this codebase is `try?` + empty return, which destroys user data. Rules:
+
+- **No `try?` without a log** on any `load`, `decode`, or `migrate` path. If decode fails, surface an error to the user. Losing saved views, directories, or widget data without telling the user is an App Review risk and a trust breaker.
+- **No bare `catch {}` or `catch { return [] }`.** If you can't recover, rethrow; if you must swallow, log with `os.Logger` at `.error` and emit a user-visible toast.
+- **HTTP error codes must be classified before JSON decoding.** 403/429/5xx should short-circuit into typed errors, not fall through to "invalid response" when the body isn't JSON.
+
+#### Force-unwraps forbidden
+
+`!`, `try!`, `fatalError()`, `preconditionFailure()` are instant crashes — including `preconditionFailure` in lazily-invoked closures (e.g., URL constants).
+
+This has shipped one production crash: `Dictionary(uniqueKeysWithValues:)` on PR `headRefName` blew up when two PRs shared a branch name (force-push, forks, reopened PRs). Users on v1.2.1 saw the app die on launch.
+
+- **No `!` in production** — use `guard let`/`if let` and surface an error.
+- **No `Dictionary(uniqueKeysWithValues:)` on API data** — use `Dictionary(_, uniquingKeysWith:)` or `reduce(into:)`.
+- **No `!` in tests either** — use `try #require(...)`. A crash in a test hides what failed.
+- **`Date` math must handle clock skew** — future-dated timestamps (server drift, timezone bugs) have crashed real data paths.
 
 ### Testing
 
@@ -90,8 +123,10 @@ Shared/               — Cross-cutting constants
 - Test files mirror source structure in `PullRequestPilotTests/`.
 - Mock files go in `PullRequestPilotTests/Mocks/`.
 - Use isolated `UserDefaults(suiteName:)` in tests — never touch real user defaults.
-- **Empty stores in tests**: `ViewsStore` with fresh `UserDefaults` returns `[]` (`defaultViews` is empty). Tests must call `viewModel.addView(...)` before accessing `views.first` — never force-unwrap on data that depends on test setup.
+- **Empty stores in tests**: `ViewsStore` with fresh `UserDefaults` returns `[]` (`defaultViews` is empty). Tests must call `viewModel.addView(...)` before accessing `views.first`. Use `try #require(...)` for unwrapping, never `!`.
 - Test both success and error paths. Test edge cases (empty state, invalid input).
+- **No `Task.sleep` as synchronization in tests.** Use `waitForLoad()`-style helpers that check for the target state. Sleep-based waits are flaky under Swift Testing's parallel runner.
+- **`MockGitHubClient` must be actor-backed, not `@unchecked Sendable`.** Mock state is read/written concurrently by parallel tests; shared mutable state without isolation produces intermittent failures.
 
 ## Key Technical Decisions
 
@@ -101,10 +136,37 @@ Shared/               — Cross-cutting constants
 - **No external dependencies** — everything uses Apple frameworks (URLSession, SwiftUI, Security). Keep it this way unless there's a compelling reason.
 - **XcodeGen** for project generation — avoids `.xcodeproj` merge conflicts.
 
+### GraphQL pagination safety
+
+- **Every `repeat ... while nextCursor != nil` loop needs `let maxPages = 20`.** Unbounded paging has shipped twice as an infinite loop.
+- **Event IDs reset per page** — GitHub's timeline returns indices that are page-local. If you synthesize an ID from the index, include the cursor to avoid collisions in SwiftUI `ForEach`. The canonical bug: page-2 timeline events silently vanished because `ForEach(id:)` deduped against page-1 IDs.
+- **Empty-string cursor is not the same as nil.** Filter `""` out before looping.
+- **Stale cursors across query edits** — if the user edits the search query, reset the cursor. Reusing the previous query's cursor returns nonsense.
+- **Check runs must dedupe by `(name, workflowRunID)` keeping the latest attempt.** Deduping by `name` alone hides failed re-runs.
+
 ## Concurrency Pitfalls
 
-- **`URLError.cancelled`** must be caught and rethrown as `CancellationError` in the network layer — otherwise it surfaces as a user-visible error when tasks are cancelled during normal operation (e.g., auto-refresh restart).
-- **Auto-refresh**: `startAutoRefresh()` should be idempotent (no-op if already running) — calling `stopAutoRefresh()` first cancels in-flight network requests.
+Every pitfall below has shipped in this codebase at least once. The fix is always the same: treat concurrency as a boundary problem, not a local one.
+
+### Cancellation
+- **`URLError.cancelled` must be caught and rethrown as `CancellationError` in the network layer** — otherwise it surfaces as a user-visible error during normal operation (auto-refresh restart, view switch).
+- **Generic `catch` in an async function must rethrow `CancellationError`** — do not treat it as a permanent failure. Bug: `fetchViewerLoginIfNeeded` flipped `viewerLoginFetchFailed = true` on cancellation, permanently disabling the hide-reviewed filter.
+- **`try? await Task.sleep` silently swallows cancellation** — prefer `try await Task.sleep` so the outer task exits promptly.
+
+### State that crosses tasks
+- **`@unchecked Sendable` is almost always wrong.** If you need it, add an `NSLock` (or better, an actor). Bugs: `ViewsStore`, `GitDirectoriesStore`, `DateFormatter` statics all had real data races.
+- **Static formatters are shared state.** `ISO8601DateFormatter` / `DateFormatter` as file-level `let` is not thread-safe. Wrap in a lock or make them per-thread.
+- **TOCTOU on caches.** Any `get-then-invalidate` pair (e.g., `TokenCache`) must serialize through a generation counter or actor. Bug: keychain read on one task revived a token another task had just invalidated.
+
+### Auto-refresh / idempotency
+- **`startAutoRefresh()` must be idempotent** — no-op if already running. Cancel in-flight work via `stopAutoRefresh()` first.
+- **Concurrent `refreshAll` calls must dedupe.** Coalesce on a `Task` handle; a second caller joins the first.
+- **No tight loops when idle.** If the work set is empty, sleep a long interval; do not spin every 5s.
+
+### Observation / SwiftUI
+- **`@Observable` does not track computed properties backed by external storage** (e.g., `UserDefaults`). Mirror into a stored property and update on external change.
+- **`Task { await ... }` inside a `Binding.set` causes first-click snap-back.** Use `.task(id:)` or move the mutation off the binding.
+- **`disabled(...)` changing mid-frame can swallow the concurrent state change.** Don't bind `disabled` to values you also mutate in the same tick.
 
 ## File Guidelines
 
@@ -113,6 +175,20 @@ Shared/               — Cross-cutting constants
 - New external service integrations go in `Infrastructure/<ServiceName>/`.
 - DTOs (API response models) stay in Infrastructure — domain models must not know about wire formats.
 - Keep views stateless — all logic and state belong in ViewModels.
+
+### `UserDefaults.standard` is banned outside AppState
+
+Classes that accept an injected `UserDefaults` must use the injected value. Reading `UserDefaults.standard` anywhere in `Features/` or `Infrastructure/` bypasses DI, breaks tests, and loses the app-group container in widget contexts.
+
+Bug history: auto-refresh toggle and AppState launched with hardcoded `.standard`; a widget reading the wrong suite would see zero data.
+
+Lint enforcement is planned — see `todo/dev-tooling/13-swiftlint-custom-rule-ledger.md`. Until then, this rule is enforced by review.
+
+### Security-scoped bookmarks
+
+Every `url.startAccessingSecurityScopedResource()` must be paired with `url.stopAccessingSecurityScopedResource()` in the same scope. Missing stops leak access counts and eventually break sandbox reads.
+
+A `LocalRepositoryService.withAccess(_:)` RAII helper is planned (see `product-roadmap/ux-improvements/10-stale-resource-recovery-ux.md`). Until it lands, pair every `startAccessing` with a `defer { stopAccessing }` in the same function.
 
 ## App Store Compliance
 
@@ -134,6 +210,7 @@ This app is distributed via the Mac App Store. **Every line of code must be sand
 - **Privacy compliance** — if adding any new data collection, add matching `NSPrivacyCollectedDataTypes` in the privacy manifest. The app currently collects no user data beyond the GitHub token.
 - **Privacy manifest required** — any new framework or SDK that Apple lists as requiring a privacy manifest must include one. Check Apple's list before adopting any dependency.
 - **No misleading metadata** — bundle display name, category, and descriptions must accurately reflect app functionality.
+- **Forbidden terms in subtitle** (App Store rejected twice on this): `macOS`, `Mac`, `iOS`, `iPhone`, `iPad`, `GitHub`, `Apple`, or any other trademarked brand. Audit by hand until `make metadata-lint` lands (planned: `todo/dev-tooling/15-build-and-xcodegen-tooling.md`).
 - **Crash-free** — App Review tests basic flows. Any crash during review is an automatic rejection. Test all flows with real and invalid tokens, network failures, and empty states.
 - **Graceful degradation** — the app must remain usable (show meaningful UI) when: network is unavailable, token is invalid/expired, GitHub API returns errors, rate limits are hit.
 - **No deprecated API usage** — do not use APIs deprecated in macOS 14+. Use the modern replacement immediately.
@@ -182,6 +259,26 @@ Before any PR that touches production code:
 5. No new entitlements added without justification.
 6. No `Process()`, shell commands, or file access outside sandbox.
 
+## Audit & Fix Workflow
+
+Whole-codebase audits use a structured workflow, not an ad-hoc "ultrathink" prompt:
+
+1. Dispatch parallel sub-agents across layers (Domain, Features, Infrastructure, Tests, App Store compliance, Concurrency, Performance).
+2. Collect findings into a TodoWrite-backed ledger — no finding silently dropped.
+3. Execute fixes directly; don't propose/approve.
+4. Split the diff into one commit per bug category (see Commits below).
+
+Planned formal skill: `todo/dev-tooling/14-audit-and-fix-skill.md`.
+
+## Commits
+
+After a batch of fixes, split into one commit per user-visible category so the next changelog writes itself.
+
+- Good: `Fix <bug>`, `Add <feature>`, `Refactor <subsystem>`, `Update <dependency>`.
+- Bad: `Apply review feedback`, `Bugfixes`, `Misc`.
+
+Use `git add -p` to stage by category. Planned `/reshape-commits` helper: `todo/dev-tooling/15-build-and-xcodegen-tooling.md`.
+
 ## Quality Standards
 
 - All new code must compile with zero warnings under strict concurrency.
@@ -189,4 +286,4 @@ Before any PR that touches production code:
 - All errors must be user-visible with actionable messages.
 - No `// TODO`, `// FIXME`, or `// HACK` in committed code — fix it or file an issue.
 - No dead code, unused imports, or commented-out code.
-- No force-unwraps (`!`), `try!`, or `fatalError()` in production code paths — these are instant crashes and App Store rejections.
+- No force-unwraps (`!`, `try!`, `fatalError`) in production — see Code Conventions → Error Handling → Force-unwraps forbidden.
