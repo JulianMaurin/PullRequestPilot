@@ -147,6 +147,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             window.makeKeyAndOrderFront(nil)
         }
         NSApplication.shared.activate()
-        dashboardViewModel?.markBadgeAsSeen()
+        dashboardViewModel?.markBadgeAsSeenForSelectedView()
     }
 }

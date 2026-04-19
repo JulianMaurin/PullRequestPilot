@@ -124,6 +124,29 @@ struct BadgeTrackerTests {
         #expect(callbackValues == [1, 0])
     }
 
+    @Test("markAsSeen(prIDs:) only clears specified IDs")
+    func markAsSeenPartial() {
+        let tracker = makeTracker(suiteName: "BadgeMarkSeenPartial")
+        tracker.trackUnseen(Set(["PR_1", "PR_2", "PR_3"]))
+        #expect(tracker.count == 3)
+
+        tracker.markAsSeen(prIDs: Set(["PR_1", "PR_3"]))
+        #expect(tracker.count == 1)
+        #expect(tracker.unseenPRIDs == Set(["PR_2"]))
+    }
+
+    @Test("markAsSeen(prIDs:) is a no-op when none match")
+    func markAsSeenNoMatch() {
+        let tracker = makeTracker(suiteName: "BadgeMarkSeenNoMatch")
+        var callbackCount = 0
+        tracker.trackUnseen(Set(["PR_1"]))
+        tracker.onCountChanged = { _ in callbackCount += 1 }
+
+        tracker.markAsSeen(prIDs: Set(["PR_99"]))
+        #expect(tracker.count == 1)
+        #expect(callbackCount == 0)
+    }
+
     @Test("enabledViewIDs persists across instances")
     func persistence() {
         let suiteName = "BadgePersist"

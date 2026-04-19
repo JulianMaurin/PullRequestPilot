@@ -463,6 +463,83 @@ struct DashboardViewModelTests {
 
     // MARK: - View Navigation
 
+    @Test("markBadgeAsSeenForSelectedView clears only the selected view's unseen PRs")
+    func markBadgeAsSeenForSelectedView() async {
+        let pr1 = makePullRequest(number: 1, title: "PR 1")
+        let pr2 = makePullRequest(number: 2, title: "PR 2")
+        let pr3 = makePullRequest(number: 3, title: "PR 3")
+
+        let defaults = UserDefaults(suiteName: "BadgeSeenPerView")!
+        defaults.removePersistentDomain(forName: "BadgeSeenPerView")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        let view2 = DashboardView(id: UUID(), title: "View 2", query: "is:pr")
+        viewModel.addView(view1)
+        viewModel.addView(view2)
+        viewModel.setBadge(for: view1.id, enabled: true)
+        viewModel.setBadge(for: view2.id, enabled: true)
+
+        // Baseline refresh for both views
+        mockClient.pullRequestsToReturn = [pr1]
+        await viewModel.refresh(viewID: view1.id)
+        mockClient.pullRequestsToReturn = [pr2]
+        await viewModel.refresh(viewID: view2.id)
+        #expect(viewModel.badgeCount == 0)
+
+        // Add new PRs to both views
+        mockClient.pullRequestsToReturn = [pr1, pr3]
+        await viewModel.refresh(viewID: view1.id)
+        mockClient.pullRequestsToReturn = [pr2, pr3]
+        await viewModel.refresh(viewID: view2.id)
+        #expect(viewModel.badgeCount == 1) // PR_3 added to both, tracked once
+
+        // Select view1 — should clear PR_3 since it's visible there
+        viewModel.selectedViewID = view1.id
+        #expect(viewModel.badgeCount == 0)
+    }
+
+    @Test("switching views clears badge for the newly selected view only")
+    func switchingViewsClearsBadgePerView() async {
+        let pr1 = makePullRequest(number: 1, title: "PR 1")
+        let pr2 = makePullRequest(number: 2, title: "PR 2")
+        let pr3 = makePullRequest(number: 3, title: "PR 3")
+        let pr4 = makePullRequest(number: 4, title: "PR 4")
+
+        let defaults = UserDefaults(suiteName: "BadgeSwitchView")!
+        defaults.removePersistentDomain(forName: "BadgeSwitchView")
+        let store = ViewsStore(defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
+        let view2 = DashboardView(id: UUID(), title: "View 2", query: "is:pr")
+        viewModel.addView(view1)
+        viewModel.addView(view2)
+        viewModel.setBadge(for: view1.id, enabled: true)
+        viewModel.setBadge(for: view2.id, enabled: true)
+
+        // Baseline
+        mockClient.pullRequestsToReturn = [pr1]
+        await viewModel.refresh(viewID: view1.id)
+        mockClient.pullRequestsToReturn = [pr2]
+        await viewModel.refresh(viewID: view2.id)
+
+        // New unique PRs in each view
+        mockClient.pullRequestsToReturn = [pr1, pr3]
+        await viewModel.refresh(viewID: view1.id)
+        mockClient.pullRequestsToReturn = [pr2, pr4]
+        await viewModel.refresh(viewID: view2.id)
+        #expect(viewModel.badgeCount == 2)
+
+        // Visit view1 — clears PR_3 but not PR_4
+        viewModel.selectedViewID = view1.id
+        #expect(viewModel.badgeCount == 1)
+        #expect(viewModel.badgeTracker.unseenPRIDs == Set(["PR_4"]))
+
+        // Visit view2 — clears PR_4
+        viewModel.selectedViewID = view2.id
+        #expect(viewModel.badgeCount == 0)
+    }
+
     @Test("selectNextView cycles to next view")
     func selectNextView() {
         let defaults = UserDefaults(suiteName: "SelectNextView")!

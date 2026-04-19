@@ -54,6 +54,13 @@ final class BadgeTracker {
         notifyCount()
     }
 
+    func markAsSeen(prIDs: Set<String>) {
+        let removed = unseenPRIDs.intersection(prIDs)
+        guard !removed.isEmpty else { return }
+        unseenPRIDs.subtract(removed)
+        notifyCount()
+    }
+
     /// Computes the set of newly added PR IDs for a view by comparing
     /// against the previous snapshot. Returns empty on the first call
     /// (initial load baseline).
