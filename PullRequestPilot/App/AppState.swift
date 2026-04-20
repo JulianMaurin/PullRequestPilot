@@ -10,6 +10,7 @@ final class AppState {
     let identity: IdentityActor
     let gitDirectoriesStore: GitDirectoriesStore
     let localRepositoryService: LocalRepositoryService
+    let events: EventCenter
 
     let dashboardViewModel: DashboardViewModel
     let prDetailViewModel: PRDetailViewModel
@@ -17,6 +18,8 @@ final class AppState {
 
     init(defaults: UserDefaults = .standard) {
         let keychain = KeychainService()
+        let events = EventCenter()
+        let reporter = events.reporter()
 
         // Two-phase init: GitHubClient needs an identity-backed token provider,
         // but IdentityActor needs a GitHubClient for validation. Resolve by
@@ -32,9 +35,13 @@ final class AppState {
         )
         let identity = IdentityActor(keychain: keychain, github: gitHubClient)
         identityHolder.set(identity)
-        let viewsStore = ViewsStore(defaults: defaults)
-        let gitDirectoriesStore = GitDirectoriesStore()
+        let viewsStore = ViewsStore(defaults: defaults, reporter: reporter)
+        let gitDirectoriesStore = GitDirectoriesStore(defaults: defaults, reporter: reporter)
         let localRepositoryService = LocalRepositoryService()
+
+        // Widget save path reports errors through the same center so the user
+        // sees a toast rather than a silent log line.
+        WidgetData.setErrorReporter { message in reporter.postError(.widgetSaveFailed(underlying: message)) }
 
         self.keychain = keychain
         self.identity = identity
@@ -42,13 +49,15 @@ final class AppState {
         self.viewsStore = viewsStore
         self.gitDirectoriesStore = gitDirectoriesStore
         self.localRepositoryService = localRepositoryService
-        self.prDetailViewModel = PRDetailViewModel(gitHubClient: gitHubClient)
+        self.events = events
+        self.prDetailViewModel = PRDetailViewModel(gitHubClient: gitHubClient, reporter: reporter)
         self.dashboardViewModel = DashboardViewModel(
             gitHubClient: gitHubClient,
             identity: identity,
             viewsStore: viewsStore,
             localRepositoryService: localRepositoryService,
-            defaults: defaults
+            defaults: defaults,
+            reporter: reporter
         )
         // Synchronously read the stored token once at startup so the initial UI
         // can show "signed in" without awaiting the actor. Writes always go
@@ -60,6 +69,7 @@ final class AppState {
             gitDirectoriesStore: gitDirectoriesStore,
             localRepositoryService: localRepositoryService,
             defaults: defaults,
+            reporter: reporter,
             initialToken: initialToken
         )
 

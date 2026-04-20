@@ -7,13 +7,15 @@ final class GitDirectoriesStore {
     private static let legacyKey = "git_directories"
     private(set) var lastPrunedStaleCount = 0
     private let defaults: UserDefaults
+    private let reporter: EventReporter
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot",
         category: "GitDirectoriesStore"
     )
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, reporter: EventReporter = .noop) {
         self.defaults = defaults
+        self.reporter = reporter
         migrateLegacyPathsIfNeeded()
     }
 
@@ -36,6 +38,7 @@ final class GitDirectoriesStore {
         lastPrunedStaleCount = prunedCount
         if prunedCount > 0 {
             defaults.set(validBookmarks, forKey: Self.key)
+            reporter.postError(.bookmarkPruned(count: prunedCount))
         }
         return urls
     }

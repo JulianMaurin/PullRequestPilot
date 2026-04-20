@@ -21,6 +21,7 @@ final class SettingsViewModel {
     private let gitDirectoriesStore: GitDirectoriesStore
     private let localRepositoryService: LocalRepositoryService
     private let defaults: UserDefaults
+    private let reporter: EventReporter
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Settings")
 
     enum ValidationState: Equatable {
@@ -34,12 +35,13 @@ final class SettingsViewModel {
     /// Used by RootContentView to decide whether to show settings or the dashboard.
     private(set) var hasSavedToken: Bool = false
 
-    init(identity: IdentityActor, gitHubClient: GitHubClientProtocol, gitDirectoriesStore: GitDirectoriesStore, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard, initialToken: String? = nil) {
+    init(identity: IdentityActor, gitHubClient: GitHubClientProtocol, gitDirectoriesStore: GitDirectoriesStore, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard, reporter: EventReporter = .noop, initialToken: String? = nil) {
         self.identity = identity
         self.gitHubClient = gitHubClient
         self.gitDirectoriesStore = gitDirectoriesStore
         self.localRepositoryService = localRepositoryService
         self.defaults = defaults
+        self.reporter = reporter
         self.token = initialToken ?? ""
         self.hasSavedToken = (initialToken?.isEmpty == false)
         self.gitDirectories = gitDirectoriesStore.load()
@@ -75,7 +77,12 @@ final class SettingsViewModel {
             let login = try await identity.swap(to: trimmedToken)
             viewerLogin = login
             // Pull avatar in a follow-up call — swap only returns the login.
-            viewerAvatarURL = (try? await gitHubClient.validateToken(trimmedToken).avatarURL)
+            // Avatar failure is non-fatal; token is already saved.
+            do {
+                viewerAvatarURL = try await gitHubClient.validateToken(trimmedToken).avatarURL
+            } catch {
+                logger.warning("Avatar fetch failed after successful token swap: \(error, privacy: .public)")
+            }
             hasSavedToken = true
             validationState = .valid
             logger.info("Token validated — authenticated as \(login, privacy: .private)")
@@ -88,6 +95,7 @@ final class SettingsViewModel {
             case .saveFailed:
                 saveError = authError.localizedDescription
                 validationState = .idle
+                reporter.postError(.tokenSaveFailed(underlying: authError.localizedDescription))
             case .invalidToken, .network, .unauthorized, .userSignedOut, .unknown:
                 validationState = .invalid(userMessage(for: authError))
             }
@@ -122,6 +130,7 @@ final class SettingsViewModel {
             } catch {
                 logger.error("Failed to update launch at login: \(error, privacy: .public)")
                 launchAtLoginError = "Could not update launch at login setting."
+                reporter.postError(.launchAtLoginFailed(underlying: error.localizedDescription))
             }
         }
     }
@@ -220,6 +229,8 @@ final class SettingsViewModel {
                 return "Token is invalid or expired. Generate a new one at github.com/settings/tokens."
             case .rateLimited:
                 return "GitHub API rate limit exceeded. Wait a few minutes and try again."
+            case .permissionDenied:
+                return "GitHub refused the request. The token may lack the required `repo` scope."
             case .clientError:
                 return "GitHub rejected the request. Check your query or token permissions."
             case .serverError:

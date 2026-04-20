@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct ReviewQueueView: View {
     @Bindable var viewModel: DashboardViewModel
     var prDetailViewModel: PRDetailViewModel
+    var events: EventCenter?
     var onOpenSettings: () -> Void
     @State private var expandedStacks: Set<String> = []
     @State private var isAddingView = false
@@ -20,6 +21,15 @@ struct ReviewQueueView: View {
         VStack(spacing: 0) {
             viewTabs
             queryBar
+            if let events {
+                EventBannerView(events: events) { err in
+                    if case .viewerIdentityUnavailable = err { return true }
+                    if case .bookmarkPruned = err { return true }
+                    return false
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 6)
+            }
             Divider()
             HSplitView {
                 contentArea

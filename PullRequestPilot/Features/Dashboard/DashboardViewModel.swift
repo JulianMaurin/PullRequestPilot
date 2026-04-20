@@ -70,16 +70,18 @@ final class DashboardViewModel: DashboardActionsProtocol {
     private let identity: IdentityActor
     private let localRepositoryService: LocalRepositoryService
     private let defaults: UserDefaults
+    private let reporter: EventReporter
     private let pendingScheduledRefreshes = TaskMap()
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Dashboard")
 
     // MARK: - Init
 
-    init(gitHubClient: GitHubClientProtocol, identity: IdentityActor, viewsStore: any ViewsStoreProtocol, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard) {
+    init(gitHubClient: GitHubClientProtocol, identity: IdentityActor, viewsStore: any ViewsStoreProtocol, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard, reporter: EventReporter = .noop) {
         self.gitHubClient = gitHubClient
         self.identity = identity
         self.localRepositoryService = localRepositoryService
         self.defaults = defaults
+        self.reporter = reporter
         self.collapsedOrgs = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.collapsedOrgs) ?? [])
         self.collapsedRepos = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.collapsedRepos) ?? [])
         self.badgeTracker = BadgeTracker(defaults: defaults)
@@ -87,11 +89,13 @@ final class DashboardViewModel: DashboardActionsProtocol {
         self.viewRegistry = ViewRegistry(viewsStore: viewsStore, defaults: defaults)
 
         let filterIdentity = identity
+        let filterReporter = reporter
         let filterLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Dashboard.Filter")
         let filter: PRFetcher.PRFilter = { prs, view in
             guard view.hideReviewed else { return prs }
             guard let login = await filterIdentity.currentViewerLogin() else {
                 filterLogger.warning("hideReviewed enabled but viewer login unavailable — skipping filter")
+                filterReporter.postError(.viewerIdentityUnavailable)
                 return prs
             }
             let filtered = prs.filter { pr in
@@ -106,7 +110,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
             }
             return filtered
         }
-        self.fetcher = PRFetcher(gitHubClient: gitHubClient, filter: filter)
+        self.fetcher = PRFetcher(gitHubClient: gitHubClient, filter: filter, reporter: reporter)
         self.scheduler = AutoRefreshScheduler(defaults: defaults)
 
         let widgetRegistry = viewRegistry

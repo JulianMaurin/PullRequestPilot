@@ -12,10 +12,12 @@ final class PRDetailViewModel {
     private(set) var isNetworkError = false
 
     private let gitHubClient: GitHubClientProtocol
+    private let reporter: EventReporter
     private var fetchTask: Task<Void, Never>?
 
-    init(gitHubClient: GitHubClientProtocol) {
+    init(gitHubClient: GitHubClientProtocol, reporter: EventReporter = .noop) {
         self.gitHubClient = gitHubClient
+        self.reporter = reporter
     }
 
     func selectPR(_ pr: PullRequest) {
@@ -130,8 +132,25 @@ final class PRDetailViewModel {
                 guard !Task.isCancelled else { return }
                 self.isNetworkError = error.isNetworkError
                 self.error = error.localizedDescription
+                reporter.post(.error(appError(from: error)))
             }
             isLoading = false
         }
     }
+}
+
+// MARK: - Error mapping helper
+
+@MainActor
+func appError(from error: Error) -> AppError {
+    if let clientError = error as? GitHubClientError {
+        return clientError.asAppError
+    }
+    if let appError = error as? AppError {
+        return appError
+    }
+    if let urlError = error as? URLError {
+        return .network(underlying: urlError.localizedDescription)
+    }
+    return .network(underlying: error.localizedDescription)
 }

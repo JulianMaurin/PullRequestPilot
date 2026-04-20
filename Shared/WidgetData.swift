@@ -57,6 +57,19 @@ struct WidgetData: Codable, Sendable {
     static let appGroupIdentifier = "FNR3B372S8.com.pullrequestpilot.shared"
     private static let logger = Logger(subsystem: "PullRequestPilot", category: "WidgetData")
 
+    /// Set by the main app at launch to route save failures into the user-visible
+    /// EventCenter. The widget extension leaves this nil — widgets have no toast
+    /// surface, so load/save failures there are logged only.
+    private static let errorReporterStorage = OSAllocatedUnfairLock<(@Sendable (String) -> Void)?>(initialState: nil)
+
+    static func setErrorReporter(_ reporter: (@Sendable (String) -> Void)?) {
+        errorReporterStorage.withLock { $0 = reporter }
+    }
+
+    private static var errorReporter: (@Sendable (String) -> Void)? {
+        errorReporterStorage.withLock { $0 }
+    }
+
     private static var sharedFileURL: URL? {
         guard let container = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupIdentifier
@@ -88,6 +101,7 @@ struct WidgetData: Codable, Sendable {
             try data.write(to: url, options: .atomic)
         } catch {
             Self.logger.error("Failed to save widget data: \(error, privacy: .public)")
+            Self.errorReporter?(error.localizedDescription)
         }
     }
 }

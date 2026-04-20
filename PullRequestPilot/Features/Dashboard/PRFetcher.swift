@@ -57,6 +57,7 @@ final class PRFetcher {
 
     private let gitHubClient: GitHubClientProtocol
     private let filter: PRFilter
+    private let reporter: EventReporter
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "PRFetcher")
 
     /// Coalesces concurrent `refresh(for:)` calls: a second caller for the
@@ -68,9 +69,10 @@ final class PRFetcher {
 
     // MARK: - Init
 
-    init(gitHubClient: GitHubClientProtocol, filter: @escaping PRFilter) {
+    init(gitHubClient: GitHubClientProtocol, filter: @escaping PRFilter, reporter: EventReporter = .noop) {
         self.gitHubClient = gitHubClient
         self.filter = filter
+        self.reporter = reporter
     }
 
     deinit {
@@ -175,6 +177,7 @@ final class PRFetcher {
             if let clientError = error as? GitHubClientError, case .rateLimited(let retryAfter) = clientError {
                 states[view.id]?.rateLimitRetryAfter = retryAfter
             }
+            reporter.post(.error(appError(from: error)))
         }
 
         states[view.id]?.isLoading = false
@@ -209,6 +212,7 @@ final class PRFetcher {
             if let clientError = error as? GitHubClientError, case .rateLimited(let retryAfter) = clientError {
                 states[view.id]?.rateLimitRetryAfter = retryAfter
             }
+            reporter.post(.error(appError(from: error)))
         }
 
         states[view.id]?.isLoadingMore = false

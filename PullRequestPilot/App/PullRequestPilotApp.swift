@@ -19,7 +19,8 @@ struct PullRequestPilotApp: App {
                 RootContentView(
                     dashboardViewModel: appState.dashboardViewModel,
                     prDetailViewModel: appState.prDetailViewModel,
-                    settingsViewModel: appState.settingsViewModel
+                    settingsViewModel: appState.settingsViewModel,
+                    events: appState.events
                 )
                 .background(WindowAccessor())
                 .onOpenURL { url in

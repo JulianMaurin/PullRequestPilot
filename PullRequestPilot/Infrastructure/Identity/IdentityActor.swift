@@ -103,7 +103,7 @@ actor IdentityActor {
             throw CancellationError()
         } catch let clientError as GitHubClientError {
             switch clientError {
-            case .unauthorized, .clientError, .graphQLErrors:
+            case .unauthorized, .clientError, .graphQLErrors, .permissionDenied:
                 throw AuthError(reason: .invalidToken, underlying: clientError)
             case .rateLimited, .serverError:
                 throw AuthError(reason: .network, underlying: clientError)

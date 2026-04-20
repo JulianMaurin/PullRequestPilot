@@ -37,6 +37,7 @@ protocol GitHubClientProtocol: Sendable {
 enum GitHubClientError: LocalizedError {
     case unauthorized
     case rateLimited(retryAfter: TimeInterval?)
+    case permissionDenied(detail: String?)
     case clientError(statusCode: Int)
     case serverError(statusCode: Int)
     case graphQLErrors([String])
@@ -49,6 +50,12 @@ enum GitHubClientError: LocalizedError {
             "Invalid or missing GitHub token. Check your token in Settings."
         case .rateLimited:
             "GitHub API rate limit exceeded. Wait a few minutes and try again."
+        case .permissionDenied(let detail):
+            if let detail, !detail.isEmpty {
+                "GitHub refused the request: \(detail)."
+            } else {
+                "GitHub refused the request. Check that your token has the required scopes."
+            }
         case .clientError(let statusCode):
             "Request error (HTTP \(statusCode)). Check that your query uses valid GitHub search syntax."
         case .serverError(let statusCode):
@@ -60,6 +67,56 @@ enum GitHubClientError: LocalizedError {
         case .decodingError:
             "Unexpected response from GitHub. Check that your query uses valid GitHub search qualifiers (e.g. \"is:pr is:open review-requested:@me\")."
         }
+    }
+
+    /// Map this typed error to the app-wide `AppError` surface.
+    var asAppError: AppError {
+        switch self {
+        case .unauthorized:
+            return .unauthorized
+        case .rateLimited(let retryAfter):
+            let resetAt = retryAfter.map { Date(timeIntervalSinceNow: $0) }
+            return .rateLimited(resetAt: resetAt)
+        case .permissionDenied(let detail):
+            return .permissionDenied(detail: detail)
+        case .clientError(let code):
+            return .serverError(statusCode: code)
+        case .serverError(let code):
+            return .serverError(statusCode: code)
+        case .graphQLErrors(let messages):
+            return .graphQLErrors(messages)
+        case .networkError(let underlying):
+            return .network(underlying: underlying.localizedDescription)
+        case .decodingError(let underlying):
+            return .decodeResponse(detail: underlying.localizedDescription)
+        }
+    }
+
+    /// True when the underlying cause is offline / connectivity. Used to pick
+    /// a dedicated empty-state UI ("No connection") instead of a generic error.
+    var isNetworkFailure: Bool {
+        switch self {
+        case .networkError: return true
+        default: return false
+        }
+    }
+}
+
+// MARK: - Error helpers
+
+extension Error {
+    /// Generic network-failure detector for any `Error` — handles typed client
+    /// errors and raw `URLError` codes alike. Replaces the old
+    /// `ErrorNetworkCheck` extension that lived alongside the classifier.
+    var isNetworkError: Bool {
+        if let clientError = self as? GitHubClientError { return clientError.isNetworkFailure }
+        if let appError = self as? AppError { return appError.isNetworkFailure }
+        if let urlError = self as? URLError,
+           [.notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost,
+            .cannotConnectToHost, .dnsLookupFailed].contains(urlError.code) {
+            return true
+        }
+        return false
     }
 }
 
@@ -224,7 +281,14 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             case 401:
                 onUnauthorized(token)
                 throw GitHubClientError.unauthorized
-            case 403, 429:
+            case 403:
+                // Only treat 403 as rate-limit when the rate-limit headers say so.
+                // A bare 403 with no rate headers is a permission/scope error.
+                if Self.isRateLimited(response: httpResponse) {
+                    throw GitHubClientError.rateLimited(retryAfter: Self.parseRetryAfter(from: httpResponse))
+                }
+                throw GitHubClientError.permissionDenied(detail: Self.extractErrorMessage(from: data))
+            case 429:
                 throw GitHubClientError.rateLimited(retryAfter: Self.parseRetryAfter(from: httpResponse))
             case 400...499:
                 throw GitHubClientError.clientError(statusCode: httpResponse.statusCode)
@@ -257,6 +321,21 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
         return formatter
     }()
+
+    static func isRateLimited(response: HTTPURLResponse) -> Bool {
+        if response.value(forHTTPHeaderField: "Retry-After") != nil { return true }
+        if let remaining = response.value(forHTTPHeaderField: "X-RateLimit-Remaining"),
+           let remainingInt = Int(remaining), remainingInt == 0 {
+            return true
+        }
+        return false
+    }
+
+    static func extractErrorMessage(from data: Data) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        if let message = json["message"] as? String, !message.isEmpty { return message }
+        return nil
+    }
 
     static func parseRetryAfter(from response: HTTPURLResponse) -> TimeInterval? {
         if let retryStr = response.value(forHTTPHeaderField: "Retry-After") {

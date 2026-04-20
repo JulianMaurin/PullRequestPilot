@@ -17,15 +17,47 @@ struct GitHubClientHTTPErrorTests {
 
     // MARK: - HTTP 403
 
-    @Test("throws rateLimited on HTTP 403 response")
-    func http403ThrowsRateLimited() async {
+    @Test("HTTP 403 without rate-limit headers throws permissionDenied")
+    func http403WithoutRateHeadersThrowsPermissionDenied() async {
         let client = makeClient()
+        let body = #"{"message":"Resource not accessible by integration"}"#.data(using: .utf8)!
         MockURLProtocol.requestHandler = { request in
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 403,
                 httpVersion: nil,
                 headerFields: nil
+            )!
+            return (response, body)
+        }
+
+        do {
+            _ = try await client.fetchPullRequests(query: "is:pr", cursor: nil)
+            Issue.record("Should have thrown")
+        } catch let error as GitHubClientError {
+            if case .permissionDenied(let detail) = error {
+                #expect(detail?.contains("Resource not accessible") == true)
+            } else {
+                Issue.record("Expected permissionDenied, got \(error)")
+            }
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+    }
+
+    @Test("HTTP 403 with X-RateLimit-Remaining:0 throws rateLimited")
+    func http403WithRateHeadersThrowsRateLimited() async {
+        let client = makeClient()
+        MockURLProtocol.requestHandler = { request in
+            let resetAt = Int(Date.now.timeIntervalSince1970 + 120)
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 403,
+                httpVersion: nil,
+                headerFields: [
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": String(resetAt)
+                ]
             )!
             return (response, Data())
         }
@@ -34,8 +66,8 @@ struct GitHubClientHTTPErrorTests {
             _ = try await client.fetchPullRequests(query: "is:pr", cursor: nil)
             Issue.record("Should have thrown")
         } catch let error as GitHubClientError {
-            if case .rateLimited = error {
-                // expected
+            if case .rateLimited(let retryAfter) = error {
+                #expect((retryAfter ?? 0) > 0)
             } else {
                 Issue.record("Expected rateLimited, got \(error)")
             }

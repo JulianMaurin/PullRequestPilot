@@ -69,6 +69,36 @@ struct ViewsStoreTests {
         #expect(store.loadError != nil)
     }
 
+    @Test("corrupted load writes a backup file and posts a decodeCorruption event")
+    func corruptedLoadBacksUpAndPosts() async throws {
+        let suiteName = "ViewsStoreCorruptionBackup"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let center = EventCenter()
+        let store = ViewsStore(defaults: defaults, reporter: center.reporter())
+
+        defaults.set(Data("{garbage".utf8), forKey: "dashboard_views")
+
+        let views = store.load()
+        #expect(views.isEmpty)
+
+        // Reporter hops through Task { @MainActor } — yield until the post lands.
+        for _ in 0..<20 where center.events.isEmpty {
+            await Task.yield()
+        }
+
+        guard case .error(let error) = center.events.first?.payload,
+              case .decodeCorruption(let subsystem, let backupPath) = error
+        else {
+            Issue.record("Expected decodeCorruption event, got \(String(describing: center.events.first))")
+            return
+        }
+        #expect(subsystem == "dashboard views")
+        let path = try #require(backupPath)
+        #expect(FileManager.default.fileExists(atPath: path))
+        try? FileManager.default.removeItem(atPath: path)
+    }
+
     @Test("loadError is cleared on successful load")
     func loadErrorClearedOnSuccess() {
         let suiteName = "ViewsStoreErrorClear"
