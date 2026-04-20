@@ -1,0 +1,8 @@
+# Test-tree overrides.
+#
+# force_unwrapping is disabled here because tests intentionally use `!` on
+# UserDefaults(suiteName:) and similar fixtures — cleaning those up is a
+# separate sweep, not this rule's job. `force_try` stays on because
+# CLAUDE.md bans `try!` anywhere.
+disabled_rules:
+  - force_unwrapping

@@ -12,7 +12,7 @@ XCODEBUILD_BASE := xcodebuild -scheme $(SCHEME) -project $(PROJECT) \
 	-destination 'platform=macOS'
 XCODEBUILD := $(XCODEBUILD_BASE) -configuration $(CONFIG)
 
-.PHONY: all generate build install uninstall clean test run debug reinstall nuke
+.PHONY: all generate lint lint-errors-only build install uninstall clean test run debug reinstall nuke
 
 all: build
 
@@ -20,8 +20,19 @@ all: build
 generate:
 	xcodegen generate
 
+# Lint — fails on any rule defined in .swiftlint.yml
+# Requires: brew install swiftlint
+lint:
+	@command -v swiftlint >/dev/null || { echo "swiftlint not installed — run: brew install swiftlint"; exit 1; }
+	swiftlint lint --strict --quiet
+
+# Lint but suppress warnings (developer iteration loop)
+lint-errors-only:
+	@command -v swiftlint >/dev/null || { echo "swiftlint not installed — run: brew install swiftlint"; exit 1; }
+	swiftlint lint --quiet
+
 # Build release
-build: generate
+build: generate lint
 	$(XCODEBUILD) build SYMROOT=$(BUILD_DIR)
 
 # Install to /Applications
@@ -52,7 +63,7 @@ run: build
 	@open "$(BUILD_DIR)/$(CONFIG)/$(BUNDLE_NAME)"
 
 # Run tests
-test: generate
+test: generate lint
 	$(XCODEBUILD_BASE) -configuration Debug test
 
 # Clean build artifacts

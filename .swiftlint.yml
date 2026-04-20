@@ -1,0 +1,165 @@
+# SwiftLint configuration for Pull Request Pilot.
+#
+# Rationale: see commit message history for todo/dev-tooling/13-swiftlint-custom-rule-ledger.md
+# (the ledger that produced this file). Every rule here exists to freeze a bug
+# class that has already shipped once — not to enforce style.
+
+included:
+  - PullRequestPilot
+  - PullRequestPilotTests
+  - PullRequestPilotWidget
+  - Shared
+
+excluded:
+  - .build
+  - PullRequestPilot.xcodeproj
+  - GitHubDashboard.xcodeproj
+  - PullRequestPilot/Resources
+
+# Only enable the rules we explicitly want. Built-in style rules (line length,
+# identifier naming, etc.) are not this file's job — the custom rule ledger is.
+disabled_rules:
+  - trailing_whitespace
+  - trailing_newline
+  - line_length
+  - file_length
+  - type_body_length
+  - function_body_length
+  - function_parameter_count
+  - type_name
+  - identifier_name
+  - cyclomatic_complexity
+  - large_tuple
+  - nesting
+  - todo
+  - unused_closure_parameter
+  - opening_brace
+  - comma
+  - trailing_comma
+  - colon
+  - multiple_closures_with_trailing_closure
+  - redundant_string_enum_value
+  - non_optional_string_data_conversion
+  - blanket_disable_command
+  - for_where
+  - static_over_final_class
+  - void_function_in_ternary
+  - shorthand_operator
+  - unneeded_break_in_switch
+  - inclusive_language
+  - legacy_hashing
+  - syntactic_sugar
+
+opt_in_rules:
+  - force_unwrapping          # `foo!` — use guard/if let or try #require.
+  - force_try                 # `try!` — use do/try/catch.
+
+# force_cast is enabled by default.
+
+custom_rules:
+
+  # -------------------------------------------------------------------------
+  # Crash-safety rules (shipped bugs → error)
+  # -------------------------------------------------------------------------
+
+  fatal_error_forbidden:
+    included:
+      - "PullRequestPilot/.*\\.swift"
+      - "PullRequestPilotWidget/.*\\.swift"
+      - "Shared/.*\\.swift"
+    name: "fatalError() forbidden in production"
+    regex: '\bfatalError\s*\('
+    message: "No fatalError() in production. Throw a typed error or surface via EventCenter."
+    severity: error
+
+  precondition_failure_forbidden:
+    included:
+      - "PullRequestPilot/.*\\.swift"
+      - "PullRequestPilotWidget/.*\\.swift"
+      - "Shared/.*\\.swift"
+    name: "preconditionFailure() forbidden in production"
+    regex: '\bpreconditionFailure\s*\('
+    message: "No preconditionFailure() — it hides crashes in lazy closures (CLAUDE.md)."
+    severity: error
+
+  dictionary_unique_keys_api_data:
+    name: "Dictionary(uniqueKeysWithValues:) crashes on duplicates"
+    regex: 'Dictionary\(uniqueKeysWithValues:'
+    message: "Shipped crash: duplicate keys trap. Use Dictionary(_, uniquingKeysWith:) or reduce(into:)."
+    severity: error
+
+  # -------------------------------------------------------------------------
+  # Concurrency rules
+  # -------------------------------------------------------------------------
+
+  unchecked_sendable_production:
+    included:
+      - "PullRequestPilot/.*\\.swift"
+      - "PullRequestPilotWidget/.*\\.swift"
+      - "Shared/.*\\.swift"
+    name: "@unchecked Sendable forbidden in production"
+    regex: '@unchecked\s+Sendable'
+    message: "No @unchecked Sendable. Use actor, @MainActor, or a lock-backed Sendable."
+    severity: error
+
+  # -------------------------------------------------------------------------
+  # Error-handling rules
+  # -------------------------------------------------------------------------
+
+  bare_catch_block:
+    included:
+      - "PullRequestPilot/.*\\.swift"
+      - "PullRequestPilotWidget/.*\\.swift"
+      - "Shared/.*\\.swift"
+    name: "Bare catch {} swallows errors"
+    regex: 'catch\s*\{\s*\}'
+    message: "Bare catch swallows CancellationError and decode failures. Log via os.Logger or rethrow."
+    severity: error
+
+  # -------------------------------------------------------------------------
+  # Dependency-injection rules
+  # -------------------------------------------------------------------------
+
+  user_defaults_standard_outside_appstate:
+    included:
+      - "PullRequestPilot/(Features|Infrastructure|Domain)/.*\\.swift"
+      - "PullRequestPilotWidget/.*\\.swift"
+      - "Shared/.*\\.swift"
+    name: "UserDefaults.standard banned outside AppState"
+    regex: 'UserDefaults\.standard'
+    message: "Use the injected UserDefaults — .standard bypasses DI and the app-group suite."
+    severity: error
+
+  # -------------------------------------------------------------------------
+  # Product rules (project-specific semantics)
+  # -------------------------------------------------------------------------
+
+  is_pr_auto_injection:
+    included:
+      - "PullRequestPilot/.*\\.swift"
+      - "PullRequestPilotWidget/.*\\.swift"
+      - "Shared/.*\\.swift"
+    name: "Do not hard-code is:pr"
+    regex: '"is:\s*pr"'
+    message: "Never hard-code is:pr — the app intentionally supports issue queries too."
+    severity: error
+
+  # -------------------------------------------------------------------------
+  # App Store / sandbox rules
+  # -------------------------------------------------------------------------
+
+  subprocess_forbidden:
+    name: "Subprocess spawning forbidden (sandbox)"
+    regex: '\bProcess\s*\(\s*\)|\bNSTask\b|"/bin/sh"|"/usr/bin/env"'
+    message: "App Sandbox forbids subprocess spawning — automatic App Store rejection."
+    severity: error
+
+  hardcoded_sandbox_unsafe_path:
+    included:
+      - "PullRequestPilot/.*\\.swift"
+      - "PullRequestPilotWidget/.*\\.swift"
+      - "Shared/.*\\.swift"
+    name: "Hardcoded sandbox-unsafe path"
+    regex: '"(~/|/tmp/|/usr/local/|/Users/)'
+    message: "Sandbox-unsafe hardcoded path. Use NSOpenPanel or the app group container."
+    severity: error

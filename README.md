@@ -69,6 +69,7 @@ Matching priority: exact branch name > worktree branch > commit SHA.
 
 - Xcode 16+
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) 2.38+
+- [SwiftLint](https://github.com/realm/SwiftLint) 0.63+ (`brew install swiftlint`) — `make build` and `make test` run `make lint` first
 
 ## Getting started
 
@@ -98,13 +99,15 @@ make debug    # Debug build + run (reads token from .env)
 ## Build commands
 
 ```bash
-make build        # Regenerate xcodeproj + Release build
-make debug        # Debug build + run (sources .env)
-make run          # Release build + run
-make install      # Build + copy to /Applications
-make uninstall    # Remove from /Applications
-make test         # Run unit tests (235 tests)
-make clean        # Clean build artifacts
+make build            # Lint + regenerate xcodeproj + Release build
+make debug            # Debug build + run (sources .env)
+make run              # Release build + run
+make install          # Build + copy to /Applications
+make uninstall        # Remove from /Applications
+make test             # Lint + run unit tests (235 tests)
+make lint             # SwiftLint, strict (errors + warnings block)
+make lint-errors-only # SwiftLint, errors only (dev iteration)
+make clean            # Clean build artifacts
 ```
 
 ## Architecture

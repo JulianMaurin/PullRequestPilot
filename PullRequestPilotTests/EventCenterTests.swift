@@ -15,10 +15,10 @@ struct EventCenterTests {
     }
 
     @Test("dismiss removes event from activeEvents but keeps it in history")
-    func dismissKeepsHistory() {
+    func dismissKeepsHistory() throws {
         let center = EventCenter()
         center.post(.info("hello"))
-        let id = try! #require(center.events.first?.id)
+        let id = try #require(center.events.first?.id)
         center.dismiss(id)
         #expect(center.activeEvents.isEmpty)
         #expect(center.history.count == 1)

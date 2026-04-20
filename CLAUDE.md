@@ -9,14 +9,18 @@ A native macOS menu bar/window app for monitoring GitHub pull request review que
 A `Makefile` wraps all build commands. `DEVELOPER_DIR` is set automatically.
 
 ```bash
-make build        # Regenerate xcodeproj + Release build
-make debug        # Debug build + run (sources .env for GITHUB_TOKEN)
-make run          # Release build + run
-make install      # Build + copy to /Applications/Pull Request Pilot.app
-make uninstall    # Remove from /Applications
-make test         # Run unit tests
-make clean        # Clean build artifacts
+make build            # Lint + regenerate xcodeproj + Release build
+make debug            # Debug build + run (sources .env for GITHUB_TOKEN)
+make run              # Release build + run
+make install          # Build + copy to /Applications/Pull Request Pilot.app
+make uninstall        # Remove from /Applications
+make test             # Lint + run unit tests
+make lint             # SwiftLint --strict (blocks on errors and warnings)
+make lint-errors-only # SwiftLint without --strict (dev iteration)
+make clean            # Clean build artifacts
 ```
+
+**SwiftLint is required.** `brew install swiftlint`. Both `make build` and `make test` run `make lint` first — lint failures block the build. Rules live in `.swiftlint.yml` at the repo root; tests use a smaller subset via `PullRequestPilotTests/.swiftlint.yml`.
 
 In debug builds, `IdentityActor.bootstrap()` reads `GITHUB_TOKEN` from the environment (`#if DEBUG`). Create a `.env` file at the project root and `make debug` will source it automatically.
 
@@ -182,7 +186,7 @@ Classes that accept an injected `UserDefaults` must use the injected value. Read
 
 Bug history: auto-refresh toggle and AppState launched with hardcoded `.standard`; a widget reading the wrong suite would see zero data.
 
-Lint enforcement is planned — see `todo/dev-tooling/13-swiftlint-custom-rule-ledger.md`. Until then, this rule is enforced by review.
+Enforced by SwiftLint (`user_defaults_standard_outside_appstate`).
 
 ### Security-scoped bookmarks
 
