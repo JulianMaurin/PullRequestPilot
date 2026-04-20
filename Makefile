@@ -1,3 +1,6 @@
+SHELL        := /bin/bash
+.SHELLFLAGS  := -o pipefail -c
+
 SCHEME       := PullRequestPilot
 PROJECT      := PullRequestPilot.xcodeproj
 APP_NAME     := Pull Request Pilot.app
@@ -12,13 +15,30 @@ XCODEBUILD_BASE := xcodebuild -scheme $(SCHEME) -project $(PROJECT) \
 	-destination 'platform=macOS'
 XCODEBUILD := $(XCODEBUILD_BASE) -configuration $(CONFIG)
 
-.PHONY: all generate lint lint-errors-only build install uninstall clean test run debug reinstall nuke
+XCB_FILTER := scripts/xcb-filter.sh
+
+SWIFT_SOURCES := $(sort $(shell find PullRequestPilot Shared PullRequestPilotTests PullRequestPilotWidget -type f -name '*.swift' 2>/dev/null))
+SWIFT_SOURCES_STAMP := $(BUILD_DIR)/.swift-sources.stamp
+
+.PHONY: all generate lint lint-errors-only build install uninstall clean clean-deep test run debug reinstall nuke metadata-lint release-check FORCE
 
 all: build
 
-# Regenerate Xcode project from project.yml
-generate:
+# Keep a stamp file whose mtime changes only when the .swift file list does —
+# this lets project.pbxproj regenerate on add AND delete.
+$(SWIFT_SOURCES_STAMP): FORCE
+	@mkdir -p $(BUILD_DIR)
+	@printf '%s\n' $(SWIFT_SOURCES) > $@.tmp
+	@if cmp -s $@.tmp $@ 2>/dev/null; then rm -f $@.tmp; else mv $@.tmp $@; fi
+
+FORCE:
+
+$(PROJECT)/project.pbxproj: project.yml $(SWIFT_SOURCES) $(SWIFT_SOURCES_STAMP)
+	@command -v xcodegen >/dev/null || { echo "xcodegen not installed — run: brew install xcodegen"; exit 1; }
 	xcodegen generate
+
+# Phony alias for callers that expect `make generate`
+generate: $(PROJECT)/project.pbxproj
 
 # Lint — fails on any rule defined in .swiftlint.yml
 # Requires: brew install swiftlint
@@ -32,8 +52,8 @@ lint-errors-only:
 	swiftlint lint --quiet
 
 # Build release
-build: generate lint
-	$(XCODEBUILD) build SYMROOT=$(BUILD_DIR)
+build: $(PROJECT)/project.pbxproj lint
+	$(XCODEBUILD) build SYMROOT=$(BUILD_DIR) 2>&1 | $(XCB_FILTER)
 
 # Install to /Applications
 install: build
@@ -49,8 +69,8 @@ uninstall:
 	@echo "Done."
 
 # Build debug and run (reads GITHUB_TOKEN from .env)
-debug: generate
-	$(XCODEBUILD_BASE) -configuration Debug build SYMROOT=$(BUILD_DIR)
+debug: $(PROJECT)/project.pbxproj
+	$(XCODEBUILD_BASE) -configuration Debug build SYMROOT=$(BUILD_DIR) 2>&1 | $(XCB_FILTER)
 	@if [ -f .env ]; then \
 		set -a && . ./.env && set +a && \
 		"$(BUILD_DIR)/Debug/$(BUNDLE_NAME)/Contents/MacOS/PullRequestPilot"; \
@@ -63,13 +83,33 @@ run: build
 	@open "$(BUILD_DIR)/$(CONFIG)/$(BUNDLE_NAME)"
 
 # Run tests
-test: generate lint
-	$(XCODEBUILD_BASE) -configuration Debug test
+test: $(PROJECT)/project.pbxproj lint
+	$(XCODEBUILD_BASE) -configuration Debug test 2>&1 | $(XCB_FILTER)
 
 # Clean build artifacts
 clean:
 	$(XCODEBUILD) clean
 	rm -rf $(BUILD_DIR)
+
+# Deep clean — use when Xcode and reality diverge (stale indexer, ghost errors,
+# widget cache shadows). Nukes DerivedData and Xcode caches, kicks
+# NotificationCenter to flush widget registrations.
+clean-deep: clean
+	@echo "Removing DerivedData..."
+	@rm -rf $(HOME)/Library/Developer/Xcode/DerivedData/PullRequestPilot-*
+	@echo "Removing Xcode caches..."
+	@rm -rf $(HOME)/Library/Caches/com.apple.dt.Xcode
+	@echo "Killing NotificationCenter to flush widget cache..."
+	@killall NotificationCenter 2>/dev/null || true
+	@echo "Deep clean complete."
+
+# App Store metadata lint — forbidden terms, subtitle length, version monotonicity
+metadata-lint:
+	@scripts/metadata-lint.sh
+
+# Pre-submission gate — runs everything and reports a manual checklist at the end
+release-check:
+	@scripts/release-check.sh
 
 # Reinstall — clear widget caches and reinstall the app (preserves token and data)
 reinstall: uninstall

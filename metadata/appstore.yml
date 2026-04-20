@@ -1,0 +1,7 @@
+# Mirror of App Store Connect metadata. Update this when you change
+# subtitle/promotional text in App Store Connect so `make metadata-lint`
+# can catch forbidden brand terms before another submission rejection.
+#
+# Leave subtitle empty to skip the subtitle check.
+
+subtitle: ""

@@ -9,7 +9,7 @@ A native macOS menu bar/window app for monitoring GitHub pull request review que
 A `Makefile` wraps all build commands. `DEVELOPER_DIR` is set automatically.
 
 ```bash
-make build            # Lint + regenerate xcodeproj + Release build
+make build            # Regenerates xcodeproj if stale + lint + Release build (terse output)
 make debug            # Debug build + run (sources .env for GITHUB_TOKEN)
 make run              # Release build + run
 make install          # Build + copy to /Applications/Pull Request Pilot.app
@@ -17,8 +17,13 @@ make uninstall        # Remove from /Applications
 make test             # Lint + run unit tests
 make lint             # SwiftLint --strict (blocks on errors and warnings)
 make lint-errors-only # SwiftLint without --strict (dev iteration)
+make metadata-lint    # App Store subtitle/version/privacy checks
+make release-check    # Pre-submission gate (lint + test + metadata + build + codesign)
 make clean            # Clean build artifacts
+make clean-deep       # Wipes DerivedData + Xcode caches + NotificationCenter (ghost-error reset)
 ```
+
+Build output is piped through `scripts/xcb-filter.sh` (falls back to `xcpretty` if installed), which drops per-file compile/link chatter and keeps errors, warnings, and test results. The `make build` xcodegen step is file-dependency-driven: adding, removing, or modifying any `.swift` file under `PullRequestPilot/`, `Shared/`, `PullRequestPilotTests/`, or `PullRequestPilotWidget/` triggers regeneration on the next build.
 
 **SwiftLint is required.** `brew install swiftlint`. Both `make build` and `make test` run `make lint` first — lint failures block the build. Rules live in `.swiftlint.yml` at the repo root; tests use a smaller subset via `PullRequestPilotTests/.swiftlint.yml`.
 
@@ -39,10 +44,7 @@ open PullRequestPilot.xcodeproj
 
 **Trust `make build`, not Xcode's in-editor errors.** SourceKit shows phantom errors with `@Observable`, cross-target types (`Shared/`), and after XcodeGen regenerations. Don't refactor to "fix" something only Xcode flags.
 
-**DerivedData reset** — use when CLI errors persist, `make test` crashes with stale binaries, or Xcode shows unreachable errors:
-```bash
-rm -rf ~/Library/Developer/Xcode/DerivedData/PullRequestPilot-*
-```
+**When Xcode and reality diverge, run `make clean-deep`.** Wipes DerivedData, Xcode caches, and kicks NotificationCenter (clears widget registrations). Use when CLI errors persist, `make test` crashes with stale binaries, or Xcode shows unreachable errors.
 
 ## Architecture
 
@@ -214,7 +216,7 @@ This app is distributed via the Mac App Store. **Every line of code must be sand
 - **Privacy compliance** — if adding any new data collection, add matching `NSPrivacyCollectedDataTypes` in the privacy manifest. The app currently collects no user data beyond the GitHub token.
 - **Privacy manifest required** — any new framework or SDK that Apple lists as requiring a privacy manifest must include one. Check Apple's list before adopting any dependency.
 - **No misleading metadata** — bundle display name, category, and descriptions must accurately reflect app functionality.
-- **Forbidden terms in subtitle** (App Store rejected twice on this): `macOS`, `Mac`, `iOS`, `iPhone`, `iPad`, `GitHub`, `Apple`, or any other trademarked brand. Audit by hand until `make metadata-lint` lands (planned: `todo/dev-tooling/15-build-and-xcodegen-tooling.md`).
+- **Forbidden terms in subtitle** (App Store rejected twice on this): `macOS`, `Mac`, `iOS`, `iPhone`, `iPad`, `GitHub`, `Apple`, or any other trademarked brand. Mirror the App Store Connect subtitle in `metadata/appstore.yml` and run `make metadata-lint` — it checks forbidden terms, 30-char limit, version monotonicity, and privacy manifests.
 - **Crash-free** — App Review tests basic flows. Any crash during review is an automatic rejection. Test all flows with real and invalid tokens, network failures, and empty states.
 - **Graceful degradation** — the app must remain usable (show meaningful UI) when: network is unavailable, token is invalid/expired, GitHub API returns errors, rate limits are hit.
 - **No deprecated API usage** — do not use APIs deprecated in macOS 14+. Use the modern replacement immediately.

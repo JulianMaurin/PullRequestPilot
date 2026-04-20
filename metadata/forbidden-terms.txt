@@ -1,0 +1,10 @@
+# App Store Connect subtitle/description forbidden brand terms.
+# One term per line. Lines starting with # are comments.
+# Matched case-insensitively against the subtitle.
+macOS
+Mac
+iOS
+iPhone
+iPad
+GitHub
+Apple
