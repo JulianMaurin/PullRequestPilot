@@ -1,7 +1,6 @@
 import AppKit
 import Foundation
 import os
-import WidgetKit
 
 struct ViewState: Sendable {
     var pullRequests: [PullRequest] = []
@@ -25,16 +24,17 @@ struct ViewState: Sendable {
 @Observable
 final class DashboardViewModel: DashboardActionsProtocol {
 
-    // MARK: - Properties
+    // MARK: - Collaborators
 
-    private(set) var views: [DashboardView]
-    private(set) var viewStates: [UUID: ViewState] = [:]
-    var selectedViewID: UUID? {
-        didSet {
-            persistSelectedViewID()
-            markBadgeAsSeenForSelectedView()
-        }
-    }
+    let viewRegistry: ViewRegistry
+    let fetcher: PRFetcher
+    let badgeTracker: BadgeTracker
+    let notificationService: NotificationService
+    private let scheduler: AutoRefreshScheduler
+    private let widgetSync: WidgetSync
+
+    // MARK: - UI state that belongs on the VM
+
     var showingSettings = false
     var collapsedOrgs: Set<String> {
         didSet { persistCollapsedSections() }
@@ -43,19 +43,34 @@ final class DashboardViewModel: DashboardActionsProtocol {
         didSet { persistCollapsedSections() }
     }
 
-    let badgeTracker: BadgeTracker
-    let notificationService: NotificationService
+    // MARK: - Delegated view-registry state
+
+    var views: [DashboardView] { viewRegistry.views }
+
+    var selectedViewID: UUID? {
+        get { viewRegistry.selectedViewID }
+        set {
+            viewRegistry.selectedViewID = newValue
+            markBadgeAsSeenForSelectedView()
+        }
+    }
+
+    // MARK: - Delegated fetcher state
+
+    var viewStates: [UUID: ViewState] { fetcher.states }
+
+    var selectedViewState: ViewState {
+        guard let id = selectedViewID else { return ViewState() }
+        return fetcher.state(for: id)
+    }
+
+    // MARK: - Infra
 
     private let gitHubClient: GitHubClientProtocol
     private let identity: IdentityActor
-    private let viewsStore: any ViewsStoreProtocol
     private let localRepositoryService: LocalRepositoryService
     private let defaults: UserDefaults
-    private var refreshTask: Task<Void, Never>?
-    private var refreshIntervalTask: Task<Void, Never>?
-    private var hideReviewedTask: Task<Void, Never>?
-    private var pendingRefreshTasks: [UUID: Task<Void, Never>] = [:]
-    private var refreshingViewIDs: Set<UUID> = []
+    private let pendingScheduledRefreshes = TaskMap()
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Dashboard")
 
     // MARK: - Init
@@ -63,43 +78,66 @@ final class DashboardViewModel: DashboardActionsProtocol {
     init(gitHubClient: GitHubClientProtocol, identity: IdentityActor, viewsStore: any ViewsStoreProtocol, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard) {
         self.gitHubClient = gitHubClient
         self.identity = identity
-        self.viewsStore = viewsStore
         self.localRepositoryService = localRepositoryService
         self.defaults = defaults
         self.collapsedOrgs = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.collapsedOrgs) ?? [])
         self.collapsedRepos = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.collapsedRepos) ?? [])
         self.badgeTracker = BadgeTracker(defaults: defaults)
         self.notificationService = NotificationService(defaults: defaults)
-        let loadedViews = viewsStore.load()
-        self.views = loadedViews
-        self.selectedViewID = Self.restoreSelectedViewID(from: defaults, views: loadedViews)
+        self.viewRegistry = ViewRegistry(viewsStore: viewsStore, defaults: defaults)
 
-        for view in views {
-            viewStates[view.id] = ViewState()
+        let filterIdentity = identity
+        let filterLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Dashboard.Filter")
+        let filter: PRFetcher.PRFilter = { prs, view in
+            guard view.hideReviewed else { return prs }
+            guard let login = await filterIdentity.currentViewerLogin() else {
+                filterLogger.warning("hideReviewed enabled but viewer login unavailable — skipping filter")
+                return prs
+            }
+            let filtered = prs.filter { pr in
+                guard let viewerReview = pr.latestReviews.first(where: { $0.login == login }) else {
+                    return true
+                }
+                return viewerReview.state == .dismissed
+            }
+            let removedCount = prs.count - filtered.count
+            if removedCount > 0 {
+                filterLogger.info("Filtered out \(removedCount, privacy: .public) reviewed PR(s) for '\(view.title, privacy: .public)'")
+            }
+            return filtered
+        }
+        self.fetcher = PRFetcher(gitHubClient: gitHubClient, filter: filter)
+        self.scheduler = AutoRefreshScheduler(defaults: defaults)
+
+        let widgetRegistry = viewRegistry
+        let widgetFetcher = fetcher
+        self.widgetSync = WidgetSync { [widgetRegistry, widgetFetcher] in
+            Self.buildWidgetData(registry: widgetRegistry, fetcher: widgetFetcher)
+        }
+
+        for view in viewRegistry.views {
+            fetcher.ensureState(for: view.id)
+        }
+
+        fetcher.onFetched = { [weak self] outcome in
+            guard let self else { return }
+            self.handleFetchOutcome(outcome)
+            self.widgetSync.sync()
         }
     }
 
-    private static func restoreSelectedViewID(from defaults: UserDefaults, views: [DashboardView]) -> UUID? {
-        guard let stored = defaults.string(forKey: Constants.UserDefaultsKeys.selectedViewID),
-              let uuid = UUID(uuidString: stored),
-              views.contains(where: { $0.id == uuid }) else {
-            return views.first?.id
-        }
-        return uuid
+    deinit {
+        pendingScheduledRefreshes.cancelAll()
+        // All other collaborators (scheduler, fetcher, widgetSync) cancel
+        // their own Tasks in their own deinits, which run when this VM's
+        // stored properties are released.
     }
 
-    private func persistSelectedViewID() {
-        defaults.set(selectedViewID?.uuidString, forKey: Constants.UserDefaultsKeys.selectedViewID)
-    }
+    // MARK: - Collapsed Sections Persistence
 
     private func persistCollapsedSections() {
         defaults.set(Array(collapsedOrgs), forKey: Constants.UserDefaultsKeys.collapsedOrgs)
         defaults.set(Array(collapsedRepos), forKey: Constants.UserDefaultsKeys.collapsedRepos)
-    }
-
-    var selectedViewState: ViewState {
-        guard let id = selectedViewID else { return ViewState() }
-        return viewStates[id] ?? ViewState()
     }
 
     // MARK: - Badge / Notification Forwarding
@@ -116,7 +154,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
     }
 
     func setBadge(for viewID: UUID, enabled: Bool) {
-        badgeTracker.setEnabled(for: viewID, enabled: enabled, currentPRs: viewStates[viewID]?.pullRequests ?? [])
+        badgeTracker.setEnabled(for: viewID, enabled: enabled, currentPRs: fetcher.state(for: viewID).pullRequests)
     }
 
     func markBadgeAsSeen() {
@@ -125,7 +163,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
 
     func markBadgeAsSeenForSelectedView() {
         guard let viewID = selectedViewID else { return }
-        let prIDs = Set((viewStates[viewID]?.pullRequests ?? []).map(\.id))
+        let prIDs = Set(fetcher.state(for: viewID).pullRequests.map(\.id))
         guard !prIDs.isEmpty else { return }
         badgeTracker.markAsSeen(prIDs: prIDs)
     }
@@ -166,209 +204,88 @@ final class DashboardViewModel: DashboardActionsProtocol {
 
     func refresh(viewID: UUID) async {
         guard let view = views.first(where: { $0.id == viewID }) else { return }
-        guard refreshingViewIDs.insert(viewID).inserted else { return }
-        defer { refreshingViewIDs.remove(viewID) }
-
-        if viewStates[viewID] == nil {
-            viewStates[viewID] = ViewState()
-        }
-        viewStates[viewID]?.isLoading = true
-        viewStates[viewID]?.error = nil
-        viewStates[viewID]?.isNetworkError = false
-        viewStates[viewID]?.rateLimitRetryAfter = nil
-
-        logger.info("Fetching PRs for '\(view.title, privacy: .public)'...")
-
-        do {
-            let page = try await gitHubClient.fetchPullRequests(query: view.query, cursor: nil)
-            let prs = page.pullRequests
-            var seenIDs = Set<String>()
-            let uniquePRs = prs.filter { seenIDs.insert($0.id).inserted }
-            let filteredPRs = await filterReviewedPRs(uniquePRs, for: view)
-
-            await checkAndNotify(viewID: viewID, newPRs: filteredPRs)
-            viewStates[viewID]?.pullRequests = filteredPRs
-            viewStates[viewID]?.seenIDs = seenIDs
-            viewStates[viewID]?.nextCursor = page.nextCursor
-            viewStates[viewID]?.rawFetchedCount = uniquePRs.count
-            viewStates[viewID]?.reachedLimit = uniquePRs.count >= Constants.App.maxPullRequests
-            viewStates[viewID]?.skippedPRCount = page.skippedNodeCount
-            logger.info("Fetched \(uniquePRs.count, privacy: .public) PR(s) for '\(view.title, privacy: .public)'")
-        } catch is CancellationError {
-            viewStates[viewID]?.isLoading = false
-            return
-        } catch {
-            logger.error("Failed to fetch PRs for '\(view.title, privacy: .public)': \(error, privacy: .public)")
-            viewStates[viewID]?.isNetworkError = error.isNetworkError
-            viewStates[viewID]?.error = error.localizedDescription
-            if let clientError = error as? GitHubClientError, case .rateLimited(let retryAfter) = clientError {
-                viewStates[viewID]?.rateLimitRetryAfter = retryAfter
-            }
-        }
-
-        viewStates[viewID]?.isLoading = false
-        updateWidgetData()
+        await fetcher.refresh(for: view)
     }
 
     func loadMore(viewID: UUID) async {
-        guard let view = views.first(where: { $0.id == viewID }),
-              let state = viewStates[viewID],
-              state.canLoadMore else { return }
-
-        viewStates[viewID]?.isLoadingMore = true
-        viewStates[viewID]?.error = nil
-        viewStates[viewID]?.isNetworkError = false
-        viewStates[viewID]?.rateLimitRetryAfter = nil
-
-        do {
-            let page = try await gitHubClient.fetchPullRequests(query: view.query, cursor: state.nextCursor)
-            let newPRs = page.pullRequests.filter { viewStates[viewID]?.seenIDs.insert($0.id).inserted == true }
-            let filteredNewPRs = await filterReviewedPRs(newPRs, for: view)
-
-            viewStates[viewID]?.pullRequests.append(contentsOf: filteredNewPRs)
-            viewStates[viewID]?.nextCursor = page.nextCursor
-            let rawTotal = (viewStates[viewID]?.rawFetchedCount ?? 0) + newPRs.count
-            viewStates[viewID]?.rawFetchedCount = rawTotal
-            viewStates[viewID]?.reachedLimit = rawTotal >= Constants.App.maxPullRequests
-            logger.info("Loaded \(newPRs.count, privacy: .public) more PR(s) for '\(view.title, privacy: .public)' (total: \(rawTotal, privacy: .public))")
-        } catch is CancellationError {
-            viewStates[viewID]?.isLoadingMore = false
-            return
-        } catch {
-            logger.error("Failed to load more PRs for '\(view.title, privacy: .public)': \(error, privacy: .public)")
-            viewStates[viewID]?.isNetworkError = error.isNetworkError
-            viewStates[viewID]?.error = error.localizedDescription
-            if let clientError = error as? GitHubClientError, case .rateLimited(let retryAfter) = clientError {
-                viewStates[viewID]?.rateLimitRetryAfter = retryAfter
-            }
-        }
-
-        viewStates[viewID]?.isLoadingMore = false
+        guard let view = views.first(where: { $0.id == viewID }) else { return }
+        await fetcher.loadMore(for: view)
     }
 
     func refreshAll() async {
+        let viewsSnapshot = views
         await withTaskGroup(of: Void.self) { group in
-            for view in views {
-                group.addTask { await self.refresh(viewID: view.id) }
+            for view in viewsSnapshot {
+                group.addTask { [fetcher] in await fetcher.refresh(for: view) }
             }
         }
         guard !Task.isCancelled else { return }
-        badgeTracker.pruneUnseen(viewStates: viewStates)
-        updateWidgetData()
+        badgeTracker.pruneUnseen(viewStates: fetcher.states)
+        widgetSync.sync()
     }
 
     // MARK: - Auto-Refresh
 
     func startAutoRefresh() {
-        guard refreshTask == nil else { return }
-        refreshTask = Task { [weak self] in
-            var consecutiveEmptyFetches = 0
-            while !Task.isCancelled {
-                await self?.refreshAll()
-                let hasAnyData = self?.viewStates.values.contains(where: \.hasData) ?? false
-                let hasAnyError = self?.viewStates.values.contains(where: { $0.error != nil }) ?? false
-                let seconds: Double
-                if hasAnyData {
-                    consecutiveEmptyFetches = 0
-                    let interval = self?.defaults.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval) ?? 0
-                    seconds = interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
-                } else if hasAnyError {
-                    let rateLimitWait = self?.viewStates.values.compactMap(\.rateLimitRetryAfter).max()
-                    if let wait = rateLimitWait, wait > 0 {
-                        seconds = min(max(wait, 10), 3600)
-                    } else {
-                        consecutiveEmptyFetches += 1
-                        seconds = min(10 * pow(2.0, Double(consecutiveEmptyFetches - 1)), 60)
-                    }
-                } else if self?.views.isEmpty == true {
-                    let interval = self?.defaults.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval) ?? 0
-                    seconds = interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
-                } else {
-                    seconds = 30
-                }
-                do {
-                    try await Task.sleep(for: .seconds(seconds))
-                } catch {
-                    break
-                }
+        scheduler.start(tick: { [weak self] in
+            guard let self else {
+                return AutoRefreshTickResult(hasData: false, hasError: false, maxRateLimitWait: nil, hasViews: false)
             }
-        }
-        observeRefreshIntervalChanges()
+            await self.refreshAll()
+            let states = self.fetcher.states.values
+            return AutoRefreshTickResult(
+                hasData: states.contains(where: \.hasData),
+                hasError: states.contains(where: { $0.error != nil }),
+                maxRateLimitWait: states.compactMap(\.rateLimitRetryAfter).max(),
+                hasViews: !self.views.isEmpty
+            )
+        })
     }
 
     func stopAutoRefresh() {
-        refreshTask?.cancel()
-        refreshTask = nil
-        refreshIntervalTask?.cancel()
-        refreshIntervalTask = nil
-        hideReviewedTask?.cancel()
-        hideReviewedTask = nil
-        for task in pendingRefreshTasks.values {
-            task.cancel()
-        }
-        pendingRefreshTasks.removeAll()
+        scheduler.stop()
+        pendingScheduledRefreshes.cancelAll()
     }
 
     // MARK: - CRUD
 
     func addView(_ view: DashboardView) {
-        views.append(view)
-        viewStates[view.id] = ViewState()
-        viewsStore.save(views)
-        if selectedViewID == nil {
-            selectedViewID = view.id
-        }
+        viewRegistry.addView(view)
+        fetcher.ensureState(for: view.id)
     }
 
     func updateView(_ view: DashboardView) {
-        guard let index = views.firstIndex(where: { $0.id == view.id }) else { return }
-        views[index] = view
-        viewsStore.save(views)
+        viewRegistry.updateView(view)
     }
 
     func toggleHideReviewed(for viewID: UUID) {
         guard let index = views.firstIndex(where: { $0.id == viewID }) else { return }
-        views[index].hideReviewed.toggle()
-        viewsStore.save(views)
-        hideReviewedTask?.cancel()
-        hideReviewedTask = Task { await refresh(viewID: viewID) }
+        var updated = views[index]
+        updated.hideReviewed.toggle()
+        viewRegistry.updateView(updated)
+        scheduleRefresh(for: updated)
     }
 
     func moveView(from sourceID: UUID, to targetID: UUID) {
-        guard let sourceIndex = views.firstIndex(where: { $0.id == sourceID }),
-              let targetIndex = views.firstIndex(where: { $0.id == targetID }),
-              sourceIndex != targetIndex else { return }
-        views.move(fromOffsets: IndexSet(integer: sourceIndex),
-                   toOffset: targetIndex > sourceIndex ? targetIndex + 1 : targetIndex)
-        viewsStore.save(views)
+        viewRegistry.moveView(from: sourceID, to: targetID)
     }
 
     func selectNextView() {
-        guard let currentID = selectedViewID,
-              let currentIndex = views.firstIndex(where: { $0.id == currentID }),
-              !views.isEmpty else { return }
-        let nextIndex = (currentIndex + 1) % views.count
-        selectedViewID = views[nextIndex].id
+        viewRegistry.selectNext()
+        markBadgeAsSeenForSelectedView()
     }
 
     func selectPreviousView() {
-        guard let currentID = selectedViewID,
-              let currentIndex = views.firstIndex(where: { $0.id == currentID }),
-              !views.isEmpty else { return }
-        let previousIndex = (currentIndex - 1 + views.count) % views.count
-        selectedViewID = views[previousIndex].id
+        viewRegistry.selectPrevious()
+        markBadgeAsSeenForSelectedView()
     }
 
     func deleteView(id: UUID) {
-        views.removeAll { $0.id == id }
-        viewStates.removeValue(forKey: id)
-        viewsStore.save(views)
+        viewRegistry.deleteView(id: id)
+        fetcher.removeState(for: id)
         badgeTracker.removeView(id: id)
         notificationService.removeView(id: id)
-        badgeTracker.pruneUnseen(viewStates: viewStates)
-        if selectedViewID == id {
-            selectedViewID = views.first?.id
-        }
+        badgeTracker.pruneUnseen(viewStates: fetcher.states)
     }
 
     func presetConflicts() -> [String] {
@@ -379,7 +296,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
     }
 
     func createPresetViews(replacingConflicts: Bool) {
-        var viewsToRefresh: [UUID] = []
+        var viewsToRefresh: [DashboardView] = []
         for preset in DashboardView.presetViews {
             if let existingIndex = views.firstIndex(where: { $0.title == preset.title }) {
                 if replacingConflicts {
@@ -390,8 +307,8 @@ final class DashboardViewModel: DashboardActionsProtocol {
                         query: preset.query,
                         hideReviewed: preset.hideReviewed
                     )
-                    views[existingIndex] = replacement
-                    viewsToRefresh.append(oldID)
+                    viewRegistry.updateView(replacement)
+                    viewsToRefresh.append(replacement)
                 }
             } else {
                 let newView = DashboardView(
@@ -400,33 +317,20 @@ final class DashboardViewModel: DashboardActionsProtocol {
                     query: preset.query,
                     hideReviewed: preset.hideReviewed
                 )
-                views.append(newView)
-                viewStates[newView.id] = ViewState()
-                viewsToRefresh.append(newView.id)
+                viewRegistry.addView(newView)
+                fetcher.ensureState(for: newView.id)
+                viewsToRefresh.append(newView)
             }
         }
-        viewsStore.save(views)
-        if selectedViewID == nil {
-            selectedViewID = views.first?.id
-        }
-        for viewID in viewsToRefresh {
-            scheduleRefresh(viewID: viewID)
+        for view in viewsToRefresh {
+            scheduleRefresh(for: view)
         }
     }
 
     func reloadViews() {
-        views = viewsStore.load()
-        let currentIDs = Set(views.map(\.id))
-        for key in viewStates.keys where !currentIDs.contains(key) {
-            viewStates.removeValue(forKey: key)
-        }
-        for view in views where viewStates[view.id] == nil {
-            viewStates[view.id] = ViewState()
-        }
-        if let selected = selectedViewID, currentIDs.contains(selected) {
-            // keep current selection
-        } else {
-            selectedViewID = views.first?.id
+        viewRegistry.reload()
+        for view in viewRegistry.views {
+            fetcher.ensureState(for: view.id)
         }
     }
 
@@ -435,18 +339,14 @@ final class DashboardViewModel: DashboardActionsProtocol {
     func clearAllData() {
         stopAutoRefresh()
         localRepositoryService.stopPeriodicRefresh()
-        views = []
-        viewStates = [:]
-        selectedViewID = nil
+        viewRegistry.clear()
+        fetcher.clearAll()
         Task { [identity] in await identity.invalidate(reason: .userSignedOut) }
         badgeTracker.reset()
         notificationService.reset()
         collapsedOrgs = []
         collapsedRepos = []
-        defaults.removeObject(forKey: Constants.UserDefaultsKeys.selectedViewID)
-        viewsStore.save([])
-        WidgetData(views: [], lastUpdated: .now).save()
-        WidgetCenter.shared.reloadAllTimelines()
+        widgetSync.writeNow()
     }
 
     // MARK: - Open in Editor
@@ -478,9 +378,10 @@ final class DashboardViewModel: DashboardActionsProtocol {
         guard let dashView = views.first(where: { $0.id == viewID }) else { return }
         let trimmed = newQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != dashView.query else { return }
-        updateView(DashboardView(id: dashView.id, title: dashView.title, query: trimmed, hideReviewed: dashView.hideReviewed))
-        viewStates[viewID] = ViewState()
-        scheduleRefresh(viewID: viewID)
+        let updated = DashboardView(id: dashView.id, title: dashView.title, query: trimmed, hideReviewed: dashView.hideReviewed)
+        viewRegistry.updateView(updated)
+        fetcher.resetState(for: viewID)
+        scheduleRefresh(for: updated)
     }
 
     func queryContainsFilter(qualifier: String) -> Bool {
@@ -493,46 +394,29 @@ final class DashboardViewModel: DashboardActionsProtocol {
         guard let dashView = views.first(where: { $0.id == viewID }) else { return }
         guard !dashView.query.split(separator: " ").contains(where: { String($0) == qualifier }) else { return }
         let newQuery = dashView.query + " " + qualifier
-        updateView(DashboardView(id: dashView.id, title: dashView.title, query: newQuery, hideReviewed: dashView.hideReviewed))
-        viewStates[viewID] = ViewState()
-        scheduleRefresh(viewID: viewID)
+        let updated = DashboardView(id: dashView.id, title: dashView.title, query: newQuery, hideReviewed: dashView.hideReviewed)
+        viewRegistry.updateView(updated)
+        fetcher.resetState(for: viewID)
+        scheduleRefresh(for: updated)
     }
 
     // MARK: - Private
 
-    private func scheduleRefresh(viewID: UUID) {
-        pendingRefreshTasks[viewID]?.cancel()
-        pendingRefreshTasks[viewID] = Task {
-            await refresh(viewID: viewID)
-            pendingRefreshTasks.removeValue(forKey: viewID)
+    private func scheduleRefresh(for view: DashboardView) {
+        pendingScheduledRefreshes.cancelAndRemove(view.id)
+        let fetcher = self.fetcher
+        let task = Task {
+            await fetcher.refresh(for: view)
         }
+        pendingScheduledRefreshes.insert(task, for: view.id)
     }
 
-    private func filterReviewedPRs(_ prs: [PullRequest], for view: DashboardView) async -> [PullRequest] {
-        guard view.hideReviewed else { return prs }
-        guard let login = await identity.currentViewerLogin() else {
-            logger.warning("hideReviewed enabled but viewer login unavailable — skipping filter")
-            return prs
-        }
-        let filtered = prs.filter { pr in
-            guard let viewerReview = pr.latestReviews.first(where: { $0.login == login }) else {
-                return true
-            }
-            return viewerReview.state == .dismissed
-        }
-        let removedCount = prs.count - filtered.count
-        if removedCount > 0 {
-            logger.info("Filtered out \(removedCount, privacy: .public) reviewed PR(s) for '\(view.title, privacy: .public)'")
-        }
-        return filtered
-    }
-
-    private func checkAndNotify(viewID: UUID, newPRs: [PullRequest]) async {
-        let notifyEnabled = notificationService.isEnabled(for: viewID)
-        let badgeEnabled = badgeTracker.isEnabled(for: viewID)
+    private func handleFetchOutcome(_ outcome: PRFetcher.FetchOutcome) {
+        let notifyEnabled = notificationService.isEnabled(for: outcome.viewID)
+        let badgeEnabled = badgeTracker.isEnabled(for: outcome.viewID)
         guard notifyEnabled || badgeEnabled else { return }
 
-        let addedIDs = badgeTracker.detectNewPRs(viewID: viewID, currentPRs: newPRs)
+        let addedIDs = badgeTracker.detectNewPRs(viewID: outcome.viewID, currentPRs: outcome.pullRequests)
         guard !addedIDs.isEmpty else { return }
 
         if badgeEnabled {
@@ -540,14 +424,16 @@ final class DashboardViewModel: DashboardActionsProtocol {
         }
 
         guard notifyEnabled else { return }
-        guard let view = views.first(where: { $0.id == viewID }) else { return }
-        let addedPRs = newPRs.filter { addedIDs.contains($0.id) }
-        await notificationService.deliver(viewTitle: view.title, viewID: viewID, addedPRs: addedPRs)
+        guard let view = views.first(where: { $0.id == outcome.viewID }) else { return }
+        let addedPRs = outcome.pullRequests.filter { addedIDs.contains($0.id) }
+        Task { [notificationService] in
+            await notificationService.deliver(viewTitle: view.title, viewID: outcome.viewID, addedPRs: addedPRs)
+        }
     }
 
-    private func updateWidgetData() {
-        let widgetViews = views.map { view in
-            let prs = viewStates[view.id]?.pullRequests ?? []
+    private static func buildWidgetData(registry: ViewRegistry, fetcher: PRFetcher) -> WidgetData {
+        let widgetViews = registry.views.map { view in
+            let prs = fetcher.state(for: view.id).pullRequests
             let widgetPRs = prs.prefix(10).map { pr in
                 WidgetPullRequest(
                     id: pr.id,
@@ -572,20 +458,6 @@ final class DashboardViewModel: DashboardActionsProtocol {
                 pullRequests: Array(widgetPRs)
             )
         }
-        WidgetData(views: widgetViews, lastUpdated: .now).save()
-        WidgetCenter.shared.reloadAllTimelines()
-    }
-
-    private func restartAutoRefresh() {
-        stopAutoRefresh()
-        startAutoRefresh()
-    }
-
-    private func observeRefreshIntervalChanges() {
-        refreshIntervalTask = Task { [weak self] in
-            for await _ in NotificationCenter.default.notifications(named: Constants.Notifications.prRefreshIntervalChanged) {
-                self?.restartAutoRefresh()
-            }
-        }
+        return WidgetData(views: widgetViews, lastUpdated: .now)
     }
 }
