@@ -43,6 +43,7 @@ struct RootContentView: View {
                                     Image(systemName: "xmark")
                                 }
                                 .help("Close Settings")
+                                .accessibilityLabel("Close Settings")
                             }
                         }
                     }
