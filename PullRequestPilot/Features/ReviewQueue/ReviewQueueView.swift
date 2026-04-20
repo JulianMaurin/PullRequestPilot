@@ -438,7 +438,9 @@ struct ReviewQueueView: View {
     }
 
     private func listView(_ pullRequests: [PullRequest]) -> some View {
-        let grouped = viewModel.groupedByOrgAndRepo(pullRequests)
+        // Memoized on the view model — repeated body evaluations within a
+        // render cycle return the cached grouping in O(1). See FINDING-005.
+        let grouped = viewModel.groupedSelected
         return TimelineView(.periodic(from: .now, by: 30)) { context in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -519,8 +521,7 @@ struct ReviewQueueView: View {
                 Divider()
                 Button("Collapse All Orgs") {
                     withAnimation {
-                        let grouped = viewModel.groupedByOrgAndRepo(viewModel.selectedViewState.pullRequests)
-                        for org in grouped { viewModel.collapsedOrgs.insert(org.org) }
+                        for org in viewModel.groupedSelected { viewModel.collapsedOrgs.insert(org.org) }
                     }
                 }
                 Button("Expand All Orgs") {

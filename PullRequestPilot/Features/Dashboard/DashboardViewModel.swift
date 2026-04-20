@@ -214,11 +214,44 @@ final class DashboardViewModel: DashboardActionsProtocol {
         await notificationService.requestPermissionAndOpenSettings()
     }
 
-    // MARK: - Grouping Forwarding
+    // MARK: - Grouping (memoized)
 
     typealias PRStack = PRGrouping.PRStack
     typealias OrgGroup = PRGrouping.OrgGroup
     typealias RepoGroup = PRGrouping.RepoGroup
+
+    private struct GroupedCache {
+        let viewID: UUID?
+        let prs: [PullRequest]
+        let groups: [OrgGroup]
+    }
+
+    /// Cache is excluded from Observation tracking — writes must not cascade
+    /// into SwiftUI re-renders (the underlying `pullRequests` mutation
+    /// already triggered the observation that led us to recompute).
+    @ObservationIgnored private var groupedCache: GroupedCache?
+
+    /// Test hook — counts how many times `groupedSelected` actually
+    /// recomputed the grouping rather than returning a cached result.
+    /// `@ObservationIgnored` so it doesn't participate in SwiftUI tracking.
+    @ObservationIgnored private(set) var groupedRecomputeCount: UInt64 = 0
+
+    /// Grouping of the currently selected view's pull requests. Cached
+    /// against the backing `[PullRequest]` buffer so repeated reads during
+    /// a single render cycle (loading-state flips, `onAppear`, TimelineView
+    /// ticks, `.onChange` passes) return in O(1). Recomputes only when the
+    /// selected view changes or its PR list is reassigned.
+    var groupedSelected: [OrgGroup] {
+        let viewID = selectedViewID
+        let prs = selectedViewState.pullRequests
+        if let cached = groupedCache, cached.viewID == viewID, cached.prs == prs {
+            return cached.groups
+        }
+        let groups = PRGrouping.groupedByOrgAndRepo(prs)
+        groupedCache = GroupedCache(viewID: viewID, prs: prs, groups: groups)
+        groupedRecomputeCount &+= 1
+        return groups
+    }
 
     func groupedByOrgAndRepo(_ pullRequests: [PullRequest]) -> [OrgGroup] {
         PRGrouping.groupedByOrgAndRepo(pullRequests)
