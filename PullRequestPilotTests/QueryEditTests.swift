@@ -81,6 +81,15 @@ struct QueryEditTests {
         #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr is:open")
     }
 
+    @Test("appendFilter appends negated qualifier and dedupes on repeat")
+    func appendFilterNegated() {
+        let (vm, viewID) = makeViewModel(suiteName: "FilterAppendNegated")
+        vm.appendFilter(viewID: viewID, qualifier: "-author:alice")
+        #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr is:open -author:alice")
+        vm.appendFilter(viewID: viewID, qualifier: "-author:alice")
+        #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr is:open -author:alice")
+    }
+
     // MARK: - queryContainsFilter
 
     @Test("queryContainsFilter returns true when qualifier exists")
@@ -102,5 +111,14 @@ struct QueryEditTests {
         let (vm, _) = makeViewModel(suiteName: "ContainsFilterNone")
         vm.selectedViewID = nil
         #expect(!vm.queryContainsFilter(qualifier: "is:pr"))
+    }
+
+    @Test("queryContainsFilter distinguishes negated from positive qualifier")
+    func queryContainsFilterNegated() {
+        let (vm, viewID) = makeViewModel(suiteName: "ContainsFilterNegated")
+        vm.selectedViewID = viewID
+        vm.appendFilter(viewID: viewID, qualifier: "-author:alice")
+        #expect(vm.queryContainsFilter(qualifier: "-author:alice"))
+        #expect(!vm.queryContainsFilter(qualifier: "author:alice"))
     }
 }
