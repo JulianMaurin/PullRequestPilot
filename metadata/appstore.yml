@@ -2,11 +2,14 @@
 # subtitle/promotional text in App Store Connect so `make metadata-lint`
 # can catch forbidden brand terms before another submission rejection.
 #
-# ⚠ This file's subtitle MUST match the live App Store Connect subtitle
-# verbatim — otherwise `make metadata-lint` cannot validate against the
-# rejection patterns (forbidden terms: macOS, Mac, iOS, GitHub, Apple; 30-char
-# limit). Prior rejections: twice on subtitle brand terms. Do not leave empty
-# if a subtitle is actually live; the lint will silently skip and you will
-# ship an unchecked subtitle.
+# `subtitle` contract (enforced by scripts/metadata-lint.sh):
+#   - Populated string: checked for forbidden brand terms (macOS, Mac, iOS,
+#     GitHub, Apple, ...) and the 30-char App Store limit. This is the
+#     normal case — mirror the live subtitle here verbatim.
+#   - "<unset>": explicit sentinel declaring "no subtitle is live on App
+#     Store Connect". The check is skipped, with an auditable log line.
+#     Use this ONLY if you have verified the live listing.
+#   - Empty (""): hard failure. Prior rejections happened twice because an
+#     empty value silently skipped the check. Choose one of the two above.
 
 subtitle: ""

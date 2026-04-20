@@ -5,8 +5,13 @@
 #   1. MARKETING_VERSION in project.yml is semver (X.Y.Z)
 #   2. CURRENT_PROJECT_VERSION >= last tag's build number (warn if equal,
 #      fail if lower)
-#   3. metadata/appstore.yml subtitle (if non-empty) — <= 30 chars, no
-#      forbidden brand terms from metadata/forbidden-terms.txt
+#   3. metadata/appstore.yml subtitle — MUST be populated with the live
+#      App Store Connect value, OR explicitly set to "<unset>" to declare
+#      that no subtitle is live. An empty string is a hard failure because
+#      the resulting silent-skip would hide the brand-term rejection
+#      pattern that cost two prior submissions.
+#      Populated values are checked for <= 30 chars and forbidden brand
+#      terms from metadata/forbidden-terms.txt.
 #   4. CFBundleDisplayName (project.yml) — no forbidden brand terms
 #   5. Privacy manifests exist for main app + widget
 #
@@ -86,13 +91,24 @@ else
 fi
 
 # --- Subtitle
-SUBTITLE="${SUBTITLE_OVERRIDE:-}"
-if [[ -z "$SUBTITLE" && -f metadata/appstore.yml ]]; then
+# Empty is a hard failure: an unchecked subtitle is exactly the silent-skip
+# that hid the brand-term rejections on two prior submissions. The escape
+# valve for apps with no live subtitle is the explicit "<unset>" sentinel,
+# which forces a conscious decision and leaves an auditable trail.
+SUBTITLE_SENTINEL_UNSET="<unset>"
+if [[ -n "${SUBTITLE_OVERRIDE+x}" ]]; then
+  # Explicitly-empty override is honoured (for testing the failure path).
+  SUBTITLE="$SUBTITLE_OVERRIDE"
+elif [[ -f metadata/appstore.yml ]]; then
   SUBTITLE=$(sed -nE 's/^subtitle:[[:space:]]*"([^"]*)".*/\1/p' metadata/appstore.yml | head -1)
+else
+  SUBTITLE=""
 fi
 
 if [[ -z "$SUBTITLE" ]]; then
-  warn "subtitle is empty in metadata/appstore.yml — skipping subtitle check"
+  fail "subtitle in metadata/appstore.yml is empty — populate with the live App Store Connect value, or set to \"$SUBTITLE_SENTINEL_UNSET\" if no subtitle is live"
+elif [[ "$SUBTITLE" == "$SUBTITLE_SENTINEL_UNSET" ]]; then
+  ok "subtitle declared absent via $SUBTITLE_SENTINEL_UNSET sentinel — ensure App Store Connect listing has no subtitle"
 else
   SUBTITLE_LEN=${#SUBTITLE}
   if (( SUBTITLE_LEN > 30 )); then
