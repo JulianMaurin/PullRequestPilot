@@ -265,7 +265,7 @@ struct DashboardViewModelExtendedTests {
     // MARK: - toggleHideReviewed
 
     @Test("toggleHideReviewed toggles the flag and persists")
-    func toggleHideReviewed() async {
+    func toggleHideReviewed() async throws {
         let defaults = UserDefaults(suiteName: "ToggleHideReviewed")!
         defaults.removePersistentDomain(forName: "ToggleHideReviewed")
         let store = ViewsStore(defaults: defaults)
@@ -281,7 +281,7 @@ struct DashboardViewModelExtendedTests {
         // Wait for the internal Task to complete (poll with deadline)
         let deadline = ContinuousClock.now + .seconds(2)
         while viewModel.viewStates[viewID]?.isLoading == true, ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(5))
+            try await Task.sleep(for: .milliseconds(5))
         }
 
         #expect(viewModel.views.first(where: { $0.id == viewID })?.hideReviewed == !initialValue)
@@ -943,24 +943,29 @@ struct DashboardViewModelExtendedTests {
     @Test("refresh interval change notification restarts auto-refresh")
     func restartAutoRefreshViaNotification() async throws {
         let (viewModel, _) = makeViewModel(suiteName: "RestartAutoRefresh")
+        await mockClient.setPullRequestsToReturn([TestPullRequestFactory.make()])
         viewModel.startAutoRefresh()
 
-        // Trigger restart via notification (same mechanism as restartAutoRefresh)
+        // Wait for the first auto-refresh tick to reach the GitHub client.
+        let firstTickDeadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while await mockClient.fetchPullRequestsCallCount < 1, ContinuousClock.now < firstTickDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let countBeforeRestart = await mockClient.fetchPullRequestsCallCount
+        #expect(countBeforeRestart >= 1, "first auto-refresh tick did not run")
+
+        // The interval-change notification should cancel the sleeping loop
+        // and spawn a fresh one that ticks immediately — so we see a new
+        // fetch well before the configured interval would naturally fire.
         NotificationCenter.default.post(name: Constants.Notifications.prRefreshIntervalChanged, object: nil)
 
-        // Poll for the Task { @MainActor } inside the observer to execute.
-        // Sleep-based waits are flaky under Swift Testing's parallel runner.
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
-        while ContinuousClock.now < deadline {
-            await Task.yield()
-            if Task.isCancelled { break }
-            try await Task.sleep(for: .milliseconds(20))
-            // The observer posts onto MainActor synchronously; one yield is
-            // usually enough, but give the runner up to 2 s under load.
-            break
+        let restartDeadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while await mockClient.fetchPullRequestsCallCount <= countBeforeRestart, ContinuousClock.now < restartDeadline {
+            try await Task.sleep(for: .milliseconds(10))
         }
+        let countAfterRestart = await mockClient.fetchPullRequestsCallCount
+        #expect(countAfterRestart > countBeforeRestart, "interval-change notification did not trigger a fresh tick")
 
-        // Should still be able to stop cleanly (proves it restarted)
         viewModel.stopAutoRefresh()
     }
 
