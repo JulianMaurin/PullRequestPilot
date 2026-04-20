@@ -267,14 +267,16 @@ Before any PR that touches production code:
 
 ## Audit & Fix Workflow
 
-Whole-codebase audits use a structured workflow, not an ad-hoc "ultrathink" prompt:
+Whole-codebase audits use the `audit-and-fix` skill (`.claude/skills/audit-and-fix/SKILL.md`), not an ad-hoc "ultrathink" prompt. When the user types the ritual phrase ("ultrathink", "analyze the whole code", "fix all the findings"), invoke the skill rather than re-deriving the format.
 
-1. Dispatch parallel sub-agents across layers (Domain, Features, Infrastructure, Tests, App Store compliance, Concurrency, Performance).
-2. Collect findings into a TodoWrite-backed ledger — no finding silently dropped.
-3. Execute fixes directly; don't propose/approve.
-4. Split the diff into one commit per bug category (see Commits below).
+The skill enforces the contract:
 
-Planned formal skill: `todo/dev-tooling/14-audit-and-fix-skill.md`.
+1. Parallel lane-focused sub-agents (domain, features, infrastructure, tests, concurrency, appstore, performance, ux).
+2. Each sub-agent returns JSON matching `references/finding-schema.json`.
+3. Synthesizer merges + dedupes + sorts; every finding becomes a TodoWrite todo — no silent drops.
+4. Fix-mode is the default. Only `critical` or `high + non-small blast` findings pause for user approval.
+5. `make lint` / `make build` / `make test` must all pass before any commit.
+6. Diff is split into one commit per `rootCauseCategory`; an audit report lands at `todo/audits/AUDIT-YYYY-MM-DD.md`.
 
 ## Commits
 

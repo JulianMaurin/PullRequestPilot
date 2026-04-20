@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pullrequestpilot.local/skills/audit-and-fix/finding-schema.json",
+  "title": "AuditFinding",
+  "description": "One structured bug/issue report from a lane sub-agent. The lane returns an array of these.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "title",
+      "severity",
+      "file",
+      "rootCauseCategory",
+      "userImpact",
+      "suggestedFix",
+      "blastRadius"
+    ],
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "Assigned by the synthesizer. Sub-agents may omit.",
+        "pattern": "^FINDING-[0-9]{3,}$"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 8,
+        "maxLength": 120,
+        "description": "One-line summary. Start with the type being changed or the symptom."
+      },
+      "severity": {
+        "type": "string",
+        "enum": ["critical", "high", "medium", "low"],
+        "description": "critical = data loss / crash / App Review rejection. high = reliability regression. medium = correctness quirk. low = nit / polish."
+      },
+      "file": {
+        "type": "string",
+        "description": "Path relative to the repo root."
+      },
+      "lineRange": {
+        "type": "string",
+        "pattern": "^[0-9]+(-[0-9]+)?$",
+        "description": "Single line '42' or inclusive range '120-135'. Optional if the finding spans a whole file."
+      },
+      "rootCauseCategory": {
+        "type": "string",
+        "enum": [
+          "concurrency",
+          "cancellation",
+          "error-handling",
+          "force-unwrap",
+          "pagination",
+          "persistence",
+          "sandbox",
+          "entitlements",
+          "privacy",
+          "metadata",
+          "ux",
+          "accessibility",
+          "performance",
+          "memory-leak",
+          "observer-leak",
+          "dependency-injection",
+          "test-quality",
+          "test-coverage",
+          "swiftlint",
+          "dead-code",
+          "api-misuse",
+          "other"
+        ],
+        "description": "Chosen from this fixed list so the synthesizer can group commits. 'other' is a last resort — prefer a specific category."
+      },
+      "userImpact": {
+        "type": "string",
+        "minLength": 8,
+        "description": "What the user sees or suffers because of this bug. If you cannot describe a user impact, reconsider whether this is a real finding."
+      },
+      "suggestedFix": {
+        "type": "string",
+        "minLength": 8,
+        "description": "Concrete change, not a direction. 'Add deinit that cancels tasks' not 'consider lifecycle'."
+      },
+      "blastRadius": {
+        "type": "string",
+        "enum": ["small", "medium", "large", "cross-cutting"],
+        "description": "small = one function/type. medium = one feature module. large = multiple features. cross-cutting = architectural or repo-wide."
+      },
+      "testStrategy": {
+        "type": "string",
+        "description": "How the fix should be validated (existing test updated, new test added, manual check). Optional but strongly preferred."
+      },
+      "references": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Related CLAUDE.md sections, prior commits, or issue references."
+      }
+    }
+  }
+}
