@@ -33,7 +33,7 @@ struct ParseRetryAfterTests {
     // MARK: - Retry-After as HTTP-date
 
     @Test("parses Retry-After header with HTTP-date format")
-    func retryAfterHTTPDate() {
+    func retryAfterHTTPDate() throws {
         let futureDate = Date().addingTimeInterval(600)
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -42,21 +42,19 @@ struct ParseRetryAfterTests {
         let dateStr = formatter.string(from: futureDate)
 
         let response = makeResponse(headers: ["Retry-After": dateStr])
-        let result = GitHubClient.parseRetryAfter(from: response)
-        #expect(result != nil)
+        let result = try #require(GitHubClient.parseRetryAfter(from: response))
         // Should be approximately 600 seconds (allow for time elapsed during test)
-        #expect(result! > 590 && result! < 610)
+        #expect(result > 590 && result < 610)
     }
 
     // MARK: - X-RateLimit-Reset fallback
 
     @Test("falls back to X-RateLimit-Reset when no Retry-After header")
-    func rateLimitResetFallback() {
+    func rateLimitResetFallback() throws {
         let futureTimestamp = Date().timeIntervalSince1970 + 300
         let response = makeResponse(headers: ["X-RateLimit-Reset": "\(Int(futureTimestamp))"])
-        let result = GitHubClient.parseRetryAfter(from: response)
-        #expect(result != nil)
-        #expect(result! > 290 && result! < 310)
+        let result = try #require(GitHubClient.parseRetryAfter(from: response))
+        #expect(result > 290 && result < 310)
     }
 
     // MARK: - No headers
@@ -82,11 +80,10 @@ struct ParseRetryAfterTests {
     }
 
     @Test("returns zero or positive for past X-RateLimit-Reset")
-    func pastRateLimitReset() {
+    func pastRateLimitReset() throws {
         let pastTimestamp = Date().timeIntervalSince1970 - 100
         let response = makeResponse(headers: ["X-RateLimit-Reset": "\(Int(pastTimestamp))"])
-        let result = GitHubClient.parseRetryAfter(from: response)
-        #expect(result != nil)
-        #expect(result! >= 0)
+        let result = try #require(GitHubClient.parseRetryAfter(from: response))
+        #expect(result >= 0)
     }
 }

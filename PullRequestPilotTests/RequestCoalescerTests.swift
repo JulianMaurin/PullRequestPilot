@@ -74,8 +74,20 @@ struct RequestCoalescerTests {
 
         var firstErrored = false
         var secondErrored = false
-        do { _ = try await a } catch is Boom { firstErrored = true } catch {}
-        do { _ = try await b } catch is Boom { secondErrored = true } catch {}
+        do {
+            _ = try await a
+        } catch is Boom {
+            firstErrored = true
+        } catch {
+            Issue.record("unexpected error from first caller: \(error)")
+        }
+        do {
+            _ = try await b
+        } catch is Boom {
+            secondErrored = true
+        } catch {
+            Issue.record("unexpected error from second caller: \(error)")
+        }
         #expect(firstErrored)
         #expect(secondErrored)
     }

@@ -35,21 +35,20 @@ struct GitHubResponsesTests {
         let data = json.data(using: .utf8)!
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
 
-        let pr = node.toDomain()
-        #expect(pr != nil)
-        #expect(pr!.number == 42)
-        #expect(pr!.title == "Fix the thing")
-        #expect(pr!.state == .open)
-        #expect(pr!.isDraft == false)
-        #expect(pr!.additions == 10)
-        #expect(pr!.deletions == 3)
-        #expect(pr!.repository.nameWithOwner == "owner/repo")
-        #expect(pr!.author.login == "octocat")
-        #expect(pr!.baseRefName == "main")
-        #expect(pr!.headRefName == "fix/thing")
-        #expect(pr!.headCommitSha == "abc123def")
-        #expect(pr!.checkStatus == .success)
-        #expect(pr!.reviewDecision == .reviewRequired)
+        let pr = try #require(node.toDomain())
+        #expect(pr.number == 42)
+        #expect(pr.title == "Fix the thing")
+        #expect(pr.state == .open)
+        #expect(pr.isDraft == false)
+        #expect(pr.additions == 10)
+        #expect(pr.deletions == 3)
+        #expect(pr.repository.nameWithOwner == "owner/repo")
+        #expect(pr.author.login == "octocat")
+        #expect(pr.baseRefName == "main")
+        #expect(pr.headRefName == "fix/thing")
+        #expect(pr.headCommitSha == "abc123def")
+        #expect(pr.checkStatus == .success)
+        #expect(pr.reviewDecision == .reviewRequired)
     }
 
     @Test("toDomain returns nil for invalid dates (URL is always parseable by Foundation)")
@@ -69,8 +68,7 @@ struct GitHubResponsesTests {
         )
         let data = json.data(using: .utf8)!
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
-        let pr = node.toDomain()
-        #expect(pr != nil)
+        _ = try #require(node.toDomain())
     }
 
     @Test("toDomain uses 'ghost' when author is null")
@@ -78,9 +76,8 @@ struct GitHubResponsesTests {
         let json = makeFullPRNodeJSON(authorJSON: "null")
         let data = json.data(using: .utf8)!
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
-        let pr = node.toDomain()
-        #expect(pr != nil)
-        #expect(pr!.author.login == "ghost")
+        let pr = try #require(node.toDomain())
+        #expect(pr.author.login == "ghost")
     }
 
     @Test("toDomain counts unresolved threads")
@@ -95,7 +92,7 @@ struct GitHubResponsesTests {
         let json = makeFullPRNodeJSON(reviewThreadsJSON: threadsJSON)
         let data = json.data(using: .utf8)!
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
-        let pr = node.toDomain()!
+        let pr = try #require(node.toDomain())
 
         #expect(pr.totalThreads == 3)
         #expect(pr.unresolvedThreads == 2)
@@ -112,7 +109,7 @@ struct GitHubResponsesTests {
         let json = makeFullPRNodeJSON(labelsJSON: labelsJSON)
         let data = json.data(using: .utf8)!
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
-        let pr = node.toDomain()!
+        let pr = try #require(node.toDomain())
 
         #expect(pr.labels.count == 2)
         #expect(pr.labels[0].name == "bug")
@@ -131,7 +128,7 @@ struct GitHubResponsesTests {
         let json = makeFullPRNodeJSON(latestReviewsJSON: reviewsJSON)
         let data = json.data(using: .utf8)!
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
-        let pr = node.toDomain()!
+        let pr = try #require(node.toDomain())
 
         #expect(pr.latestReviews.count == 2)
         #expect(pr.latestReviews[0].login == "alice")
@@ -166,11 +163,11 @@ struct GitHubResponsesTests {
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
         let data = json.data(using: .utf8)!
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
-        let pr = node.toDomain()!
+        let pr = try #require(node.toDomain())
 
-        #expect(pr.lastActivity != nil)
-        #expect(pr.lastActivity!.kind == .comment)
-        #expect(pr.lastActivity!.actor?.login == "reviewer")
+        let activity = try #require(pr.lastActivity)
+        #expect(activity.kind == .comment)
+        #expect(activity.actor?.login == "reviewer")
     }
 
     @Test("toDomain maps PullRequestReview with APPROVED state")
@@ -179,9 +176,9 @@ struct GitHubResponsesTests {
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
         let data = json.data(using: .utf8)!
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
-        let pr = node.toDomain()!
-
-        #expect(pr.lastActivity!.kind == .review(.approved))
+        let pr = try #require(node.toDomain())
+        let activity = try #require(pr.lastActivity)
+        #expect(activity.kind == .review(.approved))
     }
 
     @Test("toDomain maps PullRequestReview with CHANGES_REQUESTED state")
@@ -190,9 +187,9 @@ struct GitHubResponsesTests {
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
         let data = json.data(using: .utf8)!
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
-        let pr = node.toDomain()!
-
-        #expect(pr.lastActivity!.kind == .review(.changesRequested))
+        let pr = try #require(node.toDomain())
+        let activity = try #require(pr.lastActivity)
+        #expect(activity.kind == .review(.changesRequested))
     }
 
     @Test("toDomain maps PullRequestReview with COMMENTED state as review(nil)")
@@ -201,9 +198,9 @@ struct GitHubResponsesTests {
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
         let data = json.data(using: .utf8)!
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
-        let pr = node.toDomain()!
-
-        #expect(pr.lastActivity!.kind == .review(nil))
+        let pr = try #require(node.toDomain())
+        let activity = try #require(pr.lastActivity)
+        #expect(activity.kind == .review(nil))
     }
 
     @Test("toDomain maps MergedEvent activity")
@@ -212,10 +209,10 @@ struct GitHubResponsesTests {
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
         let data = json.data(using: .utf8)!
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
-        let pr = node.toDomain()!
-
-        #expect(pr.lastActivity!.kind == .merged)
-        #expect(pr.lastActivity!.actor?.login == "reviewer")
+        let pr = try #require(node.toDomain())
+        let activity = try #require(pr.lastActivity)
+        #expect(activity.kind == .merged)
+        #expect(activity.actor?.login == "reviewer")
     }
 
     @Test("toDomain maps ClosedEvent activity")
@@ -224,9 +221,9 @@ struct GitHubResponsesTests {
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
         let data = json.data(using: .utf8)!
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
-        let pr = node.toDomain()!
-
-        #expect(pr.lastActivity!.kind == .closed)
+        let pr = try #require(node.toDomain())
+        let activity = try #require(pr.lastActivity)
+        #expect(activity.kind == .closed)
     }
 
     @Test("toDomain maps HeadRefForcePushedEvent activity")
@@ -235,9 +232,9 @@ struct GitHubResponsesTests {
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
         let data = json.data(using: .utf8)!
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
-        let pr = node.toDomain()!
-
-        #expect(pr.lastActivity!.kind == .forcePushed)
+        let pr = try #require(node.toDomain())
+        let activity = try #require(pr.lastActivity)
+        #expect(activity.kind == .forcePushed)
     }
 
     @Test("toDomain maps PullRequestCommit activity")
@@ -260,10 +257,10 @@ struct GitHubResponsesTests {
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
         let data = json.data(using: .utf8)!
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
-        let pr = node.toDomain()!
-
-        #expect(pr.lastActivity!.kind == .committed)
-        #expect(pr.lastActivity!.actor?.login == "committer")
+        let pr = try #require(node.toDomain())
+        let activity = try #require(pr.lastActivity)
+        #expect(activity.kind == .committed)
+        #expect(activity.actor?.login == "committer")
     }
 
     @Test("toDomain returns nil lastActivity for unknown typename")
@@ -281,7 +278,7 @@ struct GitHubResponsesTests {
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
         let data = json.data(using: .utf8)!
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
-        let pr = node.toDomain()!
+        let pr = try #require(node.toDomain())
 
         #expect(pr.lastActivity == nil)
     }
@@ -291,7 +288,7 @@ struct GitHubResponsesTests {
         let json = makeFullPRNodeJSON(timelineJSON: #"{"nodes": []}"#)
         let data = json.data(using: .utf8)!
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
-        let pr = node.toDomain()!
+        let pr = try #require(node.toDomain())
 
         #expect(pr.lastActivity == nil)
     }
