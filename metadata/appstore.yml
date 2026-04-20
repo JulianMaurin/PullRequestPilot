@@ -1,15 +1,58 @@
-# Mirror of App Store Connect metadata. Update this when you change
-# subtitle/promotional text in App Store Connect so `make metadata-lint`
-# can catch forbidden brand terms before another submission rejection.
+# Mirror of App Store Connect metadata. Update this when you change any
+# listing text in App Store Connect so `make metadata-lint` can catch
+# forbidden brand terms and size violations before a submission rejection.
 #
 # `subtitle` contract (enforced by scripts/metadata-lint.sh):
 #   - Populated string: checked for forbidden brand terms (macOS, Mac, iOS,
-#     GitHub, Apple, ...) and the 30-char App Store limit. This is the
-#     normal case — mirror the live subtitle here verbatim.
+#     GitHub, Apple, ...) and the 30-char App Store limit.
 #   - "<unset>": explicit sentinel declaring "no subtitle is live on App
 #     Store Connect". The check is skipped, with an auditable log line.
-#     Use this ONLY if you have verified the live listing.
 #   - Empty (""): hard failure. Prior rejections happened twice because an
-#     empty value silently skipped the check. Choose one of the two above.
+#     empty value silently skipped the check.
+#
+# `keywords` contract:
+#   - Comma-separated list, <= 100 chars total (App Store hard limit).
+#   - Mirror the live value; leave as "<unset>" if no keywords are live.
+#
+# `description` contract:
+#   - Multi-line. <= 4000 chars total (App Store hard limit).
+#   - Forbidden-terms check is NOT applied — product names are allowed in
+#     context within the description body.
+#   - Leave as "<unset>" if no description is live.
 
-subtitle: ""
+subtitle: "The pull requests manager app"
+
+# Optimized for discoverability: no duplication with App Name / Subtitle
+# ("pull", "request(s)", "manager" are already indexed from those fields),
+# adds high-value adjacent terms developers actually search for.
+keywords: "pr,github,code review,reviewer,git,diff,merge,ci,check,dashboard,issue,oncall,commit,menu bar"
+
+description: |
+  Never miss a code review again. Pull Request Pilot lives in your Mac menu bar and keeps your GitHub pull request queue one click away — no browser tab, no context switch.
+
+  ORGANIZE YOUR WAY
+  Build custom views with the full power of GitHub search: PRs needing your review, ones you authored, recent drafts, anything merged last week — any query works, including issues. Each view gets its own tab, its own notification settings, and its own menu-bar badge.
+
+  KEEP IT VISIBLE
+  Desktop widgets in small, medium, and large sizes put your review queue on your wallpaper. Pick a compact count or a scrollable list of open PRs — whichever matches your workflow.
+
+  STAY IN FLOW
+  Click a PR to see its activity timeline, reviewer status, check results, labels, and last update at a glance — all without leaving the app. If the repository is cloned locally, open it directly in VS Code or iTerm with a single click.
+
+  NEVER MISS A REVIEW
+  Get native desktop notifications the moment a new pull request matches one of your views. Auto-refresh runs on your configured interval, so fresh PRs surface on their own. A menu-bar badge counts unread items at a glance.
+
+  FEATURES
+  - Menu bar app with one-click access to your PR queue
+  - Custom views backed by full GitHub search (pull requests and issues)
+  - Detail panel with activity timeline, check statuses, and reviewer state
+  - Desktop widgets in small, medium, and large sizes
+  - Native notifications per view
+  - Auto-refresh on a configurable interval
+  - Local repo scanning — open PRs in VS Code or iTerm with one click
+  - Hide-reviewed filter for ruthless inbox zero
+  - Keyboard shortcuts for view switching (Cmd+[ and Cmd+])
+  - Token stored in macOS Keychain
+  - Launches at login, lives quietly in the background
+
+  Built natively with SwiftUI. No external dependencies, no tracking, no analytics, no account required.

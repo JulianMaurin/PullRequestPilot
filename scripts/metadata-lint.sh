@@ -12,8 +12,13 @@
 #      pattern that cost two prior submissions.
 #      Populated values are checked for <= 30 chars and forbidden brand
 #      terms from metadata/forbidden-terms.txt.
-#   4. CFBundleDisplayName (project.yml) — no forbidden brand terms
-#   5. Privacy manifests exist for main app + widget
+#   4. metadata/appstore.yml keywords — <= 100 chars total (App Store
+#      hard limit). Same <unset>/empty contract as subtitle.
+#   5. metadata/appstore.yml description — <= 4000 chars (App Store hard
+#      limit). Same <unset>/empty contract; no forbidden-terms check
+#      because product names are allowed in context.
+#   6. CFBundleDisplayName (project.yml) — no forbidden brand terms
+#   7. Privacy manifests exist for main app + widget
 #
 # Env overrides (for tests):
 #   SUBTITLE_OVERRIDE  — override subtitle (bypass metadata/appstore.yml)
@@ -117,6 +122,62 @@ else
     ok "subtitle length $SUBTITLE_LEN/30"
   fi
   check_forbidden_terms "subtitle" "$SUBTITLE" || true
+fi
+
+# --- Keywords
+if [[ -f metadata/appstore.yml ]]; then
+  KEYWORDS=$(sed -nE 's/^keywords:[[:space:]]*"([^"]*)".*/\1/p' metadata/appstore.yml | head -1)
+else
+  KEYWORDS=""
+fi
+
+if [[ -z "$KEYWORDS" ]]; then
+  fail "keywords in metadata/appstore.yml is empty — populate with the live value, or set to \"$SUBTITLE_SENTINEL_UNSET\" if no keywords are live"
+elif [[ "$KEYWORDS" == "$SUBTITLE_SENTINEL_UNSET" ]]; then
+  ok "keywords declared absent via $SUBTITLE_SENTINEL_UNSET sentinel"
+else
+  KEYWORDS_LEN=${#KEYWORDS}
+  if (( KEYWORDS_LEN > 100 )); then
+    fail "keywords is $KEYWORDS_LEN chars (max 100): \"$KEYWORDS\""
+  else
+    ok "keywords length $KEYWORDS_LEN/100"
+  fi
+fi
+
+# --- Description
+# Extracted from the `description: |` block literal. `awk` pulls the indented
+# lines that follow until the first non-indented line (next top-level key).
+if [[ -f metadata/appstore.yml ]]; then
+  DESCRIPTION=$(awk '
+    /^description:[[:space:]]*"<unset>"/ { print "<unset>"; exit }
+    /^description:[[:space:]]*"/ {
+      sub(/^description:[[:space:]]*"/, "")
+      sub(/".*$/, "")
+      print
+      exit
+    }
+    /^description:[[:space:]]*\|/ { in_block = 1; next }
+    in_block {
+      if (/^[^[:space:]]/) exit
+      sub(/^  /, "")
+      print
+    }
+  ' metadata/appstore.yml)
+else
+  DESCRIPTION=""
+fi
+
+if [[ -z "$DESCRIPTION" ]]; then
+  fail "description in metadata/appstore.yml is empty — populate with the live value, or set to \"$SUBTITLE_SENTINEL_UNSET\" if no description is live"
+elif [[ "$DESCRIPTION" == "$SUBTITLE_SENTINEL_UNSET" ]]; then
+  ok "description declared absent via $SUBTITLE_SENTINEL_UNSET sentinel"
+else
+  DESCRIPTION_LEN=${#DESCRIPTION}
+  if (( DESCRIPTION_LEN > 4000 )); then
+    fail "description is $DESCRIPTION_LEN chars (max 4000)"
+  else
+    ok "description length $DESCRIPTION_LEN/4000"
+  fi
 fi
 
 # --- CFBundleDisplayName
