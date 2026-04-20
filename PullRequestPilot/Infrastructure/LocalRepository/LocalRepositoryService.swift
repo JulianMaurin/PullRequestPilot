@@ -206,7 +206,7 @@ final class LocalRepositoryService {
         var entries: [RepoEntry] = []
 
         for gitDir in directories {
-            let repoDirs = discoverAllRepoDirs(in: gitDir)
+            let repoDirs = discoverAllRepoDirs(in: gitDir, logger: logger)
 
             for repoDir in repoDirs {
                 guard let nwo = extractNameWithOwner(repoDir: repoDir) else { continue }
@@ -232,7 +232,7 @@ final class LocalRepositoryService {
 
     // MARK: - Discovery
 
-    nonisolated private static func discoverAllRepoDirs(in directory: URL) -> [URL] {
+    nonisolated private static func discoverAllRepoDirs(in directory: URL, logger: Logger) -> [URL] {
         let fm = FileManager.default
         var repos: [URL] = []
 
@@ -240,11 +240,18 @@ final class LocalRepositoryService {
             repos.append(directory)
         }
 
-        guard let contents = try? fm.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else {
+        let contents: [URL]
+        do {
+            contents = try fm.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        } catch {
+            // Without this log, a sandbox/permission/stale-bookmark failure
+            // here surfaces as a zero-repo scan with no diagnostic — masking
+            // the root cause when users report "Open in VS Code stopped working".
+            logger.error("Failed to enumerate \(directory.path, privacy: .private): \(error, privacy: .public)")
             return repos
         }
 

@@ -29,11 +29,7 @@ final class GitDirectoriesStore {
     // MARK: - Public
 
     func load() -> [URL] {
-        guard let bookmarksData = defaults.array(forKey: Self.key) as? [Data] else {
-            cachedBookmarksFingerprint = nil
-            cachedURLs = []
-            return []
-        }
+        let bookmarksData = decodeStoredBookmarks()
         if let cached = cachedBookmarksFingerprint, cached == bookmarksData {
             return cachedURLs
         }
@@ -105,6 +101,37 @@ final class GitDirectoriesStore {
         for url in urls where startedURLs.contains(url) {
             url.stopAccessingSecurityScopedResource()
             startedURLs.remove(url)
+        }
+    }
+
+    // MARK: - Corruption handling
+
+    /// Reads the raw stored bookmark array, reporting+backing up if the stored
+    /// value is the wrong type (e.g. corrupted across versions). On corruption
+    /// the entry is removed so subsequent reads do not re-report, and so the
+    /// next `save` starts from a clean slate.
+    private func decodeStoredBookmarks() -> [Data] {
+        guard let raw = defaults.object(forKey: Self.key) else { return [] }
+        if let bookmarks = raw as? [Data] { return bookmarks }
+        let backupPath = backupCorruptedData(raw)
+        logger.error("git_directory_bookmarks stored value is not [Data] (was \(String(describing: type(of: raw)), privacy: .public)). Backup: \(backupPath ?? "n/a", privacy: .public)")
+        reporter.postError(.decodeCorruption(subsystem: "git directories", backupPath: backupPath))
+        defaults.removeObject(forKey: Self.key)
+        return []
+    }
+
+    private func backupCorruptedData(_ value: Any) -> String? {
+        guard let supportDir = ViewsStore.applicationSupportDirectory() else { return nil }
+        let filename = "git-directories.corrupted-\(ViewsStore.backupDateString()).plist"
+        let url = supportDir.appendingPathComponent(filename)
+        do {
+            try FileManager.default.createDirectory(at: supportDir, withIntermediateDirectories: true)
+            let data = try PropertyListSerialization.data(fromPropertyList: value, format: .binary, options: 0)
+            try data.write(to: url, options: .atomic)
+            return url.path
+        } catch {
+            logger.error("Failed to write corruption backup: \(error, privacy: .public)")
+            return nil
         }
     }
 

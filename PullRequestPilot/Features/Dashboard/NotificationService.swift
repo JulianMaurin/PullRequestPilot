@@ -13,12 +13,14 @@ final class NotificationService {
     private(set) var systemAuthorized: Bool = false
 
     private let defaults: UserDefaults
+    private let reporter: EventReporter
     private let logger: Logger
 
     // MARK: - Init
 
-    init(defaults: UserDefaults) {
+    init(defaults: UserDefaults, reporter: EventReporter = .noop) {
         self.defaults = defaults
+        self.reporter = reporter
         self.logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Notifications")
         self.enabledViewIDs = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.notifiedViewIDs) ?? [])
     }
@@ -110,6 +112,7 @@ final class NotificationService {
             return
         } catch {
             logger.error("Failed to deliver notification: \(error, privacy: .public)")
+            reporter.postError(.notificationSystemError(detail: error.localizedDescription))
         }
     }
 
@@ -134,6 +137,7 @@ final class NotificationService {
             return false
         } catch {
             logger.error("Notification permission error: \(error, privacy: .public)")
+            reporter.postError(.notificationSystemError(detail: error.localizedDescription))
             return false
         }
     }

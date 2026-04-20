@@ -87,7 +87,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
         self.collapsedOrgs = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.collapsedOrgs) ?? [])
         self.collapsedRepos = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.collapsedRepos) ?? [])
         self.badgeTracker = BadgeTracker(defaults: defaults)
-        self.notificationService = NotificationService(defaults: defaults)
+        self.notificationService = NotificationService(defaults: defaults, reporter: reporter)
         self.viewRegistry = ViewRegistry(viewsStore: viewsStore, defaults: defaults)
 
         let filterIdentity = identity
