@@ -129,8 +129,9 @@ final class PRDetailViewModel {
                     checksCursor = checksPage.nextCursor
                 }
 
-                // Deduplicate check runs across pages by name, keeping the best conclusion
-                let deduplicatedCheckRuns = allCheckRuns.deduplicatedByName()
+                // Dedupe check runs across pages by `(name, workflowRunID)`,
+                // keeping the latest attempt per group.
+                let deduplicatedCheckRuns = allCheckRuns.deduplicatedLatest()
 
                 // Deduplicate reviewers across pages, keeping last occurrence (latest state)
                 var seenReviewerIDs = Set<String>()

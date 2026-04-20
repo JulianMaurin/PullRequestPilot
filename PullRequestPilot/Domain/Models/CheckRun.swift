@@ -7,8 +7,18 @@ struct CheckRun: Identifiable, Hashable, Sendable {
     let conclusion: CheckRunConclusion?
     let detailsURL: URL?
     let isRequired: Bool
+    /// GitHub Actions workflow-run database ID. `nil` for `StatusContext`
+    /// entries (commit statuses from non-Actions CI systems) and for rare
+    /// CheckRuns without a check suite. Distinguishes two workflows that
+    /// happen to produce checks with the same name.
+    let workflowRunID: Int?
+    /// When GitHub started this check run. Used to pick the latest attempt
+    /// within a `(name, workflowRunID)` group. `nil` falls back to
+    /// `conclusionPriority`.
+    let startedAt: Date?
 
-    /// Priority for deduplication: higher = preferred when multiple runs share a name.
+    /// Priority for deduplication fallback: higher = preferred when two runs
+    /// in the same group have equal / missing `startedAt`.
     var conclusionPriority: Int {
         switch conclusion {
         case nil: return 5 // in-progress / pending — active runs always win over completed
@@ -77,22 +87,50 @@ enum CheckRunStatus: String, Sendable {
     }
 }
 
+/// Grouping key for CheckRun dedupe. Hoisted out of the extension because
+/// Swift does not allow types to be nested in generic methods.
+struct CheckRunDedupeKey: Hashable {
+    let name: String
+    let workflowRunID: Int?
+}
+
 extension Array where Element == CheckRun {
-    /// Deduplicates check runs by name, keeping the run with the highest `conclusionPriority`.
-    func deduplicatedByName() -> [CheckRun] {
-        var bestByName: [String: CheckRun] = [:]
-        var nameOrder: [String] = []
+    /// Dedupes check runs by `(name, workflowRunID)`. Within a group, the run
+    /// with the latest `startedAt` wins — if timestamps tie or are missing,
+    /// falls back to `conclusionPriority`. This collapses workflow re-runs to
+    /// their latest attempt while keeping distinct workflows that share a job
+    /// name as separate entries.
+    ///
+    /// Entries with `workflowRunID == nil` (StatusContexts, orphan CheckRuns)
+    /// dedupe by name alone, matching the prior behaviour for those cases.
+    func deduplicatedLatest() -> [CheckRun] {
+        var best: [CheckRunDedupeKey: CheckRun] = [:]
+        var order: [CheckRunDedupeKey] = []
         for run in self {
-            if let existing = bestByName[run.name] {
-                if run.conclusionPriority > existing.conclusionPriority {
-                    bestByName[run.name] = run
+            let key = CheckRunDedupeKey(name: run.name, workflowRunID: run.workflowRunID)
+            if let existing = best[key] {
+                if Self.isLater(run, than: existing) {
+                    best[key] = run
                 }
             } else {
-                nameOrder.append(run.name)
-                bestByName[run.name] = run
+                order.append(key)
+                best[key] = run
             }
         }
-        return nameOrder.compactMap { bestByName[$0] }
+        return order.compactMap { best[$0] }
+    }
+
+    private static func isLater(_ candidate: CheckRun, than current: CheckRun) -> Bool {
+        switch (candidate.startedAt, current.startedAt) {
+        case let (.some(a), .some(b)) where a != b:
+            return a > b
+        case (.some, .none):
+            return true
+        case (.none, .some):
+            return false
+        default:
+            return candidate.conclusionPriority > current.conclusionPriority
+        }
     }
 }
 

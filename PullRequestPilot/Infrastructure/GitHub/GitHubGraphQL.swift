@@ -237,7 +237,13 @@ enum GitHubGraphQL {
                             status
                             conclusion
                             detailsUrl
+                            startedAt
                             isRequired(pullRequestId: "\(escapedNodeID)")
+                            checkSuite {
+                              workflowRun {
+                                databaseId
+                              }
+                            }
                           }
                           ... on StatusContext {
                             context
@@ -279,7 +285,13 @@ enum GitHubGraphQL {
                             status
                             conclusion
                             detailsUrl
+                            startedAt
                             isRequired(pullRequestId: "\(escapedNodeID)")
+                            checkSuite {
+                              workflowRun {
+                                databaseId
+                              }
+                            }
                           }
                           ... on StatusContext {
                             context

@@ -205,11 +205,11 @@ struct PRDetailViewModelTests {
     func selectPaginatesCheckRuns() async throws {
         let client = MockGitHubClient()
         let initialChecks = [
-            CheckRun(id: "c1", name: "lint", status: .completed, conclusion: .success, detailsURL: nil, isRequired: false),
+            CheckRun(id: "c1", name: "lint", status: .completed, conclusion: .success, detailsURL: nil, isRequired: false, workflowRunID: nil, startedAt: nil),
         ]
         let paginatedChecks = [
-            CheckRun(id: "c2", name: "build", status: .completed, conclusion: .success, detailsURL: nil, isRequired: true),
-            CheckRun(id: "c3", name: "test", status: .completed, conclusion: .failure, detailsURL: nil, isRequired: true),
+            CheckRun(id: "c2", name: "build", status: .completed, conclusion: .success, detailsURL: nil, isRequired: true, workflowRunID: nil, startedAt: nil),
+            CheckRun(id: "c3", name: "test", status: .completed, conclusion: .failure, detailsURL: nil, isRequired: true, workflowRunID: nil, startedAt: nil),
         ]
         client.checkRunsToReturn = initialChecks
         client.checksNextCursorToReturn = "checks-cursor-1"
