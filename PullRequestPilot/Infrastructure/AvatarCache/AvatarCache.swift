@@ -4,13 +4,14 @@ import os
 /// In-memory LRU cache for avatar images, backed by NSCache which
 /// automatically evicts under memory pressure. Capped at 200 entries
 /// to prevent unbounded growth. Coalesces concurrent requests for the
-/// same URL to avoid duplicate network fetches.
+/// same URL through a shared `RequestCoalescer` so duplicate network
+/// fetches fold into a single round-trip.
 @MainActor
 final class AvatarCache {
     static let shared = AvatarCache()
 
     private let cache = NSCache<NSURL, NSImage>()
-    private var inFlight: [URL: Task<NSImage?, Never>] = [:]
+    private let coalescer = RequestCoalescer<URL, Data>()
     private let session: URLSession
     private let logger = Logger(subsystem: "PullRequestPilot", category: "AvatarCache")
 
@@ -30,28 +31,24 @@ final class AvatarCache {
             return cached
         }
 
-        if let existing = inFlight[url] {
-            return await existing.value
+        let data: Data
+        do {
+            let session = self.session
+            data = try await coalescer.run(key: url) {
+                let (bytes, _) = try await session.data(from: url)
+                return bytes
+            }
+        } catch is CancellationError {
+            return nil
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            return nil
+        } catch {
+            logger.debug("Failed to load avatar from \(url, privacy: .public): \(error, privacy: .public)")
+            return nil
         }
 
-        let task = Task<NSImage?, Never> {
-            do {
-                let (data, _) = try await session.data(from: url)
-                guard let image = NSImage(data: data) else { return nil }
-                cache.setObject(image, forKey: url as NSURL)
-                return image
-            } catch is CancellationError {
-                return nil
-            } catch let urlError as URLError where urlError.code == .cancelled {
-                return nil
-            } catch {
-                logger.debug("Failed to load avatar from \(url, privacy: .public): \(error, privacy: .public)")
-                return nil
-            }
-        }
-        inFlight[url] = task
-        let result = await task.value
-        inFlight.removeValue(forKey: url)
-        return result
+        guard let image = NSImage(data: data) else { return nil }
+        cache.setObject(image, forKey: url as NSURL)
+        return image
     }
 }

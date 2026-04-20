@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import os
 import Testing
 
 @testable import PullRequestPilot
@@ -112,5 +113,32 @@ struct AvatarCacheTests {
 
         let result = await cache.image(for: url)
         #expect(result == nil)
+    }
+
+    // MARK: - Coalescing
+
+    @Test func concurrentRequestsForSameURLFetchOnce() async {
+        let session = makeSession()
+        let cache = makeCache(session: session)
+        let url = URL(string: "https://avatars.example.com/shared.png")!
+        let imageData = sampleImageData()
+
+        let fetchCount = OSAllocatedUnfairLock<Int>(initialState: 0)
+        MockURLProtocol.requestHandler = { _ in
+            fetchCount.withLock { $0 += 1 }
+            Thread.sleep(forTimeInterval: 0.02)
+            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, imageData)
+        }
+
+        async let first = cache.image(for: url)
+        async let second = cache.image(for: url)
+        async let third = cache.image(for: url)
+        let results = await (first, second, third)
+
+        #expect(results.0 != nil)
+        #expect(results.1 != nil)
+        #expect(results.2 != nil)
+        #expect(fetchCount.withLock { $0 } == 1)
     }
 }

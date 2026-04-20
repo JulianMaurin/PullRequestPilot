@@ -128,6 +128,16 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
     private let session: URLSession
     private let logger = Logger(subsystem: "PullRequestPilot", category: "GitHubClient")
 
+    /// Coalesces concurrent identical reads (same query + token) into a single
+    /// network round-trip. Two dashboard views polling the same repo, or two
+    /// `refreshAll` calls overlapping, now share one request instead of racing.
+    private let networkCoalescer = RequestCoalescer<NetworkKey, Data>()
+
+    private struct NetworkKey: Hashable, Sendable {
+        let query: String
+        let token: String
+    }
+
     private static let endpoint: URL =
         URL(string: "https://api.github.com/graphql")
         ?? URL(fileURLWithPath: "/")
@@ -256,48 +266,7 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             throw GitHubClientError.unauthorized
         }
 
-        var request = URLRequest(url: Self.endpoint)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let body = ["query": query]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch let urlError as URLError where urlError.code == .cancelled {
-            throw CancellationError()
-        } catch {
-            throw GitHubClientError.networkError(error)
-        }
-
-        if let httpResponse = response as? HTTPURLResponse {
-            switch httpResponse.statusCode {
-            case 200...299:
-                break
-            case 401:
-                onUnauthorized(token)
-                throw GitHubClientError.unauthorized
-            case 403:
-                // Only treat 403 as rate-limit when the rate-limit headers say so.
-                // A bare 403 with no rate headers is a permission/scope error.
-                if Self.isRateLimited(response: httpResponse) {
-                    throw GitHubClientError.rateLimited(retryAfter: Self.parseRetryAfter(from: httpResponse))
-                }
-                throw GitHubClientError.permissionDenied(detail: Self.extractErrorMessage(from: data))
-            case 429:
-                throw GitHubClientError.rateLimited(retryAfter: Self.parseRetryAfter(from: httpResponse))
-            case 400...499:
-                throw GitHubClientError.clientError(statusCode: httpResponse.statusCode)
-            case 500...599:
-                throw GitHubClientError.serverError(statusCode: httpResponse.statusCode)
-            default:
-                break
-            }
-        }
+        let data = try await fetchRawData(query: query, token: token)
 
         do {
             return try JSONDecoder().decode(GraphQLResponse<T>.self, from: data)
@@ -309,6 +278,59 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
                 throw GitHubClientError.graphQLErrors(errors.map(\.message))
             }
             throw GitHubClientError.decodingError(error)
+        }
+    }
+
+    /// Performs the network round-trip and HTTP status classification, returning
+    /// raw response bytes. Coalesced on (query, token): concurrent callers with
+    /// the same key share a single request, decode independently.
+    private func fetchRawData(query: String, token: String) async throws -> Data {
+        let key = NetworkKey(query: query, token: token)
+        let session = self.session
+        let onUnauthorized = self.onUnauthorized
+        return try await networkCoalescer.run(key: key) {
+            var request = URLRequest(url: Self.endpoint)
+            request.httpMethod = "POST"
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: ["query": query])
+
+            let data: Data
+            let response: URLResponse
+            do {
+                (data, response) = try await session.data(for: request)
+            } catch let urlError as URLError where urlError.code == .cancelled {
+                throw CancellationError()
+            } catch {
+                throw GitHubClientError.networkError(error)
+            }
+
+            if let httpResponse = response as? HTTPURLResponse {
+                switch httpResponse.statusCode {
+                case 200...299:
+                    break
+                case 401:
+                    onUnauthorized(token)
+                    throw GitHubClientError.unauthorized
+                case 403:
+                    // Only treat 403 as rate-limit when the rate-limit headers say so.
+                    // A bare 403 with no rate headers is a permission/scope error.
+                    if Self.isRateLimited(response: httpResponse) {
+                        throw GitHubClientError.rateLimited(retryAfter: Self.parseRetryAfter(from: httpResponse))
+                    }
+                    throw GitHubClientError.permissionDenied(detail: Self.extractErrorMessage(from: data))
+                case 429:
+                    throw GitHubClientError.rateLimited(retryAfter: Self.parseRetryAfter(from: httpResponse))
+                case 400...499:
+                    throw GitHubClientError.clientError(statusCode: httpResponse.statusCode)
+                case 500...599:
+                    throw GitHubClientError.serverError(statusCode: httpResponse.statusCode)
+                default:
+                    break
+                }
+            }
+
+            return data
         }
     }
 
