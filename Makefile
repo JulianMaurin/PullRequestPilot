@@ -12,7 +12,7 @@ CONFIG       := Release
 export DEVELOPER_DIR := /Applications/Xcode.app/Contents/Developer
 
 XCODEBUILD_BASE := xcodebuild -scheme $(SCHEME) -project $(PROJECT) \
-	-destination 'platform=macOS'
+	-destination 'generic/platform=macOS'
 XCODEBUILD := $(XCODEBUILD_BASE) -configuration $(CONFIG)
 
 XCB_FILTER := scripts/xcb-filter.sh
@@ -124,17 +124,49 @@ reinstall: uninstall
 # Nuke — wipe everything (app, data, token) for a clean first-launch experience
 BUNDLE_ID    := com.pullrequestpilot.app
 APP_GROUP_ID := FNR3B372S8.com.pullrequestpilot.shared
-nuke: uninstall
+LSREGISTER   := /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister
+nuke:
+	@echo "Quitting running app + widget (otherwise they re-register notifications while we purge)..."
+	@killall PullRequestPilot 2>/dev/null || true
+	@killall PullRequestPilotWidgetExtension 2>/dev/null || true
+	@# Give launchd a moment to notice the exit so it doesn't respawn the widget.
+	@sleep 1
+	@echo "Unregistering installed app from Launch Services (before removal)..."
+	@$(LSREGISTER) -u "$(INSTALL_DIR)/$(APP_NAME)" 2>/dev/null || true
+	@echo "Removing $(INSTALL_DIR)/$(APP_NAME)..."
+	@rm -rf "$(INSTALL_DIR)/$(APP_NAME)"
 	@echo "Removing UserDefaults for $(BUNDLE_ID)..."
 	@defaults delete $(BUNDLE_ID) 2>/dev/null || true
 	@echo "Removing app group container..."
-	@rm -rf "$(HOME)/Library/Group Containers/$(APP_GROUP_ID)"
-	@echo "Removing app containers..."
-	@rm -rf "$(HOME)/Library/Containers/$(BUNDLE_ID)" 2>/dev/null || true
+	@rm -rf "$(HOME)/Library/Group Containers/$(APP_GROUP_ID)" 2>/dev/null || \
+		echo "  (protected by macOS App Management — grant Terminal permission in System Settings › Privacy & Security › App Management to clear)"
+	@echo "Removing all app containers (main, widget, test variants)..."
+	@for dir in $(BUNDLE_ID) $(BUNDLE_ID).widget $(BUNDLE_ID).test $(BUNDLE_ID).test.widget; do \
+		rm -rf "$(HOME)/Library/Containers/$$dir" 2>/dev/null || echo "  (skipped $$dir — protected)"; \
+	done
+	@echo "Removing Application Scripts directories..."
+	@for dir in $(BUNDLE_ID) $(BUNDLE_ID).widget $(BUNDLE_ID).test $(BUNDLE_ID).test.widget $(APP_GROUP_ID); do \
+		rm -rf "$(HOME)/Library/Application Scripts/$$dir" 2>/dev/null || echo "  (skipped $$dir — protected)"; \
+	done
 	@echo "Removing Keychain token..."
 	@security delete-generic-password -s $(BUNDLE_ID) 2>/dev/null || true
 	@echo "Removing DerivedData..."
 	@rm -rf $(HOME)/Library/Developer/Xcode/DerivedData/PullRequestPilot-*
-	@echo "Killing NotificationCenter to flush widget cache..."
-	@killall NotificationCenter 2>/dev/null || true
+	@echo "Resetting TCC permissions (microphone/camera/full-disk — not notifications)..."
+	@tccutil reset All $(BUNDLE_ID) 2>/dev/null || true
+	@tccutil reset All $(BUNDLE_ID).widget 2>/dev/null || true
+	@echo "Rebuilding Launch Services database (purges stale NOTIFICATION# activity types)..."
+	@$(LSREGISTER) -kill -r -domain user 2>/dev/null || true
+	@# Notifications MUST come LAST. Rebuilding Launch Services above re-processes
+	@# the app's old NOTIFICATION# activity type and BTM reconciles its login-item
+	@# record, both of which cause usernoted to re-register the bundle with auth=6
+	@# via designated-requirement match. If we purged notifications first, that
+	@# re-registration would defeat the purge — observed as needing 2-3 successive
+	@# `make nuke` runs before the auth plist stayed clean.
+	@echo "Purging notification authorization state (ncprefs + usernoted plist + db)..."
+	@scripts/nuke-notifications.sh \
+		$(BUNDLE_ID) \
+		$(BUNDLE_ID).widget \
+		$(BUNDLE_ID).test \
+		$(BUNDLE_ID).test.widget
 	@echo "Nuke complete — next launch will behave like a fresh install."
