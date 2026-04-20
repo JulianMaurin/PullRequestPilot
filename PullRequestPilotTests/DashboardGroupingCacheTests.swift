@@ -34,7 +34,7 @@ struct DashboardGroupingCacheTests {
     ) async -> DashboardView {
         let view = DashboardView(id: UUID(), title: title, query: "is:pr")
         viewModel.addView(view)
-        mock.pullRequestsToReturn = prs
+        await mock.setPullRequestsToReturn(prs)
         await viewModel.refresh(viewID: view.id)
         return view
     }
@@ -73,10 +73,10 @@ struct DashboardGroupingCacheTests {
         _ = vm.groupedSelected
         #expect(vm.groupedRecomputeCount == 1)
         // Refresh with a different list; the cache must miss.
-        mock.pullRequestsToReturn = [
+        await mock.setPullRequestsToReturn([
             TestPullRequestFactory.make(id: "PR_1", title: "one"),
             TestPullRequestFactory.make(id: "PR_2", title: "two"),
-        ]
+        ])
         await vm.refresh(viewID: view.id)
         _ = vm.groupedSelected
         #expect(vm.groupedRecomputeCount == 2)

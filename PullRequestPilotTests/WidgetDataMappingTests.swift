@@ -25,7 +25,7 @@ struct WidgetDataMappingTests {
         let pr1 = TestPullRequestFactory.make(id: "PR_1", reviewDecision: .approved)
         let pr2 = TestPullRequestFactory.make(id: "PR_2", reviewDecision: .changesRequested)
         let pr3 = TestPullRequestFactory.make(id: "PR_3", reviewDecision: .reviewRequired)
-        mockClient.pullRequestsToReturn = [pr1, pr2, pr3]
+        await mockClient.setPullRequestsToReturn([pr1, pr2, pr3])
 
         await viewModel.refreshAll()
 
@@ -41,9 +41,9 @@ struct WidgetDataMappingTests {
     func widgetDataLimitsPRs() async {
         let (viewModel, _) = makeViewModel(suiteName: "WidgetLimit")
 
-        mockClient.pullRequestsToReturn = (1...15).map {
+        await mockClient.setPullRequestsToReturn((1...15).map {
             TestPullRequestFactory.make(id: "PR_\($0)", number: $0, title: "PR \($0)")
-        }
+        })
 
         await viewModel.refreshAll()
 
@@ -65,7 +65,7 @@ struct WidgetDataMappingTests {
             isDraft: true,
             reviewDecision: .approved
         )
-        mockClient.pullRequestsToReturn = [pr]
+        await mockClient.setPullRequestsToReturn([pr])
 
         await viewModel.refreshAll()
 
@@ -82,7 +82,7 @@ struct WidgetDataMappingTests {
     @Test("clearAllData writes empty widget data")
     func clearAllDataClearsWidget() async {
         let (viewModel, _) = makeViewModel(suiteName: "WidgetClear")
-        mockClient.pullRequestsToReturn = [TestPullRequestFactory.make()]
+        await mockClient.setPullRequestsToReturn([TestPullRequestFactory.make()])
 
         await viewModel.refreshAll()
         viewModel.clearAllData()

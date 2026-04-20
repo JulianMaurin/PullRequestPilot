@@ -60,7 +60,7 @@ struct SettingsViewModelTests {
     @Test("save stores token and validates against GitHub API")
     func saveTokenSuccess() async {
         let (vm, keychain, _, _, _) = makeViewModel(suiteName: "SaveSuccess")
-        mockClient.viewerLoginToReturn = "octocat"
+        await mockClient.setViewerLogin("octocat")
 
         vm.token = "ghp_valid_token"
         await vm.save()
@@ -72,7 +72,7 @@ struct SettingsViewModelTests {
     @Test("save transitions through validating state")
     func saveTransitionsStates() async {
         let (vm, _, _, _, _) = makeViewModel(suiteName: "SaveTransitions")
-        mockClient.viewerLoginToReturn = "user"
+        await mockClient.setViewerLogin("user")
 
         vm.token = "ghp_token"
         // Before save
@@ -86,7 +86,7 @@ struct SettingsViewModelTests {
     @Test("save sets invalid state when API returns unauthorized")
     func saveTokenUnauthorized() async {
         let (vm, _, _, _, _) = makeViewModel(suiteName: "SaveUnauth")
-        mockClient.errorToThrow = GitHubClientError.unauthorized
+        await mockClient.setErrorToThrow(GitHubClientError.unauthorized)
 
         vm.token = "ghp_bad_token"
         await vm.save()
@@ -101,7 +101,7 @@ struct SettingsViewModelTests {
     @Test("save sets invalid state for graphQL errors")
     func saveTokenGraphQLError() async {
         let (vm, _, _, _, _) = makeViewModel(suiteName: "SaveGraphQL")
-        mockClient.errorToThrow = GitHubClientError.graphQLErrors(["scope missing"])
+        await mockClient.setErrorToThrow(GitHubClientError.graphQLErrors(["scope missing"]))
 
         vm.token = "ghp_token"
         await vm.save()
@@ -116,7 +116,7 @@ struct SettingsViewModelTests {
     @Test("save sets invalid state for network errors")
     func saveTokenNetworkError() async {
         let (vm, _, _, _, _) = makeViewModel(suiteName: "SaveNetwork")
-        mockClient.errorToThrow = GitHubClientError.networkError(URLError(.notConnectedToInternet))
+        await mockClient.setErrorToThrow(GitHubClientError.networkError(URLError(.notConnectedToInternet)))
 
         vm.token = "ghp_token"
         await vm.save()
@@ -131,7 +131,7 @@ struct SettingsViewModelTests {
     @Test("save sets invalid state for decoding errors")
     func saveTokenDecodingError() async {
         let (vm, _, _, _, _) = makeViewModel(suiteName: "SaveDecoding")
-        mockClient.errorToThrow = GitHubClientError.decodingError(URLError(.cannotParseResponse))
+        await mockClient.setErrorToThrow(GitHubClientError.decodingError(URLError(.cannotParseResponse)))
 
         vm.token = "ghp_token"
         await vm.save()
@@ -277,7 +277,7 @@ struct SettingsViewModelTests {
 
         // Create a custom error that is NOT GitHubClientError
         struct TestError: Error {}
-        mockClient.errorToThrow = TestError()
+        await mockClient.setErrorToThrow(TestError())
 
         vm.token = "ghp_token"
         await vm.save()
@@ -294,7 +294,7 @@ struct SettingsViewModelTests {
     @Test("save trims whitespace from token before saving")
     func saveTrimsWhitespace() async {
         let (vm, keychain, _, _, _) = makeViewModel(suiteName: "SaveTrim")
-        mockClient.viewerLoginToReturn = "user"
+        await mockClient.setViewerLogin("user")
 
         vm.token = "  ghp_token_with_spaces  \n"
         await vm.save()
@@ -331,7 +331,7 @@ struct SettingsViewModelTests {
     @Test("save sets hasSavedToken to true")
     func saveSetsSavedToken() async {
         let (vm, _, _, _, _) = makeViewModel(suiteName: "SaveSetsSaved")
-        mockClient.viewerLoginToReturn = "user"
+        await mockClient.setViewerLogin("user")
         #expect(!vm.hasSavedToken)
 
         vm.token = "ghp_new_token"
@@ -355,7 +355,7 @@ struct SettingsViewModelTests {
     @Test("save sets viewerLogin on success")
     func saveStoresViewerLogin() async {
         let (vm, _, _, _, _) = makeViewModel(suiteName: "ViewerLogin")
-        mockClient.viewerLoginToReturn = "octocat"
+        await mockClient.setViewerLogin("octocat")
 
         vm.token = "ghp_valid"
         await vm.save()
@@ -367,7 +367,7 @@ struct SettingsViewModelTests {
     @Test("clearToken clears viewerLogin and resets state")
     func clearTokenClearsViewerLogin() async {
         let (vm, _, _, _, _) = makeViewModel(storedToken: "ghp_token", suiteName: "ClearViewerLogin")
-        mockClient.viewerLoginToReturn = "octocat"
+        await mockClient.setViewerLogin("octocat")
         vm.token = "ghp_token"
         await vm.save()
         #expect(vm.viewerLogin == "octocat")
@@ -383,7 +383,7 @@ struct SettingsViewModelTests {
     @Test("save clears saveError on new attempt")
     func saveClearsSaveError() async {
         let (vm, _, _, _, _) = makeViewModel(suiteName: "ClearSaveError")
-        mockClient.viewerLoginToReturn = "user"
+        await mockClient.setViewerLogin("user")
 
         vm.token = "ghp_token"
         await vm.save()
@@ -457,11 +457,11 @@ struct SettingsViewModelTests {
     // MARK: - viewerAvatarURL
 
     @Test("save sets viewerAvatarURL on success")
-    func saveStoresViewerAvatarURL() async {
+    func saveStoresViewerAvatarURL() async throws {
         let (vm, _, _, _, _) = makeViewModel(suiteName: "AvatarURL")
-        let avatarURL = URL(string: "https://avatars.githubusercontent.com/u/123")!
-        mockClient.viewerLoginToReturn = "octocat"
-        mockClient.viewerAvatarURLToReturn = avatarURL
+        let avatarURL = try #require(URL(string: "https://avatars.githubusercontent.com/u/123"))
+        await mockClient.setViewerLogin("octocat")
+        await mockClient.setViewerAvatarURL(avatarURL)
 
         vm.token = "ghp_valid"
         await vm.save()
@@ -473,8 +473,8 @@ struct SettingsViewModelTests {
     @Test("clearToken resets viewerAvatarURL")
     func clearTokenResetsAvatarURL() async {
         let (vm, _, _, _, _) = makeViewModel(storedToken: "ghp_token", suiteName: "ClearAvatar")
-        mockClient.viewerLoginToReturn = "octocat"
-        mockClient.viewerAvatarURLToReturn = URL(string: "https://example.com/avatar")
+        await mockClient.setViewerLogin("octocat")
+        await mockClient.setViewerAvatarURL(URL(string: "https://example.com/avatar"))
         vm.token = "ghp_token"
         await vm.save()
 

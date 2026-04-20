@@ -1,172 +1,112 @@
 import Foundation
-import os
 @testable import PullRequestPilot
 
-/// Thread-safe mock. All state is guarded by a single lock because Swift
-/// Testing runs tests in parallel and per-test task groups (e.g.,
-/// `DashboardViewModel.refreshAll`) invoke `fetchPullRequests` concurrently
-/// from multiple tasks against the same mock instance.
-final class MockGitHubClient: GitHubClientProtocol, @unchecked Sendable {
-    private let lock = OSAllocatedUnfairLock()
+/// Actor-backed mock. Swift Testing runs tests in parallel and per-test task
+/// groups (e.g. `DashboardViewModel.refreshAll`) invoke `fetchPullRequests`
+/// concurrently from multiple tasks against the same mock instance — actor
+/// isolation serializes those reads/writes without a lock.
+///
+/// External callers must `await` every read and write. `MockGitHubClient`
+/// previously wrapped an `OSAllocatedUnfairLock` behind a `@unchecked Sendable`
+/// class; that pattern is banned by CLAUDE.md.
+actor MockGitHubClient: GitHubClientProtocol {
 
-    private var _pullRequestsToReturn: [PullRequest] = []
-    private var _nextCursorToReturn: String?
-    private var _viewerLoginToReturn: String = "testuser"
-    private var _viewerAvatarURLToReturn: URL?
-    private var _timelineEventsToReturn: [TimelineEvent] = []
-    private var _timelineNextCursorToReturn: String?
-    private var _reviewersToReturn: [Reviewer] = []
-    private var _checksNextCursorToReturn: String?
-    private var _checksPageToReturn: ChecksPage?
-    private var _errorToThrow: Error?
-    private var _fetchViewerError: Error?
-    private var _validateTokenError: Error?
-    private var _checkRunsToReturn: [CheckRun] = []
-    private var _fetchPullRequestsCallCount = 0
-    private var _fetchTimelineCallCount = 0
-    private var _fetchChecksCallCount = 0
-    private var _validateTokenCallCount = 0
-    private var _receivedQueries: [String] = []
-    private var _receivedCursors: [String?] = []
-    private var _receivedValidateTokens: [String] = []
+    // MARK: - Configurable return values
 
-    // MARK: - Accessors (tests read/write through these; lock guards every access)
+    var pullRequestsToReturn: [PullRequest] = []
+    var nextCursorToReturn: String?
+    var viewerLoginToReturn: String = "testuser"
+    var viewerAvatarURLToReturn: URL?
+    var timelineEventsToReturn: [TimelineEvent] = []
+    var timelineNextCursorToReturn: String?
+    var reviewersToReturn: [Reviewer] = []
+    var checksNextCursorToReturn: String?
+    var checksPageToReturn: ChecksPage?
+    var errorToThrow: Error?
+    var fetchViewerError: Error?
+    var validateTokenError: Error?
+    var checkRunsToReturn: [CheckRun] = []
 
-    var pullRequestsToReturn: [PullRequest] {
-        get { lock.withLock { _pullRequestsToReturn } }
-        set { lock.withLock { _pullRequestsToReturn = newValue } }
-    }
+    // MARK: - Call counters & recordings
 
-    var nextCursorToReturn: String? {
-        get { lock.withLock { _nextCursorToReturn } }
-        set { lock.withLock { _nextCursorToReturn = newValue } }
-    }
+    var fetchPullRequestsCallCount = 0
+    var fetchTimelineCallCount = 0
+    var fetchChecksCallCount = 0
+    var validateTokenCallCount = 0
+    var receivedQueries: [String] = []
+    var receivedCursors: [String?] = []
+    var receivedValidateTokens: [String] = []
 
-    var viewerLoginToReturn: String {
-        get { lock.withLock { _viewerLoginToReturn } }
-        set { lock.withLock { _viewerLoginToReturn = newValue } }
-    }
+    // MARK: - Setters
+    //
+    // Swift actors don't allow cross-actor `var` assignment (`await mock.foo = x`
+    // is rejected). Tests call these setters instead; reads (`await mock.foo`)
+    // continue to work because cross-actor *reads* of isolated `var`s are legal.
 
-    var viewerAvatarURLToReturn: URL? {
-        get { lock.withLock { _viewerAvatarURLToReturn } }
-        set { lock.withLock { _viewerAvatarURLToReturn = newValue } }
-    }
-
-    var timelineEventsToReturn: [TimelineEvent] {
-        get { lock.withLock { _timelineEventsToReturn } }
-        set { lock.withLock { _timelineEventsToReturn = newValue } }
-    }
-
-    var timelineNextCursorToReturn: String? {
-        get { lock.withLock { _timelineNextCursorToReturn } }
-        set { lock.withLock { _timelineNextCursorToReturn = newValue } }
-    }
-
-    var reviewersToReturn: [Reviewer] {
-        get { lock.withLock { _reviewersToReturn } }
-        set { lock.withLock { _reviewersToReturn = newValue } }
-    }
-
-    var checksNextCursorToReturn: String? {
-        get { lock.withLock { _checksNextCursorToReturn } }
-        set { lock.withLock { _checksNextCursorToReturn = newValue } }
-    }
-
-    var checksPageToReturn: ChecksPage? {
-        get { lock.withLock { _checksPageToReturn } }
-        set { lock.withLock { _checksPageToReturn = newValue } }
-    }
-
-    var errorToThrow: Error? {
-        get { lock.withLock { _errorToThrow } }
-        set { lock.withLock { _errorToThrow = newValue } }
-    }
-
-    var fetchViewerError: Error? {
-        get { lock.withLock { _fetchViewerError } }
-        set { lock.withLock { _fetchViewerError = newValue } }
-    }
-
-    var validateTokenError: Error? {
-        get { lock.withLock { _validateTokenError } }
-        set { lock.withLock { _validateTokenError = newValue } }
-    }
-
-    var checkRunsToReturn: [CheckRun] {
-        get { lock.withLock { _checkRunsToReturn } }
-        set { lock.withLock { _checkRunsToReturn = newValue } }
-    }
-
-    var fetchPullRequestsCallCount: Int {
-        get { lock.withLock { _fetchPullRequestsCallCount } }
-        set { lock.withLock { _fetchPullRequestsCallCount = newValue } }
-    }
-    var fetchTimelineCallCount: Int {
-        get { lock.withLock { _fetchTimelineCallCount } }
-        set { lock.withLock { _fetchTimelineCallCount = newValue } }
-    }
-    var fetchChecksCallCount: Int {
-        get { lock.withLock { _fetchChecksCallCount } }
-        set { lock.withLock { _fetchChecksCallCount = newValue } }
-    }
-    var validateTokenCallCount: Int {
-        get { lock.withLock { _validateTokenCallCount } }
-        set { lock.withLock { _validateTokenCallCount = newValue } }
-    }
-    var receivedQueries: [String] { lock.withLock { _receivedQueries } }
-    var receivedCursors: [String?] { lock.withLock { _receivedCursors } }
-    var receivedValidateTokens: [String] { lock.withLock { _receivedValidateTokens } }
+    func setPullRequestsToReturn(_ value: [PullRequest]) { pullRequestsToReturn = value }
+    func setNextCursorToReturn(_ value: String?) { nextCursorToReturn = value }
+    func setViewerLogin(_ value: String) { viewerLoginToReturn = value }
+    func setViewerAvatarURL(_ value: URL?) { viewerAvatarURLToReturn = value }
+    func setTimelineEventsToReturn(_ value: [TimelineEvent]) { timelineEventsToReturn = value }
+    func setTimelineNextCursorToReturn(_ value: String?) { timelineNextCursorToReturn = value }
+    func setReviewersToReturn(_ value: [Reviewer]) { reviewersToReturn = value }
+    func setChecksNextCursorToReturn(_ value: String?) { checksNextCursorToReturn = value }
+    func setChecksPageToReturn(_ value: ChecksPage?) { checksPageToReturn = value }
+    func setErrorToThrow(_ value: Error?) { errorToThrow = value }
+    func setFetchViewerError(_ value: Error?) { fetchViewerError = value }
+    func setValidateTokenError(_ value: Error?) { validateTokenError = value }
+    func setCheckRunsToReturn(_ value: [CheckRun]) { checkRunsToReturn = value }
+    func setFetchPullRequestsCallCount(_ value: Int) { fetchPullRequestsCallCount = value }
 
     // MARK: - Protocol
 
     func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage {
-        let (error, prs, nextCursor) = lock.withLock { () -> (Error?, [PullRequest], String?) in
-            _fetchPullRequestsCallCount += 1
-            _receivedQueries.append(query)
-            _receivedCursors.append(cursor)
-            return (_errorToThrow, _pullRequestsToReturn, _nextCursorToReturn)
-        }
-        if let error { throw error }
-        return PullRequestPage(pullRequests: prs, nextCursor: nextCursor, skippedNodeCount: 0)
+        fetchPullRequestsCallCount += 1
+        receivedQueries.append(query)
+        receivedCursors.append(cursor)
+        if let errorToThrow { throw errorToThrow }
+        return PullRequestPage(
+            pullRequests: pullRequestsToReturn,
+            nextCursor: nextCursorToReturn,
+            skippedNodeCount: 0
+        )
     }
 
-    func fetchTimeline(nodeID: String, cursor: String?, eventPageOffset: Int, checksPageOffset: Int) async throws -> TimelinePage {
-        let (error, events, checkRuns, reviewers, nextCursor, checksNextCursor) = lock.withLock { () -> (Error?, [TimelineEvent], [CheckRun], [Reviewer], String?, String?) in
-            _fetchTimelineCallCount += 1
-            return (_errorToThrow, _timelineEventsToReturn, _checkRunsToReturn, _reviewersToReturn, _timelineNextCursorToReturn, _checksNextCursorToReturn)
-        }
-        if let error { throw error }
-        return TimelinePage(events: events, checkRuns: checkRuns, reviewers: reviewers, nextCursor: nextCursor, checksNextCursor: checksNextCursor)
+    func fetchTimeline(
+        nodeID: String,
+        cursor: String?,
+        eventPageOffset: Int,
+        checksPageOffset: Int
+    ) async throws -> TimelinePage {
+        fetchTimelineCallCount += 1
+        if let errorToThrow { throw errorToThrow }
+        return TimelinePage(
+            events: timelineEventsToReturn,
+            checkRuns: checkRunsToReturn,
+            reviewers: reviewersToReturn,
+            nextCursor: timelineNextCursorToReturn,
+            checksNextCursor: checksNextCursorToReturn
+        )
     }
 
     func fetchChecks(nodeID: String, cursor: String, checksPageOffset: Int) async throws -> ChecksPage {
-        let (error, page) = lock.withLock { () -> (Error?, ChecksPage?) in
-            _fetchChecksCallCount += 1
-            return (_errorToThrow, _checksPageToReturn)
-        }
-        if let error { throw error }
-        return page ?? ChecksPage(checkRuns: [], nextCursor: nil)
+        fetchChecksCallCount += 1
+        if let errorToThrow { throw errorToThrow }
+        return checksPageToReturn ?? ChecksPage(checkRuns: [], nextCursor: nil)
     }
 
     func fetchViewer() async throws -> (login: String, avatarURL: URL?) {
-        let (viewerError, genericError, login, avatar) = lock.withLock { () -> (Error?, Error?, String, URL?) in
-            return (_fetchViewerError, _errorToThrow, _viewerLoginToReturn, _viewerAvatarURLToReturn)
-        }
-        if let viewerError { throw viewerError }
-        if let genericError { throw genericError }
-        return (login: login, avatarURL: avatar)
+        if let fetchViewerError { throw fetchViewerError }
+        if let errorToThrow { throw errorToThrow }
+        return (login: viewerLoginToReturn, avatarURL: viewerAvatarURLToReturn)
     }
 
     func validateToken(_ token: String) async throws -> (login: String, avatarURL: URL?) {
-        let (validateError, viewerError, genericError, login, avatar) = lock.withLock { () -> (Error?, Error?, Error?, String, URL?) in
-            _validateTokenCallCount += 1
-            _receivedValidateTokens.append(token)
-            return (_validateTokenError, _fetchViewerError, _errorToThrow, _viewerLoginToReturn, _viewerAvatarURLToReturn)
-        }
-
-        if let validateError { throw validateError }
-        if let viewerError { throw viewerError }
-        if let genericError { throw genericError }
-        return (login: login, avatarURL: avatar)
+        validateTokenCallCount += 1
+        receivedValidateTokens.append(token)
+        if let validateTokenError { throw validateTokenError }
+        if let fetchViewerError { throw fetchViewerError }
+        if let errorToThrow { throw errorToThrow }
+        return (login: viewerLoginToReturn, avatarURL: viewerAvatarURLToReturn)
     }
 }

@@ -39,7 +39,7 @@ struct IdentityActorTests {
     @Test("swap with valid token transitions to authenticated")
     func swapHappyPath() async throws {
         let mock = MockGitHubClient()
-        mock.viewerLoginToReturn = "octocat"
+        await mock.setViewerLogin("octocat")
         let (identity, keychain) = makeIdentity(keychainSuite: "swap-happy", github: mock)
 
         let login = try await identity.swap(to: "ghp_valid")
@@ -53,13 +53,13 @@ struct IdentityActorTests {
     @Test("swap trims whitespace before validating and saving")
     func swapTrimsWhitespace() async throws {
         let mock = MockGitHubClient()
-        mock.viewerLoginToReturn = "octocat"
+        await mock.setViewerLogin("octocat")
         let (identity, keychain) = makeIdentity(keychainSuite: "swap-trim", github: mock)
 
         _ = try await identity.swap(to: "  ghp_padded  \n")
 
         #expect(keychain.read(key: Constants.Keychain.githubToken) == "ghp_padded")
-        #expect(mock.receivedValidateTokens.last == "ghp_padded")
+        #expect(await mock.receivedValidateTokens.last == "ghp_padded")
     }
 
     // MARK: - Swap failure: prior state preserved
@@ -67,7 +67,7 @@ struct IdentityActorTests {
     @Test("swap with invalid token throws .invalidToken and does NOT write Keychain")
     func swapInvalidTokenPreservesKeychain() async throws {
         let mock = MockGitHubClient()
-        mock.validateTokenError = GitHubClientError.unauthorized
+        await mock.setValidateTokenError(GitHubClientError.unauthorized)
         let (identity, keychain) = makeIdentity(keychainSuite: "swap-invalid", github: mock)
 
         do {
@@ -85,14 +85,14 @@ struct IdentityActorTests {
     @Test("swap failure after prior authentication keeps the old token active")
     func swapFailurePreservesPriorAuth() async throws {
         let mock = MockGitHubClient()
-        mock.viewerLoginToReturn = "alice"
+        await mock.setViewerLogin("alice")
         let (identity, keychain) = makeIdentity(keychainSuite: "swap-preserve", github: mock)
 
         _ = try await identity.swap(to: "ghp_good")
         #expect(keychain.read(key: Constants.Keychain.githubToken) == "ghp_good")
 
         // Now attempt a bad token
-        mock.validateTokenError = GitHubClientError.unauthorized
+        await mock.setValidateTokenError(GitHubClientError.unauthorized)
         do {
             _ = try await identity.swap(to: "ghp_bad")
             Issue.record("Expected swap to throw")
@@ -111,12 +111,12 @@ struct IdentityActorTests {
     @Test("swap rethrows CancellationError without mutating state")
     func swapCancellationPreservesState() async throws {
         let mock = MockGitHubClient()
-        mock.viewerLoginToReturn = "alice"
+        await mock.setViewerLogin("alice")
         let (identity, keychain) = makeIdentity(keychainSuite: "swap-cancel", github: mock)
 
         _ = try await identity.swap(to: "ghp_good")
 
-        mock.validateTokenError = CancellationError()
+        await mock.setValidateTokenError(CancellationError())
         do {
             _ = try await identity.swap(to: "ghp_cancelled")
             Issue.record("Expected CancellationError")
@@ -132,7 +132,7 @@ struct IdentityActorTests {
     @Test("swap maps URLError.cancelled to CancellationError")
     func swapURLErrorCancelled() async {
         let mock = MockGitHubClient()
-        mock.validateTokenError = URLError(.cancelled)
+        await mock.setValidateTokenError(URLError(.cancelled))
         let (identity, _) = makeIdentity(keychainSuite: "swap-urlcancel", github: mock)
 
         do {
@@ -150,7 +150,7 @@ struct IdentityActorTests {
     @Test("invalidate transitions to unauthenticated and clears Keychain")
     func invalidateClears() async throws {
         let mock = MockGitHubClient()
-        mock.viewerLoginToReturn = "alice"
+        await mock.setViewerLogin("alice")
         let (identity, keychain) = makeIdentity(keychainSuite: "invalidate-clear", github: mock)
 
         _ = try await identity.swap(to: "ghp_x")
@@ -166,7 +166,7 @@ struct IdentityActorTests {
     @Test("invalidateIfMatchingToken does nothing when token differs")
     func invalidateIfMatchingSkipsWhenDifferent() async throws {
         let mock = MockGitHubClient()
-        mock.viewerLoginToReturn = "alice"
+        await mock.setViewerLogin("alice")
         let (identity, keychain) = makeIdentity(keychainSuite: "invalidate-nonmatch", github: mock)
 
         _ = try await identity.swap(to: "ghp_fresh")
@@ -183,7 +183,7 @@ struct IdentityActorTests {
     @Test("invalidateIfMatchingToken clears when token matches current state")
     func invalidateIfMatchingClearsWhenEqual() async throws {
         let mock = MockGitHubClient()
-        mock.viewerLoginToReturn = "alice"
+        await mock.setViewerLogin("alice")
         let (identity, _) = makeIdentity(keychainSuite: "invalidate-match", github: mock)
 
         _ = try await identity.swap(to: "ghp_same")
@@ -199,7 +199,7 @@ struct IdentityActorTests {
     @Test("concurrent swaps serialize; last committed wins")
     func concurrentSwapsSerialize() async throws {
         let mock = MockGitHubClient()
-        mock.viewerLoginToReturn = "user"
+        await mock.setViewerLogin("user")
         let (identity, _) = makeIdentity(keychainSuite: "concurrent-swap", github: mock)
 
         await withTaskGroup(of: Void.self) { group in
@@ -213,7 +213,7 @@ struct IdentityActorTests {
         #expect(finalToken == "ghp_A" || finalToken == "ghp_B" || finalToken == "ghp_C")
 
         // Every swap went through validation
-        #expect(mock.validateTokenCallCount == 3)
+        #expect(await mock.validateTokenCallCount == 3)
     }
 
     // MARK: - currentViewerLogin
@@ -228,31 +228,31 @@ struct IdentityActorTests {
     @Test("currentViewerLogin returns cached login without refetch")
     func currentViewerLoginCached() async throws {
         let mock = MockGitHubClient()
-        mock.viewerLoginToReturn = "alice"
+        await mock.setViewerLogin("alice")
         let (identity, _) = makeIdentity(keychainSuite: "viewer-cached", github: mock)
 
         _ = try await identity.swap(to: "ghp_x")
-        let callsAfterSwap = mock.validateTokenCallCount
+        let callsAfterSwap = await mock.validateTokenCallCount
 
         let login = try await identity.currentViewerLogin()
         #expect(login == "alice")
-        #expect(mock.validateTokenCallCount == callsAfterSwap)
+        #expect(await mock.validateTokenCallCount == callsAfterSwap)
     }
 
     @Test("currentViewerLogin rethrows CancellationError without clearing generation")
     func currentViewerLoginCancellation() async throws {
         let mock = MockGitHubClient()
-        mock.errorToThrow = CancellationError()
+        await mock.setErrorToThrow(CancellationError())
         let (identity, _) = makeIdentity(keychainSuite: "viewer-cancel", github: mock)
-        mock.errorToThrow = nil
-        mock.viewerLoginToReturn = "bob"
+        await mock.setErrorToThrow(nil)
+        await mock.setViewerLogin("bob")
         _ = try await identity.swap(to: "ghp_y")
 
         // Force a refetch by clearing the cached login via generation bump.
         await identity.invalidate(reason: .userSignedOut)
         // With no token we get nil — restore and test cancellation.
-        mock.errorToThrow = nil
-        mock.viewerLoginToReturn = "bob"
+        await mock.setErrorToThrow(nil)
+        await mock.setViewerLogin("bob")
         _ = try await identity.swap(to: "ghp_z")
         // Cached now — this path still returns quickly. The semantic behaviour
         // (rethrow of CancellationError) is exercised by the filter closure's

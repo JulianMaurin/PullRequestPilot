@@ -64,7 +64,7 @@ struct PRFetcherTests {
     func refreshWritesPRs() async throws {
         let client = MockGitHubClient()
         let pr = TestPullRequestFactory.make(id: "PR_1", title: "One")
-        client.pullRequestsToReturn = [pr]
+        await client.setPullRequestsToReturn([pr])
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
         await fetcher.refresh(for: view)
@@ -81,7 +81,7 @@ struct PRFetcherTests {
     func onFetchedAfterStateCommit() async throws {
         let client = MockGitHubClient()
         let pr = TestPullRequestFactory.make(id: "PR_onFetched")
-        client.pullRequestsToReturn = [pr]
+        await client.setPullRequestsToReturn([pr])
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
 
@@ -100,7 +100,7 @@ struct PRFetcherTests {
     @Test("onFetched does not fire on cancellation")
     func onFetchedNotFiredOnCancellation() async throws {
         let client = MockGitHubClient()
-        client.errorToThrow = CancellationError()
+        await client.setErrorToThrow(CancellationError())
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
 
@@ -115,7 +115,7 @@ struct PRFetcherTests {
     @Test("onFetched does not fire when the fetch throws a network error")
     func onFetchedNotFiredOnError() async throws {
         let client = MockGitHubClient()
-        client.errorToThrow = URLError(.notConnectedToInternet)
+        await client.setErrorToThrow(URLError(.notConnectedToInternet))
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
 
@@ -135,7 +135,7 @@ struct PRFetcherTests {
         // If coalescing works, two concurrent refresh(for:) calls should
         // result in a *single* call to fetchPullRequests.
         let client = MockGitHubClient()
-        client.pullRequestsToReturn = [TestPullRequestFactory.make(id: "PR_coalesce")]
+        await client.setPullRequestsToReturn([TestPullRequestFactory.make(id: "PR_coalesce")])
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
 
@@ -143,7 +143,7 @@ struct PRFetcherTests {
         async let b: Void = fetcher.refresh(for: view)
         _ = await [a, b]
 
-        #expect(client.fetchPullRequestsCallCount == 1)
+        #expect(await client.fetchPullRequestsCallCount == 1)
     }
 
     // MARK: - error path
@@ -152,7 +152,7 @@ struct PRFetcherTests {
     @Test("a thrown network error lands in state.error without rethrowing")
     func errorLandsInState() async throws {
         let client = MockGitHubClient()
-        client.errorToThrow = URLError(.notConnectedToInternet)
+        await client.setErrorToThrow(URLError(.notConnectedToInternet))
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
 
@@ -167,7 +167,7 @@ struct PRFetcherTests {
     @Test("a rate-limit error is captured in state.rateLimitRetryAfter")
     func rateLimitCaptured() async throws {
         let client = MockGitHubClient()
-        client.errorToThrow = GitHubClientError.rateLimited(retryAfter: 120)
+        await client.setErrorToThrow(GitHubClientError.rateLimited(retryAfter: 120))
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
 
@@ -182,7 +182,7 @@ struct PRFetcherTests {
     @Test("cancellation does not surface as a user-visible error")
     func cancellationIsQuiet() async throws {
         let client = MockGitHubClient()
-        client.errorToThrow = CancellationError()
+        await client.setErrorToThrow(CancellationError())
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
 
@@ -201,7 +201,7 @@ struct PRFetcherTests {
         let client = MockGitHubClient()
         let a = TestPullRequestFactory.make(id: "PR_keep", title: "keep")
         let b = TestPullRequestFactory.make(id: "PR_drop", title: "drop")
-        client.pullRequestsToReturn = [a, b]
+        await client.setPullRequestsToReturn([a, b])
 
         let filter: PRFetcher.PRFilter = { prs, _ in
             prs.filter { $0.id == "PR_keep" }
@@ -221,16 +221,16 @@ struct PRFetcherTests {
     func loadMoreAppends() async throws {
         let client = MockGitHubClient()
         let initial = TestPullRequestFactory.make(id: "PR_1", title: "first")
-        client.pullRequestsToReturn = [initial]
-        client.nextCursorToReturn = "cursor-1"
+        await client.setPullRequestsToReturn([initial])
+        await client.setNextCursorToReturn("cursor-1")
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
 
         await fetcher.refresh(for: view)
         // Second page: return a new PR; cursor ends.
         let second = TestPullRequestFactory.make(id: "PR_2", title: "second")
-        client.pullRequestsToReturn = [second]
-        client.nextCursorToReturn = nil
+        await client.setPullRequestsToReturn([second])
+        await client.setNextCursorToReturn(nil)
 
         await fetcher.loadMore(for: view)
         let state = try #require(fetcher.states[view.id])
@@ -243,15 +243,15 @@ struct PRFetcherTests {
     func loadMoreDeduplicates() async throws {
         let client = MockGitHubClient()
         let pr = TestPullRequestFactory.make(id: "PR_dup", title: "dup")
-        client.pullRequestsToReturn = [pr]
-        client.nextCursorToReturn = "cursor-1"
+        await client.setPullRequestsToReturn([pr])
+        await client.setNextCursorToReturn("cursor-1")
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
 
         await fetcher.refresh(for: view)
         // Same PR returned on the "next" page.
-        client.pullRequestsToReturn = [pr]
-        client.nextCursorToReturn = nil
+        await client.setPullRequestsToReturn([pr])
+        await client.setNextCursorToReturn(nil)
         await fetcher.loadMore(for: view)
         let state = try #require(fetcher.states[view.id])
         #expect(state.pullRequests.map(\.id) == ["PR_dup"])
@@ -274,7 +274,7 @@ struct PRFetcherTests {
     @Test("resetState clears the entry to an empty ViewState")
     func resetStateClears() async throws {
         let client = MockGitHubClient()
-        client.pullRequestsToReturn = [TestPullRequestFactory.make(id: "PR_R")]
+        await client.setPullRequestsToReturn([TestPullRequestFactory.make(id: "PR_R")])
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
         await fetcher.refresh(for: view)
@@ -288,7 +288,7 @@ struct PRFetcherTests {
     @Test("clearAll removes every entry")
     func clearAllWipes() async throws {
         let client = MockGitHubClient()
-        client.pullRequestsToReturn = [TestPullRequestFactory.make(id: "PR_C")]
+        await client.setPullRequestsToReturn([TestPullRequestFactory.make(id: "PR_C")])
         let fetcher = Self.makeFetcher(client: client)
         let viewA = Self.makeView()
         let viewB = Self.makeView()

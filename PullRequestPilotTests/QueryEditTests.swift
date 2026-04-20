@@ -43,10 +43,10 @@ struct QueryEditTests {
     }
 
     @Test("commitQueryEdit is no-op when query unchanged")
-    func commitQueryEditIgnoresSame() {
+    func commitQueryEditIgnoresSame() async {
         let (vm, viewID) = makeViewModel(suiteName: "QEditSame")
         let original = vm.views.first(where: { $0.id == viewID })?.query ?? ""
-        mockClient.fetchPullRequestsCallCount = 0
+        await mockClient.setFetchPullRequestsCallCount(0)
         vm.commitQueryEdit(viewID: viewID, newQuery: original)
         #expect(vm.views.first(where: { $0.id == viewID })?.query == original)
     }

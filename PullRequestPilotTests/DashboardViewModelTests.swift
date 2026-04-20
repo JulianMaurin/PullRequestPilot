@@ -30,7 +30,7 @@ struct DashboardViewModelTests {
     @Test("loads pull requests for a view on refresh")
     func loadsPullRequests() async throws {
         let pr = makePullRequest(number: 1, title: "Fix bug")
-        mockClient.pullRequestsToReturn = [pr]
+        await mockClient.setPullRequestsToReturn([pr])
 
         let (viewModel, viewID) = makeViewModel(suiteName: "LoadsPRs")
         await viewModel.refresh(viewID: viewID)
@@ -44,7 +44,7 @@ struct DashboardViewModelTests {
 
     @Test("surfaces error message on failure")
     func handlesError() async throws {
-        mockClient.errorToThrow = GitHubClientError.unauthorized
+        await mockClient.setErrorToThrow(GitHubClientError.unauthorized)
 
         let (viewModel, viewID) = makeViewModel(suiteName: "HandlesError")
         await viewModel.refresh(viewID: viewID)
@@ -56,7 +56,7 @@ struct DashboardViewModelTests {
 
     @Test("isEmpty is true when no PRs and not loading")
     func isEmpty() async throws {
-        mockClient.pullRequestsToReturn = []
+        await mockClient.setPullRequestsToReturn([])
 
         let (viewModel, viewID) = makeViewModel(suiteName: "IsEmpty")
         await viewModel.refresh(viewID: viewID)
@@ -71,7 +71,7 @@ struct DashboardViewModelTests {
         let view = viewModel.views.first(where: { $0.id == viewID })
         await viewModel.refresh(viewID: viewID)
 
-        #expect(mockClient.receivedQueries.last == view?.query)
+        #expect(await mockClient.receivedQueries.last == view?.query)
     }
 
     @Test("add and delete views")
@@ -99,12 +99,12 @@ struct DashboardViewModelTests {
         let otherReviewPR = makePullRequest(number: 4, title: "Other reviewed", reviews: [
             UserReview(login: "someone-else", state: .approved)
         ])
-        mockClient.pullRequestsToReturn = [approvedPR, dismissedPR, unreviewedPR, otherReviewPR]
+        await mockClient.setPullRequestsToReturn([approvedPR, dismissedPR, unreviewedPR, otherReviewPR])
 
         let defaults = UserDefaults(suiteName: "HideReviewedTests")!
         defaults.removePersistentDomain(forName: "HideReviewedTests")
         let store = ViewsStore(defaults: defaults)
-        mockClient.viewerLoginToReturn = "testuser"
+        await mockClient.setViewerLogin("testuser")
         let identity = IdentityActorTestFactory.make(github: mockClient)
         _ = try await identity.swap(to: "ghp_test_token")
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: identity, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -127,7 +127,7 @@ struct DashboardViewModelTests {
 
     @Test("refresh sets isNetworkError on network failure")
     func refreshSetsNetworkError() async throws {
-        mockClient.errorToThrow = GitHubClientError.networkError(URLError(.notConnectedToInternet))
+        await mockClient.setErrorToThrow(GitHubClientError.networkError(URLError(.notConnectedToInternet)))
 
         let (viewModel, viewID) = makeViewModel(suiteName: "NetworkError")
         await viewModel.refresh(viewID: viewID)
@@ -139,14 +139,14 @@ struct DashboardViewModelTests {
 
     @Test("refresh clears isNetworkError on success after previous network error")
     func refreshClearsNetworkError() async throws {
-        mockClient.errorToThrow = GitHubClientError.networkError(URLError(.notConnectedToInternet))
+        await mockClient.setErrorToThrow(GitHubClientError.networkError(URLError(.notConnectedToInternet)))
 
         let (viewModel, viewID) = makeViewModel(suiteName: "ClearsNetworkError")
         await viewModel.refresh(viewID: viewID)
         #expect(viewModel.viewStates[viewID]?.isNetworkError == true)
 
-        mockClient.errorToThrow = nil
-        mockClient.pullRequestsToReturn = [makePullRequest(number: 1, title: "OK")]
+        await mockClient.setErrorToThrow(nil)
+        await mockClient.setPullRequestsToReturn([makePullRequest(number: 1, title: "OK")])
         await viewModel.refresh(viewID: viewID)
 
         let state = try #require(viewModel.viewStates[viewID])
@@ -156,7 +156,7 @@ struct DashboardViewModelTests {
 
     @Test("isNetworkError is false for non-network errors")
     func nonNetworkErrorDoesNotSetFlag() async throws {
-        mockClient.errorToThrow = GitHubClientError.unauthorized
+        await mockClient.setErrorToThrow(GitHubClientError.unauthorized)
 
         let (viewModel, viewID) = makeViewModel(suiteName: "NonNetworkError")
         await viewModel.refresh(viewID: viewID)
@@ -263,19 +263,19 @@ struct DashboardViewModelTests {
         viewModel.setBadge(for: view1.id, enabled: true)
 
         // First refresh = baseline, no unseen
-        mockClient.pullRequestsToReturn = [pr1]
+        await mockClient.setPullRequestsToReturn([pr1])
         await viewModel.refresh(viewID: view1.id)
         #expect(viewModel.badgeCount == 0)
 
         // Second refresh with a new PR = 1 unseen
-        mockClient.pullRequestsToReturn = [pr1, pr2]
+        await mockClient.setPullRequestsToReturn([pr1, pr2])
         await viewModel.refresh(viewID: view1.id)
         #expect(viewModel.badgeCount == 1)
     }
 
     @Test("badgeCount returns 0 when no views have badge enabled")
     func badgeCountZeroWhenNoneEnabled() async {
-        mockClient.pullRequestsToReturn = [makePullRequest(number: 1, title: "PR 1")]
+        await mockClient.setPullRequestsToReturn([makePullRequest(number: 1, title: "PR 1")])
         let (viewModel, viewID) = makeViewModel(suiteName: "BadgeCountNone")
         await viewModel.refresh(viewID: viewID)
 
@@ -295,9 +295,9 @@ struct DashboardViewModelTests {
         viewModel.addView(view1)
         viewModel.setBadge(for: view1.id, enabled: true)
 
-        mockClient.pullRequestsToReturn = [pr1]
+        await mockClient.setPullRequestsToReturn([pr1])
         await viewModel.refresh(viewID: view1.id)
-        mockClient.pullRequestsToReturn = [pr1, pr2]
+        await mockClient.setPullRequestsToReturn([pr1, pr2])
         await viewModel.refresh(viewID: view1.id)
         #expect(viewModel.badgeCount == 1)
 
@@ -318,7 +318,7 @@ struct DashboardViewModelTests {
 
     @Test("setBadge sets baseline so existing PRs are not counted as new")
     func setBadgeBaseline() async {
-        mockClient.pullRequestsToReturn = [makePullRequest(number: 1, title: "PR 1")]
+        await mockClient.setPullRequestsToReturn([makePullRequest(number: 1, title: "PR 1")])
         let defaults = UserDefaults(suiteName: "BadgeBaseline")!
         defaults.removePersistentDomain(forName: "BadgeBaseline")
         let store = ViewsStore(defaults: defaults)
@@ -391,13 +391,13 @@ struct DashboardViewModelTests {
         viewModel.setBadge(for: view1.id, enabled: true)
 
         // Baseline refresh
-        mockClient.pullRequestsToReturn = [pr1]
+        await mockClient.setPullRequestsToReturn([pr1])
         await viewModel.refresh(viewID: view1.id)
 
         // Now listen for callback when new PR appears
         var receivedCount: Int?
         viewModel.onBadgeCountChanged = { count in receivedCount = count }
-        mockClient.pullRequestsToReturn = [pr1, pr2]
+        await mockClient.setPullRequestsToReturn([pr1, pr2])
         await viewModel.refresh(viewID: view1.id)
 
         #expect(receivedCount == 1)
@@ -431,9 +431,9 @@ struct DashboardViewModelTests {
         viewModel.setBadge(for: view1.id, enabled: true)
 
         // Baseline + new PR to create unseen badge count
-        mockClient.pullRequestsToReturn = [pr1]
+        await mockClient.setPullRequestsToReturn([pr1])
         await viewModel.refresh(viewID: view1.id)
-        mockClient.pullRequestsToReturn = [pr1, pr2]
+        await mockClient.setPullRequestsToReturn([pr1, pr2])
         await viewModel.refresh(viewID: view1.id)
         #expect(viewModel.badgeCount == 1)
 
@@ -453,19 +453,19 @@ struct DashboardViewModelTests {
         viewModel.addView(testView)
 
         // First identity: "testuser"
-        mockClient.viewerLoginToReturn = "testuser"
+        await mockClient.setViewerLogin("testuser")
         _ = try await identity.swap(to: "ghp_first")
 
         let approvedPR = makePullRequest(number: 1, title: "Approved", reviews: [
             UserReview(login: "testuser", state: .approved)
         ])
-        mockClient.pullRequestsToReturn = [approvedPR]
+        await mockClient.setPullRequestsToReturn([approvedPR])
         await viewModel.refresh(viewID: testView.id)
         // Filtered out — "testuser" already approved.
         #expect(viewModel.viewStates[testView.id]?.pullRequests.isEmpty == true)
 
         // Swap to second identity: "otheruser"
-        mockClient.viewerLoginToReturn = "otheruser"
+        await mockClient.setViewerLogin("otheruser")
         _ = try await identity.swap(to: "ghp_second")
 
         await viewModel.refresh(viewID: testView.id)
@@ -493,16 +493,16 @@ struct DashboardViewModelTests {
         viewModel.setBadge(for: view2.id, enabled: true)
 
         // Baseline refresh for both views
-        mockClient.pullRequestsToReturn = [pr1]
+        await mockClient.setPullRequestsToReturn([pr1])
         await viewModel.refresh(viewID: view1.id)
-        mockClient.pullRequestsToReturn = [pr2]
+        await mockClient.setPullRequestsToReturn([pr2])
         await viewModel.refresh(viewID: view2.id)
         #expect(viewModel.badgeCount == 0)
 
         // Add new PRs to both views
-        mockClient.pullRequestsToReturn = [pr1, pr3]
+        await mockClient.setPullRequestsToReturn([pr1, pr3])
         await viewModel.refresh(viewID: view1.id)
-        mockClient.pullRequestsToReturn = [pr2, pr3]
+        await mockClient.setPullRequestsToReturn([pr2, pr3])
         await viewModel.refresh(viewID: view2.id)
         #expect(viewModel.badgeCount == 1) // PR_3 added to both, tracked once
 
@@ -530,15 +530,15 @@ struct DashboardViewModelTests {
         viewModel.setBadge(for: view2.id, enabled: true)
 
         // Baseline
-        mockClient.pullRequestsToReturn = [pr1]
+        await mockClient.setPullRequestsToReturn([pr1])
         await viewModel.refresh(viewID: view1.id)
-        mockClient.pullRequestsToReturn = [pr2]
+        await mockClient.setPullRequestsToReturn([pr2])
         await viewModel.refresh(viewID: view2.id)
 
         // New unique PRs in each view
-        mockClient.pullRequestsToReturn = [pr1, pr3]
+        await mockClient.setPullRequestsToReturn([pr1, pr3])
         await viewModel.refresh(viewID: view1.id)
-        mockClient.pullRequestsToReturn = [pr2, pr4]
+        await mockClient.setPullRequestsToReturn([pr2, pr4])
         await viewModel.refresh(viewID: view2.id)
         #expect(viewModel.badgeCount == 2)
 

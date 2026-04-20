@@ -60,7 +60,7 @@ struct PRDetailViewModelTests {
     @Test("deselect clears all state")
     func deselectClearsState() async throws {
         let client = MockGitHubClient()
-        client.timelineEventsToReturn = [makeTimelineEvent()]
+        await client.setTimelineEventsToReturn([makeTimelineEvent()])
         let (vm, _) = makeViewModel(client: client)
 
         let pr = makePR()
@@ -83,7 +83,7 @@ struct PRDetailViewModelTests {
             makeTimelineEvent(id: "1", kind: .comment),
             makeTimelineEvent(id: "2", kind: .merged),
         ]
-        client.timelineEventsToReturn = events
+        await client.setTimelineEventsToReturn(events)
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR())
@@ -96,7 +96,7 @@ struct PRDetailViewModelTests {
     @Test("selectPR handles fetch error")
     func selectHandlesError() async throws {
         let client = MockGitHubClient()
-        client.errorToThrow = GitHubClientError.networkError(URLError(.notConnectedToInternet))
+        await client.setErrorToThrow(GitHubClientError.networkError(URLError(.notConnectedToInternet)))
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR())
@@ -110,7 +110,7 @@ struct PRDetailViewModelTests {
     @Test("selectPR with empty timeline shows empty state")
     func selectEmptyTimeline() async throws {
         let client = MockGitHubClient()
-        client.timelineEventsToReturn = []
+        await client.setTimelineEventsToReturn([])
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR())
@@ -124,7 +124,7 @@ struct PRDetailViewModelTests {
     @Test("selecting different PR cancels previous fetch")
     func selectDifferentPRCancelsPrevious() async throws {
         let client = MockGitHubClient()
-        client.timelineEventsToReturn = [makeTimelineEvent()]
+        await client.setTimelineEventsToReturn([makeTimelineEvent()])
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR(id: "PR_1"))
@@ -139,7 +139,7 @@ struct PRDetailViewModelTests {
     @Test("selectPR sets isNetworkError on network failure")
     func selectSetsNetworkError() async throws {
         let client = MockGitHubClient()
-        client.errorToThrow = GitHubClientError.networkError(URLError(.notConnectedToInternet))
+        await client.setErrorToThrow(GitHubClientError.networkError(URLError(.notConnectedToInternet)))
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR())
@@ -152,7 +152,7 @@ struct PRDetailViewModelTests {
     @Test("selectPR does not set isNetworkError for non-network errors")
     func selectDoesNotSetNetworkErrorForOtherErrors() async throws {
         let client = MockGitHubClient()
-        client.errorToThrow = GitHubClientError.unauthorized
+        await client.setErrorToThrow(GitHubClientError.unauthorized)
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR())
@@ -165,7 +165,7 @@ struct PRDetailViewModelTests {
     @Test("deselect clears isNetworkError")
     func deselectClearsNetworkError() async throws {
         let client = MockGitHubClient()
-        client.errorToThrow = GitHubClientError.networkError(URLError(.timedOut))
+        await client.setErrorToThrow(GitHubClientError.networkError(URLError(.timedOut)))
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR())
@@ -185,7 +185,7 @@ struct PRDetailViewModelTests {
             Reviewer(id: "r1", displayName: "alice", avatarURL: nil, isTeam: false, state: .approved),
             Reviewer(id: "r2", displayName: "bob", avatarURL: nil, isTeam: false, state: .pending),
         ]
-        client.reviewersToReturn = reviewers
+        await client.setReviewersToReturn(reviewers)
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR())
@@ -211,9 +211,9 @@ struct PRDetailViewModelTests {
             CheckRun(id: "c2", name: "build", status: .completed, conclusion: .success, detailsURL: nil, isRequired: true, workflowRunID: nil, startedAt: nil),
             CheckRun(id: "c3", name: "test", status: .completed, conclusion: .failure, detailsURL: nil, isRequired: true, workflowRunID: nil, startedAt: nil),
         ]
-        client.checkRunsToReturn = initialChecks
-        client.checksNextCursorToReturn = "checks-cursor-1"
-        client.checksPageToReturn = ChecksPage(checkRuns: paginatedChecks, nextCursor: nil)
+        await client.setCheckRunsToReturn(initialChecks)
+        await client.setChecksNextCursorToReturn("checks-cursor-1")
+        await client.setChecksPageToReturn(ChecksPage(checkRuns: paginatedChecks, nextCursor: nil))
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(makePR())
@@ -224,7 +224,7 @@ struct PRDetailViewModelTests {
         #expect(vm.checkRuns[0].name == "lint")
         #expect(vm.checkRuns[1].name == "build")
         #expect(vm.checkRuns[2].name == "test")
-        #expect(client.fetchChecksCallCount == 1)
+        #expect(await client.fetchChecksCallCount == 1)
     }
 
     // MARK: - updateSelectedPR

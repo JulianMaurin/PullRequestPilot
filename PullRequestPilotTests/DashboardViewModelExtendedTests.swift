@@ -63,8 +63,8 @@ struct DashboardViewModelExtendedTests {
         let pr1 = TestPullRequestFactory.make(id: "PR_1", number: 1, title: "First")
         let pr2 = TestPullRequestFactory.make(id: "PR_2", number: 2, title: "Second")
 
-        mockClient.pullRequestsToReturn = [pr1]
-        mockClient.nextCursorToReturn = "cursor_1"
+        await mockClient.setPullRequestsToReturn([pr1])
+        await mockClient.setNextCursorToReturn("cursor_1")
 
         let (viewModel, viewID) = makeViewModel(suiteName: "LoadMore")
         await viewModel.refresh(viewID: viewID)
@@ -72,8 +72,8 @@ struct DashboardViewModelExtendedTests {
         #expect(viewModel.viewStates[viewID]?.pullRequests.count == 1)
         #expect(viewModel.viewStates[viewID]?.canLoadMore == true)
 
-        mockClient.pullRequestsToReturn = [pr2]
-        mockClient.nextCursorToReturn = nil
+        await mockClient.setPullRequestsToReturn([pr2])
+        await mockClient.setNextCursorToReturn(nil)
 
         await viewModel.loadMore(viewID: viewID)
 
@@ -85,15 +85,15 @@ struct DashboardViewModelExtendedTests {
     func loadMoreDeduplicates() async {
         let pr1 = TestPullRequestFactory.make(id: "PR_1", number: 1, title: "First")
 
-        mockClient.pullRequestsToReturn = [pr1]
-        mockClient.nextCursorToReturn = "cursor_1"
+        await mockClient.setPullRequestsToReturn([pr1])
+        await mockClient.setNextCursorToReturn("cursor_1")
 
         let (viewModel, viewID) = makeViewModel(suiteName: "LoadMoreDedup")
         await viewModel.refresh(viewID: viewID)
 
         // Return the same PR again
-        mockClient.pullRequestsToReturn = [pr1]
-        mockClient.nextCursorToReturn = nil
+        await mockClient.setPullRequestsToReturn([pr1])
+        await mockClient.setNextCursorToReturn(nil)
 
         await viewModel.loadMore(viewID: viewID)
 
@@ -207,7 +207,7 @@ struct DashboardViewModelExtendedTests {
 
     @Test("refresh ignores CancellationError")
     func refreshIgnoresCancellation() async throws {
-        mockClient.errorToThrow = CancellationError()
+        await mockClient.setErrorToThrow(CancellationError())
 
         let (viewModel, viewID) = makeViewModel(suiteName: "CancelRefresh")
         await viewModel.refresh(viewID: viewID)
@@ -222,7 +222,7 @@ struct DashboardViewModelExtendedTests {
     func refreshUnknownViewID() async {
         let (viewModel, _) = makeViewModel(suiteName: "UnknownViewID")
         await viewModel.refresh(viewID: UUID())
-        #expect(mockClient.fetchPullRequestsCallCount == 0)
+        #expect(await mockClient.fetchPullRequestsCallCount == 0)
     }
 
     // MARK: - addView sets selection when none
@@ -247,8 +247,8 @@ struct DashboardViewModelExtendedTests {
     @Test("refreshAll fetches PRs for all views")
     func refreshAllFetchesAllViews() async throws {
         let pr = TestPullRequestFactory.make(id: "PR_1", title: "PR 1")
-        mockClient.pullRequestsToReturn = [pr]
-        mockClient.viewerLoginToReturn = "testuser"
+        await mockClient.setPullRequestsToReturn([pr])
+        await mockClient.setViewerLogin("testuser")
 
         let (viewModel, _) = makeViewModel(suiteName: "RefreshAll")
         let view2 = DashboardView(id: UUID(), title: "My PRs", query: "author:@me")
@@ -275,7 +275,7 @@ struct DashboardViewModelExtendedTests {
         let viewID = testView.id
         let initialValue = viewModel.views.first(where: { $0.id == viewID })?.hideReviewed ?? false
 
-        mockClient.pullRequestsToReturn = []
+        await mockClient.setPullRequestsToReturn([])
         viewModel.toggleHideReviewed(for: viewID)
 
         // Wait for the internal Task to complete (poll with deadline)
@@ -296,13 +296,13 @@ struct DashboardViewModelExtendedTests {
     @Test("loadMore surfaces error on failure")
     func loadMoreError() async throws {
         let pr = TestPullRequestFactory.make(id: "PR_1", title: "PR 1")
-        mockClient.pullRequestsToReturn = [pr]
-        mockClient.nextCursorToReturn = "cursor_1"
+        await mockClient.setPullRequestsToReturn([pr])
+        await mockClient.setNextCursorToReturn("cursor_1")
 
         let (viewModel, viewID) = makeViewModel(suiteName: "LoadMoreError")
         await viewModel.refresh(viewID: viewID)
 
-        mockClient.errorToThrow = GitHubClientError.networkError(URLError(.timedOut))
+        await mockClient.setErrorToThrow(GitHubClientError.networkError(URLError(.timedOut)))
         await viewModel.loadMore(viewID: viewID)
 
         let state = try #require(viewModel.viewStates[viewID])
@@ -314,13 +314,13 @@ struct DashboardViewModelExtendedTests {
     @Test("loadMore ignores CancellationError")
     func loadMoreIgnoresCancellation() async throws {
         let pr = TestPullRequestFactory.make(id: "PR_1", title: "PR 1")
-        mockClient.pullRequestsToReturn = [pr]
-        mockClient.nextCursorToReturn = "cursor_1"
+        await mockClient.setPullRequestsToReturn([pr])
+        await mockClient.setNextCursorToReturn("cursor_1")
 
         let (viewModel, viewID) = makeViewModel(suiteName: "LoadMoreCancel")
         await viewModel.refresh(viewID: viewID)
 
-        mockClient.errorToThrow = CancellationError()
+        await mockClient.setErrorToThrow(CancellationError())
         await viewModel.loadMore(viewID: viewID)
 
         let state = try #require(viewModel.viewStates[viewID])
@@ -329,13 +329,13 @@ struct DashboardViewModelExtendedTests {
 
     @Test("loadMore is no-op when canLoadMore is false")
     func loadMoreNoOpWhenCannotLoad() async {
-        mockClient.pullRequestsToReturn = []
+        await mockClient.setPullRequestsToReturn([])
         let (viewModel, viewID) = makeViewModel(suiteName: "LoadMoreNoOp")
         await viewModel.refresh(viewID: viewID)
 
-        let callsBefore = mockClient.fetchPullRequestsCallCount
+        let callsBefore = await mockClient.fetchPullRequestsCallCount
         await viewModel.loadMore(viewID: viewID)
-        #expect(mockClient.fetchPullRequestsCallCount == callsBefore)
+        #expect(await mockClient.fetchPullRequestsCallCount == callsBefore)
     }
 
     // MARK: - reloadViews with stale selection
@@ -378,7 +378,7 @@ struct DashboardViewModelExtendedTests {
     @Test("selectedViewState returns the state for selected view")
     func selectedViewStateReturnsCorrectState() async {
         let pr = TestPullRequestFactory.make(id: "PR_1", title: "Test")
-        mockClient.pullRequestsToReturn = [pr]
+        await mockClient.setPullRequestsToReturn([pr])
 
         let (viewModel, viewID) = makeViewModel(suiteName: "SelectedViewStateValid")
         viewModel.selectedViewID = viewID
@@ -405,14 +405,14 @@ struct DashboardViewModelExtendedTests {
         #expect(viewModel.isNotificationEnabled(for: viewID))
 
         let pr = TestPullRequestFactory.make(id: "PR_1", title: "First PR")
-        mockClient.pullRequestsToReturn = [pr]
+        await mockClient.setPullRequestsToReturn([pr])
 
         // First refresh: should not trigger notification (initial load)
         await viewModel.refresh(viewID: viewID)
 
         // Second refresh with new PR: should detect it as new
         let pr2 = TestPullRequestFactory.make(id: "PR_2", title: "Second PR")
-        mockClient.pullRequestsToReturn = [pr, pr2]
+        await mockClient.setPullRequestsToReturn([pr, pr2])
         await viewModel.refresh(viewID: viewID)
 
         // We can't easily assert the notification was sent, but we can verify
@@ -568,7 +568,7 @@ struct DashboardViewModelExtendedTests {
     func refreshDeduplicates() async {
         let pr = TestPullRequestFactory.make(id: "PR_DUP", title: "Duplicate PR")
         // Return the same PR twice
-        mockClient.pullRequestsToReturn = [pr, pr]
+        await mockClient.setPullRequestsToReturn([pr, pr])
 
         let (viewModel, viewID) = makeViewModel(suiteName: "RefreshDedup")
         await viewModel.refresh(viewID: viewID)
@@ -585,8 +585,8 @@ struct DashboardViewModelExtendedTests {
         for i in 0..<Constants.App.maxPullRequests {
             prs.append(TestPullRequestFactory.make(id: "PR_\(i)", number: i, title: "PR \(i)"))
         }
-        mockClient.pullRequestsToReturn = prs
-        mockClient.nextCursorToReturn = "cursor"
+        await mockClient.setPullRequestsToReturn(prs)
+        await mockClient.setNextCursorToReturn("cursor")
 
         let (viewModel, viewID) = makeViewModel(suiteName: "ReachedLimit")
         await viewModel.refresh(viewID: viewID)
@@ -599,30 +599,30 @@ struct DashboardViewModelExtendedTests {
 
     @Test("refresh ignores CancellationError")
     func refreshIgnoresCancellationError() async throws {
-        mockClient.errorToThrow = CancellationError()
+        await mockClient.setErrorToThrow(CancellationError())
 
         let (viewModel, viewID) = makeViewModel(suiteName: "CancelRefresh2")
         await viewModel.refresh(viewID: viewID)
 
-        let state = viewModel.viewStates[viewID]!
+        let state = try #require(viewModel.viewStates[viewID])
         #expect(state.error == nil)
     }
 
     // MARK: - loadMore CancellationError handling
 
     @Test("loadMore ignores CancellationError")
-    func loadMoreIgnoresCancellationError() async {
+    func loadMoreIgnoresCancellationError() async throws {
         let pr = TestPullRequestFactory.make(id: "PR_1", title: "PR 1")
-        mockClient.pullRequestsToReturn = [pr]
-        mockClient.nextCursorToReturn = "cursor_1"
+        await mockClient.setPullRequestsToReturn([pr])
+        await mockClient.setNextCursorToReturn("cursor_1")
 
         let (viewModel, viewID) = makeViewModel(suiteName: "LoadMoreCancel")
         await viewModel.refresh(viewID: viewID)
 
-        mockClient.errorToThrow = CancellationError()
+        await mockClient.setErrorToThrow(CancellationError())
         await viewModel.loadMore(viewID: viewID)
 
-        let state = viewModel.viewStates[viewID]!
+        let state = try #require(viewModel.viewStates[viewID])
         #expect(state.error == nil)
     }
 
@@ -631,9 +631,9 @@ struct DashboardViewModelExtendedTests {
     @Test("loadMore with unknown viewID is a no-op")
     func loadMoreUnknownViewID() async {
         let (viewModel, _) = makeViewModel(suiteName: "LoadMoreUnknown")
-        let callsBefore = mockClient.fetchPullRequestsCallCount
+        let callsBefore = await mockClient.fetchPullRequestsCallCount
         await viewModel.loadMore(viewID: UUID())
-        #expect(mockClient.fetchPullRequestsCallCount == callsBefore)
+        #expect(await mockClient.fetchPullRequestsCallCount == callsBefore)
     }
 
     // MARK: - loadMore reachedLimit
@@ -646,17 +646,17 @@ struct DashboardViewModelExtendedTests {
         for i in 0..<initialCount {
             initialPRs.append(TestPullRequestFactory.make(id: "PR_\(i)", number: i, title: "PR \(i)"))
         }
-        mockClient.pullRequestsToReturn = initialPRs
-        mockClient.nextCursorToReturn = "cursor_1"
+        await mockClient.setPullRequestsToReturn(initialPRs)
+        await mockClient.setNextCursorToReturn("cursor_1")
 
         let (viewModel, viewID) = makeViewModel(suiteName: "LoadMoreLimit")
         await viewModel.refresh(viewID: viewID)
 
         // Load one more to hit the limit
         let extraPR = TestPullRequestFactory.make(id: "PR_extra", number: 999, title: "Extra")
-        mockClient.pullRequestsToReturn = [extraPR]
-        mockClient.nextCursorToReturn = "cursor_2"
-        mockClient.errorToThrow = nil
+        await mockClient.setPullRequestsToReturn([extraPR])
+        await mockClient.setNextCursorToReturn("cursor_2")
+        await mockClient.setErrorToThrow(nil)
 
         await viewModel.loadMore(viewID: viewID)
 
@@ -670,15 +670,15 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "LoadMoreFilter")!
         defaults.removePersistentDomain(forName: "LoadMoreFilter")
         let store = ViewsStore(defaults: defaults)
-        mockClient.viewerLoginToReturn = "testuser"
+        await mockClient.setViewerLogin("testuser")
         let identity = try await IdentityActorTestFactory.makeAuthenticated(github: mockClient)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: identity, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Test", query: "is:pr", hideReviewed: true)
         viewModel.addView(testView)
         let viewID = testView.id
 
-        mockClient.pullRequestsToReturn = [TestPullRequestFactory.make(id: "PR_1", title: "First")]
-        mockClient.nextCursorToReturn = "cursor_1"
+        await mockClient.setPullRequestsToReturn([TestPullRequestFactory.make(id: "PR_1", title: "First")])
+        await mockClient.setNextCursorToReturn("cursor_1")
         await viewModel.refresh(viewID: viewID)
 
         // Load more with a reviewed PR
@@ -687,9 +687,9 @@ struct DashboardViewModelExtendedTests {
             latestReviews: [UserReview(login: "testuser", state: .approved)]
         )
         let unreviewedPR = TestPullRequestFactory.make(id: "PR_3", number: 3, title: "Unreviewed")
-        mockClient.pullRequestsToReturn = [reviewedPR, unreviewedPR]
-        mockClient.nextCursorToReturn = nil
-        mockClient.errorToThrow = nil
+        await mockClient.setPullRequestsToReturn([reviewedPR, unreviewedPR])
+        await mockClient.setNextCursorToReturn(nil)
+        await mockClient.setErrorToThrow(nil)
 
         await viewModel.loadMore(viewID: viewID)
 
@@ -709,8 +709,8 @@ struct DashboardViewModelExtendedTests {
         let testView = DashboardView(id: UUID(), title: "Test", query: "is:pr", hideReviewed: true)
         viewModel.addView(testView)
 
-        mockClient.viewerLoginToReturn = "mylogin"
-        mockClient.pullRequestsToReturn = []
+        await mockClient.setViewerLogin("mylogin")
+        await mockClient.setPullRequestsToReturn([])
         await viewModel.refreshAll()
 
         // The viewer login should have been fetched (no error)
@@ -773,7 +773,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "HideReviewedCR")!
         defaults.removePersistentDomain(forName: "HideReviewedCR")
         let store = ViewsStore(defaults: defaults)
-        mockClient.viewerLoginToReturn = "testuser"
+        await mockClient.setViewerLogin("testuser")
         let identity = try await IdentityActorTestFactory.makeAuthenticated(github: mockClient)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: identity, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Review", query: "is:pr", hideReviewed: true)
@@ -783,7 +783,7 @@ struct DashboardViewModelExtendedTests {
             id: "PR_CR", number: 1, title: "Changes Requested",
             latestReviews: [UserReview(login: "testuser", state: .changesRequested)]
         )
-        mockClient.pullRequestsToReturn = [changesRequestedPR]
+        await mockClient.setPullRequestsToReturn([changesRequestedPR])
         await viewModel.refresh(viewID: testView.id)
 
         let titles = try #require(viewModel.viewStates[testView.id]).pullRequests.map(\.title)
@@ -795,7 +795,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "HideReviewedComment")!
         defaults.removePersistentDomain(forName: "HideReviewedComment")
         let store = ViewsStore(defaults: defaults)
-        mockClient.viewerLoginToReturn = "testuser"
+        await mockClient.setViewerLogin("testuser")
         let identity = try await IdentityActorTestFactory.makeAuthenticated(github: mockClient)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: identity, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Review", query: "is:pr", hideReviewed: true)
@@ -805,7 +805,7 @@ struct DashboardViewModelExtendedTests {
             id: "PR_C", number: 1, title: "Commented",
             latestReviews: [UserReview(login: "testuser", state: .commented)]
         )
-        mockClient.pullRequestsToReturn = [commentedPR]
+        await mockClient.setPullRequestsToReturn([commentedPR])
         await viewModel.refresh(viewID: testView.id)
 
         let titles = try #require(viewModel.viewStates[testView.id]).pullRequests.map(\.title)
@@ -826,10 +826,10 @@ struct DashboardViewModelExtendedTests {
             id: "PR_A", number: 1, title: "Approved",
             latestReviews: [UserReview(login: "testuser", state: .approved)]
         )
-        mockClient.pullRequestsToReturn = [approvedPR]
+        await mockClient.setPullRequestsToReturn([approvedPR])
 
         // First swap attempt is cancelled → state stays unauthenticated → filter skipped.
-        mockClient.validateTokenError = CancellationError()
+        await mockClient.setValidateTokenError(CancellationError())
         do {
             _ = try await identity.swap(to: "ghp_try1")
             Issue.record("Expected cancellation")
@@ -840,8 +840,8 @@ struct DashboardViewModelExtendedTests {
         #expect(titles.contains("Approved"))
 
         // Second swap succeeds → viewer login available → filter applies.
-        mockClient.validateTokenError = nil
-        mockClient.viewerLoginToReturn = "testuser"
+        await mockClient.setValidateTokenError(nil)
+        await mockClient.setViewerLogin("testuser")
         _ = try await identity.swap(to: "ghp_try2")
         await viewModel.refresh(viewID: testView.id)
         titles = try #require(viewModel.viewStates[testView.id]).pullRequests.map(\.title)
@@ -859,12 +859,12 @@ struct DashboardViewModelExtendedTests {
         let testView = DashboardView(id: UUID(), title: "All", query: "is:pr", hideReviewed: false)
         viewModel.addView(testView)
 
-        mockClient.viewerLoginToReturn = "testuser"
+        await mockClient.setViewerLogin("testuser")
         let approvedPR = TestPullRequestFactory.make(
             id: "PR_A", number: 1, title: "Approved",
             latestReviews: [UserReview(login: "testuser", state: .approved)]
         )
-        mockClient.pullRequestsToReturn = [approvedPR]
+        await mockClient.setPullRequestsToReturn([approvedPR])
         await viewModel.refresh(viewID: testView.id)
 
         let titles = try #require(viewModel.viewStates[testView.id]).pullRequests.map(\.title)
@@ -923,7 +923,7 @@ struct DashboardViewModelExtendedTests {
 
         let view1 = DashboardView(id: UUID(), title: "View 1", query: "q1")
         viewModel.addView(view1)
-        mockClient.pullRequestsToReturn = [TestPullRequestFactory.make()]
+        await mockClient.setPullRequestsToReturn([TestPullRequestFactory.make()])
         await viewModel.refresh(viewID: view1.id)
 
         #expect(!viewModel.views.isEmpty)
@@ -979,12 +979,12 @@ struct DashboardViewModelExtendedTests {
         #expect(!viewModel.isNotificationEnabled(for: testView.id))
 
         let pr = TestPullRequestFactory.make(id: "PR_1", title: "First")
-        mockClient.pullRequestsToReturn = [pr]
+        await mockClient.setPullRequestsToReturn([pr])
         await viewModel.refresh(viewID: testView.id)
 
         // Second refresh with new PR — should not crash even with notifications off
         let pr2 = TestPullRequestFactory.make(id: "PR_2", title: "Second")
-        mockClient.pullRequestsToReturn = [pr, pr2]
+        await mockClient.setPullRequestsToReturn([pr, pr2])
         await viewModel.refresh(viewID: testView.id)
 
         #expect(try #require(viewModel.viewStates[testView.id]).pullRequests.count == 2)
@@ -1006,7 +1006,7 @@ struct DashboardViewModelExtendedTests {
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         #expect(viewModel.viewStates[testView.id] != nil)
 
-        mockClient.pullRequestsToReturn = [TestPullRequestFactory.make()]
+        await mockClient.setPullRequestsToReturn([TestPullRequestFactory.make()])
         await viewModel.refresh(viewID: testView.id)
 
         #expect(viewModel.viewStates[testView.id]?.pullRequests.count == 1)
@@ -1027,12 +1027,12 @@ struct DashboardViewModelExtendedTests {
 
         // Initial load
         let pr1 = TestPullRequestFactory.make(id: "PR_1", title: "Initial")
-        mockClient.pullRequestsToReturn = [pr1]
+        await mockClient.setPullRequestsToReturn([pr1])
         await viewModel.refresh(viewID: testView.id)
 
         // Second load with one new PR
         let pr2 = TestPullRequestFactory.make(id: "PR_2", title: "New One")
-        mockClient.pullRequestsToReturn = [pr1, pr2]
+        await mockClient.setPullRequestsToReturn([pr1, pr2])
         await viewModel.refresh(viewID: testView.id)
 
         #expect(try #require(viewModel.viewStates[testView.id]).pullRequests.count == 2)
@@ -1050,7 +1050,7 @@ struct DashboardViewModelExtendedTests {
         viewModel.setNotification(for: testView.id, enabled: true)
 
         // Initial load
-        mockClient.pullRequestsToReturn = [TestPullRequestFactory.make(id: "PR_1", title: "Initial")]
+        await mockClient.setPullRequestsToReturn([TestPullRequestFactory.make(id: "PR_1", title: "Initial")])
         await viewModel.refresh(viewID: testView.id)
 
         // Second load with 5 new PRs (exercises the >1 branch and >4 prefix)
@@ -1058,7 +1058,7 @@ struct DashboardViewModelExtendedTests {
         for i in 2...6 {
             prs.append(TestPullRequestFactory.make(id: "PR_\(i)", number: i, title: "New \(i)"))
         }
-        mockClient.pullRequestsToReturn = prs
+        await mockClient.setPullRequestsToReturn(prs)
         await viewModel.refresh(viewID: testView.id)
 
         #expect(try #require(viewModel.viewStates[testView.id]).pullRequests.count == 6)

@@ -26,7 +26,7 @@ struct PRDetailRetryTests {
     @Test("retry re-fetches timeline without deselecting")
     func retryRefetchesWithoutDeselecting() async throws {
         let client = MockGitHubClient()
-        client.errorToThrow = GitHubClientError.networkError(URLError(.timedOut))
+        await client.setErrorToThrow(GitHubClientError.networkError(URLError(.timedOut)))
         let vm = PRDetailViewModel(gitHubClient: client)
 
         // Select PR — will error
@@ -36,10 +36,10 @@ struct PRDetailRetryTests {
         #expect(vm.selectedPR != nil)
 
         // Fix the client
-        client.errorToThrow = nil
-        client.timelineEventsToReturn = [
+        await client.setErrorToThrow(nil)
+        await client.setTimelineEventsToReturn([
             TimelineEvent(id: "1", kind: .comment, actor: nil, timestamp: Date(), body: nil)
-        ]
+        ])
 
         // Retry — should keep selection and re-fetch
         vm.retry()
@@ -50,12 +50,12 @@ struct PRDetailRetryTests {
     }
 
     @Test("retry is no-op when no PR selected")
-    func retryNoOpWhenNoSelection() {
+    func retryNoOpWhenNoSelection() async {
         let client = MockGitHubClient()
         let vm = PRDetailViewModel(gitHubClient: client)
         vm.retry()
         // Should not crash, no fetch triggered
         #expect(vm.selectedPR == nil)
-        #expect(client.fetchTimelineCallCount == 0)
+        #expect(await client.fetchTimelineCallCount == 0)
     }
 }
