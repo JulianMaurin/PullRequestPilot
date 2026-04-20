@@ -11,7 +11,7 @@ struct SettingsViewModelTests {
     private func makeViewModel(
         storedToken: String? = nil,
         suiteName: String = "SettingsVMTests"
-    ) -> (SettingsViewModel, KeychainService, TokenCache, GitDirectoriesStore, UserDefaults) {
+    ) -> (SettingsViewModel, KeychainService, IdentityActor, GitDirectoriesStore, UserDefaults) {
         let keychainService = "com.pullrequestpilot.settings.tests.\(suiteName)"
         let keychain = KeychainService(service: keychainService)
         if let storedToken {
@@ -19,20 +19,20 @@ struct SettingsViewModelTests {
         } else {
             try? keychain.delete(key: Constants.Keychain.githubToken)
         }
-        let tokenCache = TokenCache(keychain: keychain)
+        let identity = IdentityActor(keychain: keychain, github: mockClient)
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         let gitDirStore = GitDirectoriesStore(defaults: defaults)
 
         let vm = SettingsViewModel(
-            keychain: keychain,
+            identity: identity,
             gitHubClient: mockClient,
-            tokenCache: tokenCache,
             gitDirectoriesStore: gitDirStore,
             localRepositoryService: localRepoService,
-            defaults: defaults
+            defaults: defaults,
+            initialToken: storedToken
         )
-        return (vm, keychain, tokenCache, gitDirStore, defaults)
+        return (vm, keychain, identity, gitDirStore, defaults)
     }
 
     // MARK: - Token
@@ -144,16 +144,16 @@ struct SettingsViewModelTests {
     }
 
     @Test("clearToken removes from keychain and resets state")
-    func clearToken() {
-        let (vm, keychain, tokenCache, _, _) = makeViewModel(storedToken: "ghp_existing", suiteName: "ClearToken")
+    func clearToken() async {
+        let (vm, keychain, identity, _, _) = makeViewModel(storedToken: "ghp_existing", suiteName: "ClearToken")
         vm.token = "ghp_existing"
 
-        vm.clearToken()
+        await vm.clearToken()
 
         #expect(vm.token == "")
         #expect(vm.validationState == .idle)
         #expect(keychain.read(key: Constants.Keychain.githubToken) == nil)
-        #expect(tokenCache.token == nil)
+        #expect(await identity.token() == nil)
     }
 
     // MARK: - Computed Properties
@@ -341,11 +341,11 @@ struct SettingsViewModelTests {
     }
 
     @Test("clearToken sets hasSavedToken to false")
-    func clearTokenResetsSavedToken() {
+    func clearTokenResetsSavedToken() async {
         let (vm, _, _, _, _) = makeViewModel(storedToken: "ghp_existing", suiteName: "ClearSaved")
         #expect(vm.hasSavedToken)
 
-        vm.clearToken()
+        await vm.clearToken()
 
         #expect(!vm.hasSavedToken)
     }
@@ -372,7 +372,7 @@ struct SettingsViewModelTests {
         await vm.save()
         #expect(vm.viewerLogin == "octocat")
 
-        vm.clearToken()
+        await vm.clearToken()
 
         #expect(vm.viewerLogin == nil)
         #expect(vm.validationState == .idle)
@@ -399,12 +399,12 @@ struct SettingsViewModelTests {
         let keychainService = "com.pullrequestpilot.settings.tests.\(suiteName)"
         let keychain = KeychainService(service: keychainService)
         try? keychain.delete(key: Constants.Keychain.githubToken)
-        let tokenCache = TokenCache(keychain: keychain)
+        let identity = IdentityActor(keychain: keychain, github: mockClient)
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         defaults.set(300.0, forKey: Constants.UserDefaultsKeys.prRefreshInterval)
         let gitDirStore = GitDirectoriesStore(defaults: defaults)
-        let vm = SettingsViewModel(keychain: keychain, gitHubClient: mockClient, tokenCache: tokenCache, gitDirectoriesStore: gitDirStore, localRepositoryService: localRepoService, defaults: defaults)
+        let vm = SettingsViewModel(identity: identity, gitHubClient: mockClient, gitDirectoriesStore: gitDirStore, localRepositoryService: localRepoService, defaults: defaults)
         #expect(vm.prRefreshInterval == 300.0)
     }
 
@@ -430,12 +430,12 @@ struct SettingsViewModelTests {
         let keychainService = "com.pullrequestpilot.settings.tests.\(suiteName)"
         let keychain = KeychainService(service: keychainService)
         try? keychain.delete(key: Constants.Keychain.githubToken)
-        let tokenCache = TokenCache(keychain: keychain)
+        let identity = IdentityActor(keychain: keychain, github: mockClient)
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         defaults.set(600.0, forKey: Constants.UserDefaultsKeys.repoScanInterval)
         let gitDirStore = GitDirectoriesStore(defaults: defaults)
-        let vm = SettingsViewModel(keychain: keychain, gitHubClient: mockClient, tokenCache: tokenCache, gitDirectoriesStore: gitDirStore, localRepositoryService: localRepoService, defaults: defaults)
+        let vm = SettingsViewModel(identity: identity, gitHubClient: mockClient, gitDirectoriesStore: gitDirStore, localRepositoryService: localRepoService, defaults: defaults)
         #expect(vm.repoScanInterval == 600.0)
     }
 
@@ -480,7 +480,7 @@ struct SettingsViewModelTests {
 
         #expect(vm.viewerAvatarURL != nil)
 
-        vm.clearToken()
+        await vm.clearToken()
 
         #expect(vm.viewerAvatarURL == nil)
         #expect(vm.viewerLogin == nil)

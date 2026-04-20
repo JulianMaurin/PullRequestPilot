@@ -47,6 +47,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
     let notificationService: NotificationService
 
     private let gitHubClient: GitHubClientProtocol
+    private let identity: IdentityActor
     private let viewsStore: any ViewsStoreProtocol
     private let localRepositoryService: LocalRepositoryService
     private let defaults: UserDefaults
@@ -55,13 +56,13 @@ final class DashboardViewModel: DashboardActionsProtocol {
     private var hideReviewedTask: Task<Void, Never>?
     private var pendingRefreshTasks: [UUID: Task<Void, Never>] = [:]
     private var refreshingViewIDs: Set<UUID> = []
-    private var viewerLogin: String?
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Dashboard")
 
     // MARK: - Init
 
-    init(gitHubClient: GitHubClientProtocol, viewsStore: any ViewsStoreProtocol, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard) {
+    init(gitHubClient: GitHubClientProtocol, identity: IdentityActor, viewsStore: any ViewsStoreProtocol, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard) {
         self.gitHubClient = gitHubClient
+        self.identity = identity
         self.viewsStore = viewsStore
         self.localRepositoryService = localRepositoryService
         self.defaults = defaults
@@ -176,10 +177,6 @@ final class DashboardViewModel: DashboardActionsProtocol {
         viewStates[viewID]?.isNetworkError = false
         viewStates[viewID]?.rateLimitRetryAfter = nil
 
-        if view.hideReviewed {
-            await fetchViewerLoginIfNeeded()
-        }
-
         logger.info("Fetching PRs for '\(view.title, privacy: .public)'...")
 
         do {
@@ -187,7 +184,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
             let prs = page.pullRequests
             var seenIDs = Set<String>()
             let uniquePRs = prs.filter { seenIDs.insert($0.id).inserted }
-            let filteredPRs = filterReviewedPRs(uniquePRs, for: view)
+            let filteredPRs = await filterReviewedPRs(uniquePRs, for: view)
 
             await checkAndNotify(viewID: viewID, newPRs: filteredPRs)
             viewStates[viewID]?.pullRequests = filteredPRs
@@ -226,7 +223,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
         do {
             let page = try await gitHubClient.fetchPullRequests(query: view.query, cursor: state.nextCursor)
             let newPRs = page.pullRequests.filter { viewStates[viewID]?.seenIDs.insert($0.id).inserted == true }
-            let filteredNewPRs = filterReviewedPRs(newPRs, for: view)
+            let filteredNewPRs = await filterReviewedPRs(newPRs, for: view)
 
             viewStates[viewID]?.pullRequests.append(contentsOf: filteredNewPRs)
             viewStates[viewID]?.nextCursor = page.nextCursor
@@ -250,7 +247,6 @@ final class DashboardViewModel: DashboardActionsProtocol {
     }
 
     func refreshAll() async {
-        await fetchViewerLoginIfNeeded()
         await withTaskGroup(of: Void.self) { group in
             for view in views {
                 group.addTask { await self.refresh(viewID: view.id) }
@@ -259,14 +255,6 @@ final class DashboardViewModel: DashboardActionsProtocol {
         guard !Task.isCancelled else { return }
         badgeTracker.pruneUnseen(viewStates: viewStates)
         updateWidgetData()
-    }
-
-    /// Clears the cached viewer login so the next refresh re-fetches it from the API.
-    func resetViewerLogin() {
-        viewerLogin = nil
-        viewerLoginFetchFailed = false
-        viewerLoginTask?.cancel()
-        viewerLoginTask = nil
     }
 
     // MARK: - Auto-Refresh
@@ -450,8 +438,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
         views = []
         viewStates = [:]
         selectedViewID = nil
-        viewerLogin = nil
-        viewerLoginFetchFailed = false
+        Task { [identity] in await identity.invalidate(reason: .userSignedOut) }
         badgeTracker.reset()
         notificationService.reset()
         collapsedOrgs = []
@@ -513,9 +500,6 @@ final class DashboardViewModel: DashboardActionsProtocol {
 
     // MARK: - Private
 
-    private var viewerLoginTask: Task<Void, Never>?
-    private var viewerLoginFetchFailed = false
-
     private func scheduleRefresh(viewID: UUID) {
         pendingRefreshTasks[viewID]?.cancel()
         pendingRefreshTasks[viewID] = Task {
@@ -524,32 +508,10 @@ final class DashboardViewModel: DashboardActionsProtocol {
         }
     }
 
-    private func fetchViewerLoginIfNeeded() async {
-        if let existing = viewerLoginTask {
-            await existing.value
-            return
-        }
-        guard viewerLogin == nil, !viewerLoginFetchFailed else { return }
-        let task = Task {
-            do {
-                let viewer = try await gitHubClient.fetchViewer()
-                viewerLogin = viewer.login
-            } catch is CancellationError {
-                logger.info("Viewer login fetch cancelled — will retry on next refresh")
-            } catch {
-                viewerLoginFetchFailed = true
-                logger.warning("Failed to fetch viewer login: \(error, privacy: .public)")
-            }
-        }
-        viewerLoginTask = task
-        await task.value
-        viewerLoginTask = nil
-    }
-
-    private func filterReviewedPRs(_ prs: [PullRequest], for view: DashboardView) -> [PullRequest] {
+    private func filterReviewedPRs(_ prs: [PullRequest], for view: DashboardView) async -> [PullRequest] {
         guard view.hideReviewed else { return prs }
-        guard let login = viewerLogin else {
-            logger.warning("hideReviewed enabled but viewerLogin is nil — skipping filter")
+        guard let login = await identity.currentViewerLogin() else {
+            logger.warning("hideReviewed enabled but viewer login unavailable — skipping filter")
             return prs
         }
         let filtered = prs.filter { pr in

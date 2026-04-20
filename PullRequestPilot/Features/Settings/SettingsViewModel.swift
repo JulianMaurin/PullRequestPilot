@@ -16,9 +16,8 @@ final class SettingsViewModel {
 
     private(set) var launchAtLoginError: String?
 
-    private let keychain: KeychainService
+    private let identity: IdentityActor
     private let gitHubClient: GitHubClientProtocol
-    private let tokenCache: TokenCache
     private let gitDirectoriesStore: GitDirectoriesStore
     private let localRepositoryService: LocalRepositoryService
     private let defaults: UserDefaults
@@ -31,19 +30,18 @@ final class SettingsViewModel {
         case invalid(String)
     }
 
-    /// Whether a token has been persisted to the Keychain (not just typed in the field).
+    /// Whether a token has been persisted (not just typed in the field).
     /// Used by RootContentView to decide whether to show settings or the dashboard.
     private(set) var hasSavedToken: Bool = false
 
-    init(keychain: KeychainService, gitHubClient: GitHubClientProtocol, tokenCache: TokenCache, gitDirectoriesStore: GitDirectoriesStore, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard) {
-        self.keychain = keychain
+    init(identity: IdentityActor, gitHubClient: GitHubClientProtocol, gitDirectoriesStore: GitDirectoriesStore, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard, initialToken: String? = nil) {
+        self.identity = identity
         self.gitHubClient = gitHubClient
-        self.tokenCache = tokenCache
         self.gitDirectoriesStore = gitDirectoriesStore
         self.localRepositoryService = localRepositoryService
         self.defaults = defaults
-        self.token = tokenCache.token ?? ""
-        self.hasSavedToken = tokenCache.token != nil
+        self.token = initialToken ?? ""
+        self.hasSavedToken = (initialToken?.isEmpty == false)
         self.gitDirectories = gitDirectoriesStore.load()
         if gitDirectoriesStore.lastPrunedStaleCount > 0 {
             let count = gitDirectoriesStore.lastPrunedStaleCount
@@ -71,62 +69,42 @@ final class SettingsViewModel {
         saveError = nil
         validationState = .validating
 
-        // Temporarily set in cache so the API client can use it for validation
-        tokenCache.set(trimmedToken)
-
         logger.info("Validating token against GitHub API...")
 
         do {
-            let viewer = try await gitHubClient.fetchViewer()
-            viewerLogin = viewer.login
-            viewerAvatarURL = viewer.avatarURL
+            let login = try await identity.swap(to: trimmedToken)
+            viewerLogin = login
+            // Pull avatar in a follow-up call — swap only returns the login.
+            viewerAvatarURL = (try? await gitHubClient.validateToken(trimmedToken).avatarURL)
+            hasSavedToken = true
             validationState = .valid
-            logger.info("Token validated — authenticated as \(viewer.login, privacy: .private)")
+            logger.info("Token validated — authenticated as \(login, privacy: .private)")
         } catch is CancellationError {
-            // View disappeared during validation — restore cache to previous state
-            tokenCache.invalidate()
             validationState = .idle
             return
-        } catch let error as GitHubClientError {
-            logger.error("Token validation failed: \(error.localizedDescription, privacy: .public)")
-            tokenCache.invalidate()
-            validationState = .invalid(userMessage(for: error))
-            return
+        } catch let authError as AuthError {
+            logger.error("Token swap failed: \(authError.localizedDescription, privacy: .public)")
+            switch authError.reason {
+            case .saveFailed:
+                saveError = authError.localizedDescription
+                validationState = .idle
+            case .invalidToken, .network, .unauthorized, .userSignedOut, .unknown:
+                validationState = .invalid(userMessage(for: authError))
+            }
         } catch {
             logger.error("Unexpected error during token validation: \(error, privacy: .public)")
-            tokenCache.invalidate()
             validationState = .invalid("Something went wrong. Check the logs for details.")
-            return
-        }
-
-        // Validation succeeded — persist to Keychain
-        logger.info("Saving GitHub token to Keychain...")
-
-        do {
-            try keychain.save(key: Constants.Keychain.githubToken, value: trimmedToken)
-            hasSavedToken = true
-            logger.info("Token saved to Keychain successfully")
-        } catch {
-            logger.error("Failed to save token to Keychain: \(error, privacy: .public)")
-            tokenCache.invalidate()
-            saveError = "Could not save token to Keychain. Check that the app has Keychain access."
-            validationState = .idle
         }
     }
 
-    func clearToken() {
-        do {
-            try keychain.delete(key: Constants.Keychain.githubToken)
-            tokenCache.invalidate()
-            logger.info("Token cleared from Keychain")
-        } catch {
-            logger.error("Failed to clear token from Keychain: \(error, privacy: .public)")
-        }
+    func clearToken() async {
+        await identity.invalidate(reason: .userSignedOut)
         token = ""
         viewerLogin = nil
         viewerAvatarURL = nil
         validationState = .idle
         hasSavedToken = false
+        logger.info("Token cleared")
     }
 
     // MARK: - Launch at Login
@@ -235,22 +213,25 @@ final class SettingsViewModel {
 
     // MARK: - Private
 
-    private func userMessage(for error: GitHubClientError) -> String {
-        switch error {
-        case .unauthorized:
-            "Token is invalid or expired. Generate a new one at github.com/settings/tokens."
-        case .rateLimited:
-            "GitHub API rate limit exceeded. Wait a few minutes and try again."
-        case .clientError:
-            "GitHub rejected the request. Check your query or token permissions."
-        case .serverError:
-            "GitHub is experiencing issues. Try again later."
-        case .graphQLErrors:
-            "GitHub rejected the request. The token may lack the required `repo` scope."
-        case .networkError:
-            "Could not reach GitHub. Check your internet connection and try again."
-        case .decodingError:
-            "Received an unexpected response from GitHub. Try again later."
+    private func userMessage(for authError: AuthError) -> String {
+        if let clientError = authError.underlying as? GitHubClientError {
+            switch clientError {
+            case .unauthorized:
+                return "Token is invalid or expired. Generate a new one at github.com/settings/tokens."
+            case .rateLimited:
+                return "GitHub API rate limit exceeded. Wait a few minutes and try again."
+            case .clientError:
+                return "GitHub rejected the request. Check your query or token permissions."
+            case .serverError:
+                return "GitHub is experiencing issues. Try again later."
+            case .graphQLErrors:
+                return "GitHub rejected the request. The token may lack the required `repo` scope."
+            case .networkError:
+                return "Could not reach GitHub. Check your internet connection and try again."
+            case .decodingError:
+                return "Received an unexpected response from GitHub. Try again later."
+            }
         }
+        return authError.localizedDescription
     }
 }

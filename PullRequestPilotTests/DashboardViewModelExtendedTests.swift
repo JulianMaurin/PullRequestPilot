@@ -12,7 +12,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Test View", query: "is:pr is:open")
         viewModel.addView(testView)
         return (viewModel, testView.id)
@@ -147,7 +147,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "ReloadViews")!
         defaults.removePersistentDomain(forName: "ReloadViews")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
 
         let newView = DashboardView(id: UUID(), title: "New View", query: "test")
         var allViews = store.load()
@@ -178,7 +178,7 @@ struct DashboardViewModelExtendedTests {
         defaults.removePersistentDomain(forName: "ToggleNotification")
 
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Test", query: "is:pr")
         viewModel.addView(testView)
         let viewID = testView.id
@@ -270,7 +270,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "ToggleHideReviewed")!
         defaults.removePersistentDomain(forName: "ToggleHideReviewed")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Test", query: "is:pr")
         viewModel.addView(testView)
         let viewID = testView.id
@@ -346,7 +346,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "ReloadViewsStale")!
         defaults.removePersistentDomain(forName: "ReloadViewsStale")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
 
         // Set selection to a non-existent view
         viewModel.selectedViewID = UUID()
@@ -361,7 +361,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "ReloadViewsOrphaned")!
         defaults.removePersistentDomain(forName: "ReloadViewsOrphaned")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
 
         // Store currently has the default view. Save it so reloadViews has it.
         let statesBefore = viewModel.viewStates.count
@@ -396,7 +396,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "NotifyFirstLoad")!
         defaults.removePersistentDomain(forName: "NotifyFirstLoad")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Test", query: "is:pr")
         viewModel.addView(testView)
         let viewID = testView.id
@@ -437,7 +437,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "MoveView")!
         defaults.removePersistentDomain(forName: "MoveView")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
 
         let view1 = DashboardView(id: UUID(), title: "First", query: "q1")
         let view2 = DashboardView(id: UUID(), title: "Second", query: "q2")
@@ -478,7 +478,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "PresetNoConflict")!
         defaults.removePersistentDomain(forName: "PresetNoConflict")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         // No preset titles exist, so there should be no conflicts
         let conflicts = viewModel.presetConflicts()
         #expect(conflicts.isEmpty)
@@ -489,7 +489,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "PresetConflict")!
         defaults.removePersistentDomain(forName: "PresetConflict")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
 
         // Add a view with a preset title
         let conflicting = DashboardView(id: UUID(), title: "My PRs", query: "custom query")
@@ -506,7 +506,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "CreatePresets")!
         defaults.removePersistentDomain(forName: "CreatePresets")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
 
         let countBefore = viewModel.views.count
         viewModel.createPresetViews(replacingConflicts: false)
@@ -519,7 +519,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "CreatePresetsSkip")!
         defaults.removePersistentDomain(forName: "CreatePresetsSkip")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
 
         let conflicting = DashboardView(id: UUID(), title: "My PRs", query: "old query")
         viewModel.addView(conflicting)
@@ -536,7 +536,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "CreatePresetsReplace")!
         defaults.removePersistentDomain(forName: "CreatePresetsReplace")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
 
         let conflictingID = UUID()
         let conflicting = DashboardView(id: conflictingID, title: "My PRs", query: "old query")
@@ -555,7 +555,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "CreatePresetsSelect")!
         defaults.removePersistentDomain(forName: "CreatePresetsSelect")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         viewModel.selectedViewID = nil
 
         viewModel.createPresetViews(replacingConflicts: false)
@@ -667,16 +667,17 @@ struct DashboardViewModelExtendedTests {
     // MARK: - loadMore filters reviewed PRs
 
     @Test("loadMore filters reviewed PRs when hideReviewed is enabled")
-    func loadMoreFiltersReviewed() async {
+    func loadMoreFiltersReviewed() async throws {
         let defaults = UserDefaults(suiteName: "LoadMoreFilter")!
         defaults.removePersistentDomain(forName: "LoadMoreFilter")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        mockClient.viewerLoginToReturn = "testuser"
+        let identity = try await IdentityActorTestFactory.makeAuthenticated(github: mockClient)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: identity, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Test", query: "is:pr", hideReviewed: true)
         viewModel.addView(testView)
         let viewID = testView.id
 
-        mockClient.viewerLoginToReturn = "testuser"
         mockClient.pullRequestsToReturn = [TestPullRequestFactory.make(id: "PR_1", title: "First")]
         mockClient.nextCursorToReturn = "cursor_1"
         await viewModel.refresh(viewID: viewID)
@@ -705,7 +706,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "RefreshAllLogin")!
         defaults.removePersistentDomain(forName: "RefreshAllLogin")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Test", query: "is:pr", hideReviewed: true)
         viewModel.addView(testView)
 
@@ -753,7 +754,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "NotifiedPersist")!
         defaults.removePersistentDomain(forName: "NotifiedPersist")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Test View", query: "is:pr is:open")
         viewModel.addView(testView)
         let viewID = testView.id
@@ -773,11 +774,12 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "HideReviewedCR")!
         defaults.removePersistentDomain(forName: "HideReviewedCR")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        mockClient.viewerLoginToReturn = "testuser"
+        let identity = try await IdentityActorTestFactory.makeAuthenticated(github: mockClient)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: identity, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Review", query: "is:pr", hideReviewed: true)
         viewModel.addView(testView)
 
-        mockClient.viewerLoginToReturn = "testuser"
         let changesRequestedPR = TestPullRequestFactory.make(
             id: "PR_CR", number: 1, title: "Changes Requested",
             latestReviews: [UserReview(login: "testuser", state: .changesRequested)]
@@ -794,11 +796,12 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "HideReviewedComment")!
         defaults.removePersistentDomain(forName: "HideReviewedComment")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        mockClient.viewerLoginToReturn = "testuser"
+        let identity = try await IdentityActorTestFactory.makeAuthenticated(github: mockClient)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: identity, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Review", query: "is:pr", hideReviewed: true)
         viewModel.addView(testView)
 
-        mockClient.viewerLoginToReturn = "testuser"
         let commentedPR = TestPullRequestFactory.make(
             id: "PR_C", number: 1, title: "Commented",
             latestReviews: [UserReview(login: "testuser", state: .commented)]
@@ -810,12 +813,13 @@ struct DashboardViewModelExtendedTests {
         #expect(!titles.contains("Commented"))
     }
 
-    @Test("hideReviewed retries viewer login after cancellation error")
+    @Test("hideReviewed retries viewer login after swap cancellation")
     func hideReviewedRetriesAfterCancellation() async throws {
         let defaults = UserDefaults(suiteName: "HideReviewedRetry")!
         defaults.removePersistentDomain(forName: "HideReviewedRetry")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let identity = IdentityActorTestFactory.make(github: mockClient)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: identity, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Review", query: "is:pr", hideReviewed: true)
         viewModel.addView(testView)
 
@@ -825,15 +829,21 @@ struct DashboardViewModelExtendedTests {
         )
         mockClient.pullRequestsToReturn = [approvedPR]
 
-        // First refresh: fetchViewer throws CancellationError — PR should NOT be filtered
-        mockClient.fetchViewerError = CancellationError()
+        // First swap attempt is cancelled → state stays unauthenticated → filter skipped.
+        mockClient.validateTokenError = CancellationError()
+        do {
+            _ = try await identity.swap(to: "ghp_try1")
+            Issue.record("Expected cancellation")
+        } catch is CancellationError { /* expected */ }
+
         await viewModel.refresh(viewID: testView.id)
         var titles = try #require(viewModel.viewStates[testView.id]).pullRequests.map(\.title)
         #expect(titles.contains("Approved"))
 
-        // Second refresh: fetchViewer succeeds — PR should be filtered out
-        mockClient.fetchViewerError = nil
+        // Second swap succeeds → viewer login available → filter applies.
+        mockClient.validateTokenError = nil
         mockClient.viewerLoginToReturn = "testuser"
+        _ = try await identity.swap(to: "ghp_try2")
         await viewModel.refresh(viewID: testView.id)
         titles = try #require(viewModel.viewStates[testView.id]).pullRequests.map(\.title)
         #expect(!titles.contains("Approved"))
@@ -846,7 +856,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "NoFilterOff")!
         defaults.removePersistentDomain(forName: "NoFilterOff")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "All", query: "is:pr", hideReviewed: false)
         viewModel.addView(testView)
 
@@ -879,7 +889,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "DeleteKeepSelection")!
         defaults.removePersistentDomain(forName: "DeleteKeepSelection")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
 
         let view1 = DashboardView(id: UUID(), title: "View 1", query: "q1")
         let view2 = DashboardView(id: UUID(), title: "View 2", query: "q2")
@@ -910,7 +920,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "ClearAllData")!
         defaults.removePersistentDomain(forName: "ClearAllData")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
 
         let view1 = DashboardView(id: UUID(), title: "View 1", query: "q1")
         viewModel.addView(view1)
@@ -953,7 +963,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "NotifyDisabled")!
         defaults.removePersistentDomain(forName: "NotifyDisabled")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Test", query: "is:pr")
         viewModel.addView(testView)
 
@@ -985,7 +995,7 @@ struct DashboardViewModelExtendedTests {
         store.save([testView])
 
         // Create viewModel which loads from store — viewStates should be populated
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         #expect(viewModel.viewStates[testView.id] != nil)
 
         mockClient.pullRequestsToReturn = [TestPullRequestFactory.make()]
@@ -1001,7 +1011,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "NotifySingle")!
         defaults.removePersistentDomain(forName: "NotifySingle")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Notify", query: "is:pr")
         viewModel.addView(testView)
 
@@ -1025,7 +1035,7 @@ struct DashboardViewModelExtendedTests {
         let defaults = UserDefaults(suiteName: "NotifyMultiple")!
         defaults.removePersistentDomain(forName: "NotifyMultiple")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Notify", query: "is:pr")
         viewModel.addView(testView)
 

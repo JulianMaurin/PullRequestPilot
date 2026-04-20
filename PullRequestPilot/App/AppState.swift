@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 @MainActor
 @Observable
@@ -6,7 +7,7 @@ final class AppState {
     let keychain: KeychainService
     let gitHubClient: GitHubClient
     let viewsStore: ViewsStore
-    let tokenCache: TokenCache
+    let identity: IdentityActor
     let gitDirectoriesStore: GitDirectoriesStore
     let localRepositoryService: LocalRepositoryService
 
@@ -16,17 +17,27 @@ final class AppState {
 
     init(defaults: UserDefaults = .standard) {
         let keychain = KeychainService()
-        let tokenCache = TokenCache(keychain: keychain)
+
+        // Two-phase init: GitHubClient needs an identity-backed token provider,
+        // but IdentityActor needs a GitHubClient for validation. Resolve by
+        // holding a weak-ish reference via a mutable box assigned after both
+        // are constructed.
+        let identityHolder = IdentityHolder()
+
         let gitHubClient = GitHubClient(
-            tokenProvider: { tokenCache.token },
-            onUnauthorized: { staleToken in tokenCache.invalidateIfCurrent(staleToken) }
+            tokenProvider: { await identityHolder.identity?.token() },
+            onUnauthorized: { staleToken in
+                Task { await identityHolder.identity?.invalidateIfMatchingToken(staleToken, reason: .unauthorized) }
+            }
         )
+        let identity = IdentityActor(keychain: keychain, github: gitHubClient)
+        identityHolder.set(identity)
         let viewsStore = ViewsStore(defaults: defaults)
         let gitDirectoriesStore = GitDirectoriesStore()
         let localRepositoryService = LocalRepositoryService()
 
         self.keychain = keychain
-        self.tokenCache = tokenCache
+        self.identity = identity
         self.gitHubClient = gitHubClient
         self.viewsStore = viewsStore
         self.gitDirectoriesStore = gitDirectoriesStore
@@ -34,18 +45,26 @@ final class AppState {
         self.prDetailViewModel = PRDetailViewModel(gitHubClient: gitHubClient)
         self.dashboardViewModel = DashboardViewModel(
             gitHubClient: gitHubClient,
+            identity: identity,
             viewsStore: viewsStore,
             localRepositoryService: localRepositoryService,
             defaults: defaults
         )
+        // Synchronously read the stored token once at startup so the initial UI
+        // can show "signed in" without awaiting the actor. Writes always go
+        // through IdentityActor.
+        let initialToken = Self.initialToken(keychain: keychain)
         self.settingsViewModel = SettingsViewModel(
-            keychain: keychain,
+            identity: identity,
             gitHubClient: gitHubClient,
-            tokenCache: tokenCache,
             gitDirectoriesStore: gitDirectoriesStore,
             localRepositoryService: localRepositoryService,
-            defaults: defaults
+            defaults: defaults,
+            initialToken: initialToken
         )
+
+        // Populate IdentityActor from Keychain (or DEBUG env var) before any fetch.
+        Task { await identity.bootstrap() }
 
         // Start security-scoped access for bookmarked directories
         let initialDirectories = gitDirectoriesStore.load()
@@ -70,6 +89,17 @@ final class AppState {
         )
     }
 
+    // MARK: - Private
+
+    private static func initialToken(keychain: KeychainService) -> String? {
+        #if DEBUG
+        if let envToken = ProcessInfo.processInfo.environment["GITHUB_TOKEN"], !envToken.isEmpty {
+            return envToken
+        }
+        #endif
+        return keychain.read(key: Constants.Keychain.githubToken)
+    }
+
     // MARK: - Lifecycle
 
     func cleanup() {
@@ -77,5 +107,20 @@ final class AppState {
         localRepositoryService.stopPeriodicRefresh()
         let dirs = gitDirectoriesStore.load()
         gitDirectoriesStore.stopAccessing(dirs)
+    }
+}
+
+/// Lets GitHubClient's token-provider closure reach IdentityActor without a
+/// chicken-and-egg dependency cycle at init time. Single-writer: AppState.init
+/// assigns once and then only reads occur.
+private final class IdentityHolder: Sendable {
+    private let storage = OSAllocatedUnfairLock<IdentityActor?>(initialState: nil)
+
+    var identity: IdentityActor? {
+        storage.withLock { $0 }
+    }
+
+    func set(_ identity: IdentityActor) {
+        storage.withLock { $0 = identity }
     }
 }

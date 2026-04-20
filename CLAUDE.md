@@ -18,7 +18,7 @@ make test         # Run unit tests
 make clean        # Clean build artifacts
 ```
 
-In debug builds, `TokenCache` reads `GITHUB_TOKEN` from the environment (`#if DEBUG`). Create a `.env` file at the project root and `make debug` will source it automatically.
+In debug builds, `IdentityActor.bootstrap()` reads `GITHUB_TOKEN` from the environment (`#if DEBUG`). Create a `.env` file at the project root and `make debug` will source it automatically.
 
 ```bash
 # Open in Xcode
@@ -131,7 +131,7 @@ This has shipped one production crash: `Dictionary(uniqueKeysWithValues:)` on PR
 ## Key Technical Decisions
 
 - **GraphQL over REST** for GitHub API — single endpoint, precise field selection, cursor pagination.
-- **Keychain** for token storage — never persist tokens in UserDefaults or files. Use `TokenCache` for in-memory caching — never read Keychain on every API call (causes repeated macOS permission prompts).
+- **Keychain** for token storage — never persist tokens in UserDefaults or files. `IdentityActor` owns the in-memory identity state (token + viewer login); never read Keychain on every API call (causes repeated macOS permission prompts).
 - **Status bar app** — `AppDelegate` owns the `NSStatusItem`. Window hides on close (via `WindowAccessor` intercepting `windowShouldClose`) instead of being destroyed, so the status bar icon can re-show it. Never remove the `@NSApplicationDelegateAdaptor` line.
 - **No external dependencies** — everything uses Apple frameworks (URLSession, SwiftUI, Security). Keep it this way unless there's a compelling reason.
 - **XcodeGen** for project generation — avoids `.xcodeproj` merge conflicts.
@@ -156,7 +156,7 @@ Every pitfall below has shipped in this codebase at least once. The fix is alway
 ### State that crosses tasks
 - **`@unchecked Sendable` is almost always wrong.** If you need it, add an `NSLock` (or better, an actor). Bugs: `ViewsStore`, `GitDirectoriesStore`, `DateFormatter` statics all had real data races.
 - **Static formatters are shared state.** `ISO8601DateFormatter` / `DateFormatter` as file-level `let` is not thread-safe. Wrap in a lock or make them per-thread.
-- **TOCTOU on caches.** Any `get-then-invalidate` pair (e.g., `TokenCache`) must serialize through a generation counter or actor. Bug: keychain read on one task revived a token another task had just invalidated.
+- **TOCTOU on caches.** Any `get-then-invalidate` pair must serialize through a generation counter or actor (see `IdentityActor.invalidateIfMatchingToken`). Bug history: keychain read on one task revived a token another task had just invalidated.
 
 ### Auto-refresh / idempotency
 - **`startAutoRefresh()` must be idempotent** — no-op if already running. Cancel in-flight work via `stopAutoRefresh()` first.

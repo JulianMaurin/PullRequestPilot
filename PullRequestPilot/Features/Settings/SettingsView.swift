@@ -15,7 +15,7 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
                     LabeledContent {
                         Button("Sign Out", role: .destructive) {
                             dashboard.clearAllData()
-                            viewModel.clearToken()
+                            Task { await viewModel.clearToken() }
                         }
                     } label: {
                         HStack(spacing: 8) {

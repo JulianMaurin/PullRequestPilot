@@ -49,14 +49,12 @@ struct RootContentView: View {
             }
         }
         .onChange(of: settingsViewModel.hasSavedToken) { _, hasSaved in
-            if hasSaved {
-                // Token changed — clear cached viewer login so the next refresh
-                // re-fetches the authenticated user for "hide reviewed" filtering.
-                dashboardViewModel.resetViewerLogin()
-            } else {
+            if !hasSaved {
                 needsInitialSetup = true
                 dashboardViewModel.showingSettings = false
             }
+            // When `hasSaved` flips to true, IdentityActor.swap has already
+            // refreshed the viewer login atomically — nothing else to do here.
         }
     }
 }

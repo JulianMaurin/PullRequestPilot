@@ -27,6 +27,9 @@ protocol GitHubClientProtocol: Sendable {
     func fetchTimeline(nodeID: String, cursor: String?, eventPageOffset: Int, checksPageOffset: Int) async throws -> TimelinePage
     func fetchChecks(nodeID: String, cursor: String, checksPageOffset: Int) async throws -> ChecksPage
     func fetchViewer() async throws -> (login: String, avatarURL: URL?)
+    /// Validates an explicit token against the GitHub API, bypassing the
+    /// ambient token provider. Used by IdentityActor.swap before committing.
+    func validateToken(_ token: String) async throws -> (login: String, avatarURL: URL?)
 }
 
 // MARK: - Errors
@@ -63,7 +66,7 @@ enum GitHubClientError: LocalizedError {
 // MARK: - Implementation
 
 final class GitHubClient: GitHubClientProtocol, Sendable {
-    private let tokenProvider: @Sendable () -> String?
+    private let tokenProvider: @Sendable () async -> String?
     private let onUnauthorized: @Sendable (String) -> Void
     private let session: URLSession
     private let logger = Logger(subsystem: "PullRequestPilot", category: "GitHubClient")
@@ -79,7 +82,7 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         return URLSession(configuration: config)
     }()
 
-    init(tokenProvider: @escaping @Sendable () -> String?, onUnauthorized: @escaping @Sendable (String) -> Void = { _ in }, session: URLSession? = nil) {
+    init(tokenProvider: @escaping @Sendable () async -> String?, onUnauthorized: @escaping @Sendable (String) -> Void = { _ in }, session: URLSession? = nil) {
         self.tokenProvider = tokenProvider
         self.onUnauthorized = onUnauthorized
         self.session = session ?? Self.defaultSession
@@ -161,7 +164,17 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
 
     func fetchViewer() async throws -> (login: String, avatarURL: URL?) {
         let response: GraphQLResponse<ViewerData> = try await execute(query: GitHubGraphQL.viewerQuery)
+        return try viewerResult(from: response)
+    }
 
+    func validateToken(_ token: String) async throws -> (login: String, avatarURL: URL?) {
+        let response: GraphQLResponse<ViewerData> = try await execute(query: GitHubGraphQL.viewerQuery, overrideToken: token)
+        return try viewerResult(from: response)
+    }
+
+    // MARK: - Private
+
+    private func viewerResult(from response: GraphQLResponse<ViewerData>) throws -> (login: String, avatarURL: URL?) {
         if let errors = response.errors, !errors.isEmpty, response.data != nil {
             logger.warning("GraphQL partial errors: \(errors.map(\.message).joined(separator: "; "), privacy: .public)")
         }
@@ -175,10 +188,14 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         return (login: data.viewer.login, avatarURL: avatarURL)
     }
 
-    // MARK: - Private
-
-    private func execute<T: Decodable>(query: String) async throws -> GraphQLResponse<T> {
-        guard let token = tokenProvider(), !token.isEmpty else {
+    private func execute<T: Decodable>(query: String, overrideToken: String? = nil) async throws -> GraphQLResponse<T> {
+        let resolvedToken: String?
+        if let overrideToken {
+            resolvedToken = overrideToken
+        } else {
+            resolvedToken = await tokenProvider()
+        }
+        guard let token = resolvedToken, !token.isEmpty else {
             throw GitHubClientError.unauthorized
         }
 
