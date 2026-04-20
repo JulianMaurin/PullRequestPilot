@@ -6,6 +6,10 @@ struct ReviewQueueView: View {
     var prDetailViewModel: PRDetailViewModel
     var events: EventCenter?
     var onOpenSettings: () -> Void
+    /// Injected explicitly — `@AppStorage` without an explicit `store:`
+    /// implicitly reaches the default suite, which bypasses DI and the app
+    /// group container. Panel width is persisted here instead.
+    let userDefaults: UserDefaults
     @State private var expandedStacks: Set<String> = []
     @State private var isAddingView = false
     @State private var newViewTitle = ""
@@ -15,7 +19,19 @@ struct ReviewQueueView: View {
     @State private var editingQuery: String = ""
     @State private var draggedViewID: UUID?
     @FocusState private var isQueryFocused: Bool
-    @AppStorage("detailPanelWidth") private var detailPanelWidth: Double = 550
+    @State private var detailPanelWidth: Double
+
+    init(viewModel: DashboardViewModel, prDetailViewModel: PRDetailViewModel, events: EventCenter? = nil, userDefaults: UserDefaults, onOpenSettings: @escaping () -> Void) {
+        self.viewModel = viewModel
+        self.prDetailViewModel = prDetailViewModel
+        self.events = events
+        self.userDefaults = userDefaults
+        self.onOpenSettings = onOpenSettings
+        let stored = userDefaults.double(forKey: Self.detailPanelWidthKey)
+        _detailPanelWidth = State(initialValue: stored > 0 ? stored : 550)
+    }
+
+    private static let detailPanelWidthKey = "detailPanelWidth"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,6 +58,7 @@ struct ReviewQueueView: View {
                                 Color.clear
                                     .onChange(of: geo.size.width) { _, newWidth in
                                         detailPanelWidth = newWidth
+                                        userDefaults.set(newWidth, forKey: Self.detailPanelWidthKey)
                                     }
                             }
                         }
@@ -85,6 +102,7 @@ struct ReviewQueueView: View {
                 }
                 .disabled(viewModel.selectedViewState.isLoading)
                 .help(viewModel.selectedViewState.isLoading ? "Refreshing..." : "Refresh")
+                .accessibilityLabel("Refresh pull requests")
                 .keyboardShortcut("r", modifiers: .command)
             }
             ToolbarItem(placement: .automatic) {
@@ -95,6 +113,7 @@ struct ReviewQueueView: View {
                     Image(systemName: "gearshape")
                 }
                 .help("Settings")
+                .accessibilityLabel("Open Settings")
             }
         }
         .onAppear {
@@ -157,47 +176,26 @@ struct ReviewQueueView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
                 ForEach(viewModel.views) { dashView in
-                    tabButton(for: dashView)
+                    TabButton(
+                        dashView: dashView,
+                        isSelected: dashView.id == viewModel.selectedViewID,
+                        isDragged: draggedViewID == dashView.id,
+                        draggedID: $draggedViewID,
+                        viewModel: viewModel,
+                        onSelect: {
+                            prDetailViewModel.deselect()
+                            viewModel.selectedViewID = dashView.id
+                        },
+                        onRequestDelete: {
+                            viewToDelete = dashView
+                            showDeleteConfirmation = true
+                        }
+                    )
                 }
                 addButton
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-        }
-    }
-
-    private func tabButton(for dashView: DashboardView) -> some View {
-        let isSelected = dashView.id == viewModel.selectedViewID
-        return Button {
-            prDetailViewModel.deselect()
-            viewModel.selectedViewID = dashView.id
-        } label: {
-            Text(dashView.title)
-            .font(.subheadline)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
-            .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(.plain)
-        .opacity(draggedViewID == dashView.id ? 0.4 : 1.0)
-        .onDrag {
-            draggedViewID = dashView.id
-            return NSItemProvider(object: dashView.id.uuidString as NSString)
-        }
-        .onDrop(of: [.text], delegate: TabDropDelegate(
-            targetID: dashView.id,
-            draggedID: $draggedViewID,
-            viewModel: viewModel
-        ))
-        .contextMenu {
-            Button(role: .destructive) {
-                viewToDelete = dashView
-                showDeleteConfirmation = true
-            } label: {
-                SwiftUI.Label("Delete View", systemImage: "trash")
-            }
         }
     }
 
@@ -214,6 +212,8 @@ struct ReviewQueueView: View {
                 .foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)
+        .help("New view")
+        .accessibilityLabel("New view")
         .popover(isPresented: $isAddingView) {
             addViewPopover
         }
@@ -285,6 +285,8 @@ struct ReviewQueueView: View {
         }
         .buttonStyle(.plain)
         .help(isOn ? helpOn : helpOff)
+        .accessibilityLabel(isOn ? helpOn : helpOff)
+        .accessibilityValue(isOn ? "on" : "off")
     }
 
     private func commitQueryEdit() {
@@ -410,14 +412,27 @@ struct ReviewQueueView: View {
     }
 
     private var emptyView: some View {
-        VStack(spacing: 12) {
+        let skipped = viewModel.selectedViewState.skippedPRCount
+        return VStack(spacing: 12) {
             Image(systemName: "checkmark.circle")
                 .font(.largeTitle)
                 .foregroundStyle(.green)
             Text("No pull requests")
                 .font(.headline)
-            Text("Nothing matched this view's query.")
-                .foregroundStyle(.secondary)
+            if skipped > 0 {
+                VStack(spacing: 4) {
+                    Text("Your query matched \(skipped) non-PR \(skipped == 1 ? "item" : "items") (issues, discussions).")
+                        .foregroundStyle(.secondary)
+                    Text("Add `is:pr` to filter to pull requests.")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            } else {
+                Text("Nothing matched this view's query.")
+                    .foregroundStyle(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -741,6 +756,50 @@ private struct SplitDividerRestorer: NSViewRepresentable {
             current = candidate.superview
         }
         return nil
+    }
+}
+
+// MARK: - Tab Button
+
+/// Extracted from `ReviewQueueView` so SwiftUI only re-renders tabs whose
+/// own `isSelected` / `isDragged` changes — the previous inline helper read
+/// `viewModel.selectedViewID` inside the outer body, which invalidated
+/// every tab on any selection change.
+private struct TabButton: View {
+    let dashView: DashboardView
+    let isSelected: Bool
+    let isDragged: Bool
+    @Binding var draggedID: UUID?
+    let viewModel: DashboardViewModel
+    let onSelect: () -> Void
+    let onRequestDelete: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            Text(dashView.title)
+                .font(.subheadline)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+                .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .opacity(isDragged ? 0.4 : 1.0)
+        .onDrag {
+            draggedID = dashView.id
+            return NSItemProvider(object: dashView.id.uuidString as NSString)
+        }
+        .onDrop(of: [.text], delegate: TabDropDelegate(
+            targetID: dashView.id,
+            draggedID: $draggedID,
+            viewModel: viewModel
+        ))
+        .contextMenu {
+            Button(role: .destructive, action: onRequestDelete) {
+                SwiftUI.Label("Delete View", systemImage: "trash")
+            }
+        }
     }
 }
 

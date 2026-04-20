@@ -20,7 +20,8 @@ struct PullRequestPilotApp: App {
                     dashboardViewModel: appState.dashboardViewModel,
                     prDetailViewModel: appState.prDetailViewModel,
                     settingsViewModel: appState.settingsViewModel,
-                    events: appState.events
+                    events: appState.events,
+                    userDefaults: appState.userDefaults
                 )
                 .background(WindowAccessor())
                 .onOpenURL { url in
@@ -36,6 +37,13 @@ struct PullRequestPilotApp: App {
         }
         .defaultSize(width: 700, height: 500)
         .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    appState?.dashboardViewModel.showingSettings = true
+                    appDelegate.showWindow()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
             CommandGroup(replacing: .windowList) {
                 if let viewModel = appState?.dashboardViewModel, !viewModel.views.isEmpty {
                     ForEach(Array(viewModel.views.enumerated()), id: \.element.id) { index, view in

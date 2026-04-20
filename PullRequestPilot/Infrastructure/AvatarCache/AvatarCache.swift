@@ -34,8 +34,13 @@ final class AvatarCache {
         let data: Data
         do {
             let session = self.session
+            let logger = self.logger
             data = try await coalescer.run(key: url) {
-                let (bytes, _) = try await session.data(from: url)
+                let (bytes, response) = try await session.data(from: url)
+                if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                    logger.debug("Avatar HTTP \(http.statusCode, privacy: .public) for \(url, privacy: .public)")
+                    throw URLError(.badServerResponse)
+                }
                 return bytes
             }
         } catch is CancellationError {

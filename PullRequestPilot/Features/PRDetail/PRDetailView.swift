@@ -55,6 +55,7 @@ struct PRDetailView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Close")
+                .accessibilityLabel("Close pull request details")
             }
         }
         .padding(12)

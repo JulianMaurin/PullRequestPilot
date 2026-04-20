@@ -80,12 +80,19 @@ final class ViewsStore: ViewsStoreProtocol {
 
     static func applicationSupportDirectory() -> URL? {
         let bundleID = Bundle.main.bundleIdentifier ?? "PullRequestPilot"
-        guard let base = try? FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ) else { return nil }
+        let base: URL
+        do {
+            base = try FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+        } catch {
+            Logger(subsystem: bundleID, category: "ViewsStore")
+                .error("Application Support directory unavailable: \(error, privacy: .public)")
+            return nil
+        }
         return base.appendingPathComponent(bundleID, isDirectory: true)
     }
 

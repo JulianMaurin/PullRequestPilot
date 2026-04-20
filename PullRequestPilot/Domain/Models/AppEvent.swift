@@ -79,9 +79,11 @@ enum AppError: LocalizedError, Sendable, Hashable {
     case tokenSaveFailed(underlying: String)
     case decodeCorruption(subsystem: String, backupPath: String?)
     case bookmarkPruned(count: Int)
+    case bookmarkCreationFailed(path: String)
     case viewerIdentityUnavailable
     case launchAtLoginFailed(underlying: String)
     case widgetSaveFailed(underlying: String)
+    case externalAppLaunchFailed(appName: String)
 
     var errorDescription: String? {
         switch self {
@@ -120,12 +122,16 @@ enum AppError: LocalizedError, Sendable, Hashable {
             let noun = count == 1 ? "directory" : "directories"
             let pronoun = count == 1 ? "it" : "them"
             return "\(count) \(noun) lost sandbox access and \(count == 1 ? "was" : "were") removed. Re-add \(pronoun) in Settings."
+        case .bookmarkCreationFailed(let path):
+            return "Couldn't store a sandbox bookmark for \(path). The directory wasn't added."
         case .viewerIdentityUnavailable:
             return "Your GitHub identity isn't available yet. The hide-reviewed filter has been disabled."
         case .launchAtLoginFailed(let underlying):
             return "Could not update launch-at-login: \(underlying)"
         case .widgetSaveFailed(let underlying):
             return "Couldn't update widget data: \(underlying)"
+        case .externalAppLaunchFailed(let appName):
+            return "Couldn't open \(appName). Make sure it's installed and try again."
         }
     }
 

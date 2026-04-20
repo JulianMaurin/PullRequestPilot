@@ -8,6 +8,9 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
     var onDismiss: (() -> Void)?
     @State private var showResetConfirmation = false
     @State private var presetToReset: DashboardView?
+    @State private var showSignOutConfirmation = false
+    @State private var directoryToRemove: URL?
+    @State private var showClearLogConfirmation = false
 
     var body: some View {
         Form {
@@ -15,8 +18,7 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
                 if let login = viewModel.viewerLogin {
                     LabeledContent {
                         Button("Sign Out", role: .destructive) {
-                            dashboard.clearAllData()
-                            Task { await viewModel.clearToken() }
+                            showSignOutConfirmation = true
                         }
                     } label: {
                         HStack(spacing: 8) {
@@ -66,6 +68,17 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
                                 .foregroundStyle(.red)
                             Text(error)
                                 .foregroundStyle(.red)
+                        }
+                        .font(.caption)
+                    }
+
+                    if case .invalid(let message) = viewModel.validationState {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.red)
+                            Text(message)
+                                .foregroundStyle(.red)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .font(.caption)
                     }
@@ -173,8 +186,10 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
             }
             .task {
                 await dashboard.refreshNotificationAuthorization()
+                viewModel.refreshLaunchAtLoginStatus()
                 for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) {
                     await dashboard.refreshNotificationAuthorization()
+                    viewModel.refreshLaunchAtLoginStatus()
                 }
             }
 
@@ -188,12 +203,14 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
                             .truncationMode(.head)
                         Spacer()
                         Button {
-                            viewModel.removeGitDirectory(directory)
+                            directoryToRemove = directory
                         } label: {
                             Image(systemName: "minus.circle.fill")
                                 .foregroundStyle(.red)
                         }
                         .buttonStyle(.plain)
+                        .help("Remove directory")
+                        .accessibilityLabel("Remove directory \(directory.lastPathComponent)")
                     }
                 }
 
@@ -216,6 +233,7 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
                         }
                         .buttonStyle(.plain)
                         .help("Rescan repositories")
+                        .accessibilityLabel("Rescan repositories")
                     }
                 }
             } footer: {
@@ -258,7 +276,7 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
                     }
                     if events.history.count > 1 {
                         Button("Clear Log", role: .destructive) {
-                            events.clearHistory()
+                            showClearLogConfirmation = true
                         }
                         .controlSize(.small)
                     }
@@ -286,6 +304,48 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
         }
         .formStyle(.grouped)
         .frame(minWidth: 450, minHeight: 250)
+        .confirmationDialog(
+            "Sign out of GitHub?",
+            isPresented: $showSignOutConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Sign Out", role: .destructive) {
+                dashboard.clearAllData()
+                Task { await viewModel.clearToken() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will clear your GitHub token and remove all saved views, notifications, and badge settings. This cannot be undone.")
+        }
+        .confirmationDialog(
+            "Remove this directory?",
+            isPresented: Binding(
+                get: { directoryToRemove != nil },
+                set: { if !$0 { directoryToRemove = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: directoryToRemove
+        ) { directory in
+            Button("Remove", role: .destructive) {
+                viewModel.removeGitDirectory(directory)
+                directoryToRemove = nil
+            }
+            Button("Cancel", role: .cancel) { directoryToRemove = nil }
+        } message: { directory in
+            Text("Pull Request Pilot will stop matching pull requests to repositories under \(directory.path).")
+        }
+        .confirmationDialog(
+            "Clear diagnostics log?",
+            isPresented: $showClearLogConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Clear Log", role: .destructive) {
+                events.clearHistory()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The recent events shown above will be discarded.")
+        }
     }
 
     @ViewBuilder

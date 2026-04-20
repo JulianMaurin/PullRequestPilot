@@ -7,14 +7,16 @@ struct RootContentView: View {
     let prDetailViewModel: PRDetailViewModel
     let settingsViewModel: SettingsViewModel
     let events: EventCenter
+    let userDefaults: UserDefaults
     /// True when the app launched without a saved token — stays true until "Get Started" is clicked.
     @State private var needsInitialSetup: Bool
 
-    init(dashboardViewModel: DashboardViewModel, prDetailViewModel: PRDetailViewModel, settingsViewModel: SettingsViewModel, events: EventCenter) {
+    init(dashboardViewModel: DashboardViewModel, prDetailViewModel: PRDetailViewModel, settingsViewModel: SettingsViewModel, events: EventCenter, userDefaults: UserDefaults) {
         self.dashboardViewModel = dashboardViewModel
         self.prDetailViewModel = prDetailViewModel
         self.settingsViewModel = settingsViewModel
         self.events = events
+        self.userDefaults = userDefaults
         self._needsInitialSetup = State(initialValue: !settingsViewModel.hasSavedToken)
     }
 
@@ -45,9 +47,15 @@ struct RootContentView: View {
                         }
                     }
             } else {
-                ReviewQueueView(viewModel: dashboardViewModel, prDetailViewModel: prDetailViewModel, events: events, onOpenSettings: {
-                    dashboardViewModel.showingSettings = true
-                })
+                ReviewQueueView(
+                    viewModel: dashboardViewModel,
+                    prDetailViewModel: prDetailViewModel,
+                    events: events,
+                    userDefaults: userDefaults,
+                    onOpenSettings: {
+                        dashboardViewModel.showingSettings = true
+                    }
+                )
                 .navigationTitle("PR Views")
             }
         }

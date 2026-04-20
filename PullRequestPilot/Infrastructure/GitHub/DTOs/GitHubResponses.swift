@@ -510,24 +510,28 @@ extension TimelineItemsConnection {
 // MARK: - Shared ISO8601 Formatters
 
 private enum ISO8601DateParsing {
-    private static let lock = NSLock()
+    /// Per-thread formatters avoid the process-wide NSLock that serialised
+    /// every parse call. On macOS 12+ `ISO8601DateFormatter` is not thread-safe
+    /// but each thread gets its own instance via `Thread.current.threadDictionary`.
+    private static let primaryKey = "com.pullrequestpilot.iso8601.primary"
+    private static let fallbackKey = "com.pullrequestpilot.iso8601.fallback"
 
-    private nonisolated(unsafe) static let primary: ISO8601DateFormatter = {
+    private static func formatter(key: String, options: ISO8601DateFormatter.Options) -> ISO8601DateFormatter {
+        let dict = Thread.current.threadDictionary
+        if let existing = dict[key] as? ISO8601DateFormatter {
+            return existing
+        }
         let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        formatter.formatOptions = options
+        dict[key] = formatter
         return formatter
-    }()
-
-    private nonisolated(unsafe) static let fallback: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
+    }
 
     static func parse(_ string: String) -> Date? {
-        lock.lock()
-        defer { lock.unlock() }
-        return primary.date(from: string) ?? fallback.date(from: string)
+        let primary = formatter(key: primaryKey, options: [.withInternetDateTime, .withFractionalSeconds])
+        if let date = primary.date(from: string) { return date }
+        let fallback = formatter(key: fallbackKey, options: [.withInternetDateTime])
+        return fallback.date(from: string)
     }
 }
 

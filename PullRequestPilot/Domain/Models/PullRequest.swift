@@ -165,6 +165,13 @@ extension Date {
     func relativeTimestampText(relativeTo now: Date) -> String {
         let calendar = Calendar.current
 
+        // Future timestamps (server drift, timezone bugs, daylight-savings
+        // transitions) should not claim "today at X" for an event that hasn't
+        // happened — render as "just now" to avoid misleading the user.
+        if self > now {
+            return "just now"
+        }
+
         let startOfToday = calendar.startOfDay(for: now)
         let startOfTimestamp = calendar.startOfDay(for: self)
         let dayDifference = calendar.dateComponents([.day], from: startOfTimestamp, to: startOfToday).day ?? 0
