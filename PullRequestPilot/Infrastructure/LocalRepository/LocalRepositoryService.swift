@@ -24,12 +24,33 @@ final class LocalRepositoryService {
     private(set) var indexedRepoCount: Int = 0
     // internal setter for test injection via @testable import
     var repoIndex: [RepoEntry] = []
-    private var refreshTask: Task<Void, Never>?
+    /// Bumped every time a scan starts. Pending scans compare their captured
+    /// generation before committing results — stale results are discarded.
+    private var scanGeneration: UInt64 = 0
+    /// Lock-backed so deinit can cancel without hopping to MainActor.
+    private let refreshTaskStorage = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+    private let activeScanTaskStorage = OSAllocatedUnfairLock<Task<[RepoEntry], Never>?>(initialState: nil)
+    private let reporter: EventReporter
 
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot",
         category: "LocalRepository"
     )
+
+    init(reporter: EventReporter = .noop) {
+        self.reporter = reporter
+    }
+
+    deinit {
+        refreshTaskStorage.withLock { task in
+            task?.cancel()
+            task = nil
+        }
+        activeScanTaskStorage.withLock { task in
+            task?.cancel()
+            task = nil
+        }
+    }
 
     // MARK: - Cache Model
 
@@ -49,36 +70,44 @@ final class LocalRepositoryService {
 
     // MARK: - Scanning
 
-    private var activeScanTask: Task<[RepoEntry], Never>?
-
     func scan(directories: [URL]) async {
-        activeScanTask?.cancel()
+        activeScanTaskStorage.withLock { $0?.cancel() }
+        scanGeneration &+= 1
+        let capturedGeneration = scanGeneration
         isScanning = true
 
         let task = Task.detached { [logger] in
             Self.buildIndex(directories: directories, logger: logger)
         }
-        activeScanTask = task
+        activeScanTaskStorage.withLock { $0 = task }
         let entries = await task.value
 
-        guard !Task.isCancelled else {
-            isScanning = false
+        guard !Task.isCancelled, capturedGeneration == scanGeneration else {
+            // A newer scan superseded us — do not overwrite its results.
+            if capturedGeneration == scanGeneration {
+                isScanning = false
+            }
             return
         }
         repoIndex = entries
         indexedRepoCount = entries.count
         lastScanDate = Date()
         isScanning = false
-        activeScanTask = nil
+        activeScanTaskStorage.withLock { $0 = nil }
         logger.info("Scan complete: indexed \(entries.count, privacy: .public) repo(s)")
     }
 
     func startPeriodicRefresh(directories: @MainActor @escaping @Sendable () -> [URL], interval: TimeInterval = 120) {
         stopPeriodicRefresh()
-        refreshTask = Task { [weak self] in
+        let task = Task { [weak self] in
             while !Task.isCancelled {
                 let dirs = directories()
-                await self?.scan(directories: dirs)
+                // Skip the filesystem walk entirely when no directories are
+                // configured — saves sustained I/O on a menu-bar app that may
+                // run for days with the window hidden.
+                if !dirs.isEmpty {
+                    await self?.scan(directories: dirs)
+                }
                 do {
                     try await Task.sleep(for: .seconds(interval))
                 } catch {
@@ -86,11 +115,14 @@ final class LocalRepositoryService {
                 }
             }
         }
+        refreshTaskStorage.withLock { $0 = task }
     }
 
     func stopPeriodicRefresh() {
-        refreshTask?.cancel()
-        refreshTask = nil
+        refreshTaskStorage.withLock { task in
+            task?.cancel()
+            task = nil
+        }
     }
 
     // MARK: - Lookup (pure in-memory, no I/O)
@@ -155,12 +187,15 @@ final class LocalRepositoryService {
         guard let bundleID = Self.appBundleIDs[appName],
               let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
             logger.error("Application not found: \(appName, privacy: .public)")
+            reporter.postError(.externalAppLaunchFailed(appName: appName))
             return
         }
         let config = NSWorkspace.OpenConfiguration()
+        let reporter = self.reporter
         NSWorkspace.shared.open([path], withApplicationAt: appURL, configuration: config) { [logger] _, error in
             if let error {
                 logger.error("Failed to open \(appName, privacy: .public): \(error, privacy: .public)")
+                Task { @MainActor in reporter.postError(.externalAppLaunchFailed(appName: appName)) }
             }
         }
     }

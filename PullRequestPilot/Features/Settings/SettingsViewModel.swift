@@ -13,7 +13,7 @@ final class SettingsViewModel {
     private(set) var saveError: String?
     var gitDirectories: [URL] = []
     private(set) var staleDirectoryWarning: String?
-
+    private(set) var launchAtLoginEnabled: Bool
     private(set) var launchAtLoginError: String?
 
     private let identity: IdentityActor
@@ -22,6 +22,7 @@ final class SettingsViewModel {
     private let localRepositoryService: LocalRepositoryService
     private let defaults: UserDefaults
     private let reporter: EventReporter
+    private let rescanTaskStorage = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Settings")
 
     enum ValidationState: Equatable {
@@ -35,7 +36,7 @@ final class SettingsViewModel {
     /// Used by RootContentView to decide whether to show settings or the dashboard.
     private(set) var hasSavedToken: Bool = false
 
-    init(identity: IdentityActor, gitHubClient: GitHubClientProtocol, gitDirectoriesStore: GitDirectoriesStore, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard, reporter: EventReporter = .noop, initialToken: String? = nil) {
+    init(identity: IdentityActor, gitHubClient: GitHubClientProtocol, gitDirectoriesStore: GitDirectoriesStore, localRepositoryService: LocalRepositoryService, defaults: UserDefaults, reporter: EventReporter = .noop, initialToken: String? = nil) {
         self.identity = identity
         self.gitHubClient = gitHubClient
         self.gitDirectoriesStore = gitDirectoriesStore
@@ -54,6 +55,14 @@ final class SettingsViewModel {
         self.prRefreshInterval = prInterval > 0 ? prInterval : Constants.App.defaultPRRefreshInterval
         let repoInterval = defaults.double(forKey: Constants.UserDefaultsKeys.repoScanInterval)
         self.repoScanInterval = repoInterval > 0 ? repoInterval : Constants.App.defaultRepoScanInterval
+        self.launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+    }
+
+    deinit {
+        rescanTaskStorage.withLock { task in
+            task?.cancel()
+            task = nil
+        }
     }
 
     var isScanning: Bool { localRepositoryService.isScanning }
@@ -123,7 +132,7 @@ final class SettingsViewModel {
     // MARK: - Launch at Login
 
     var launchAtLogin: Bool {
-        get { SMAppService.mainApp.status == .enabled }
+        get { launchAtLoginEnabled }
         set {
             launchAtLoginError = nil
             do {
@@ -132,12 +141,19 @@ final class SettingsViewModel {
                 } else {
                     try SMAppService.mainApp.unregister()
                 }
+                launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
             } catch {
                 logger.error("Failed to update launch at login: \(error, privacy: .public)")
                 launchAtLoginError = "Could not update launch at login setting."
                 reporter.postError(.launchAtLoginFailed(underlying: error.localizedDescription))
             }
         }
+    }
+
+    /// Call when the window gains focus so the Toggle reflects changes made in
+    /// System Settings → Login Items while Settings was open.
+    func refreshLaunchAtLoginStatus() {
+        launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
     }
 
     // MARK: - Refresh Intervals
@@ -193,6 +209,7 @@ final class SettingsViewModel {
         if !gitDirectories.contains(url) {
             guard gitDirectoriesStore.saveFromPanel(url) != nil else {
                 logger.error("Failed to create security-scoped bookmark for \(url.path, privacy: .private)")
+                reporter.postError(.bookmarkCreationFailed(path: url.lastPathComponent))
                 return
             }
             gitDirectories.append(url)
@@ -220,8 +237,13 @@ final class SettingsViewModel {
     }
 
     private func triggerRescan() {
-        Task {
-            await localRepositoryService.scan(directories: gitDirectories)
+        let snapshot = gitDirectories
+        let service = localRepositoryService
+        rescanTaskStorage.withLock { existing in
+            existing?.cancel()
+            existing = Task {
+                await service.scan(directories: snapshot)
+            }
         }
     }
 

@@ -41,7 +41,8 @@ final class EventCenter {
 
     private var dismissed: Set<UUID> = []
     private var dedupeWindow: [DedupeKey: Date] = [:]
-    private var autoDismissTasks: [UUID: Task<Void, Never>] = [:]
+    /// Lock-backed so deinit can cancel tasks without hopping to MainActor.
+    private let autoDismissTasksStorage = OSAllocatedUnfairLock<[UUID: Task<Void, Never>]>(initialState: [:])
     private let maxHistory: Int
     private let clock: any Clock<Duration>
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "EventCenter")
@@ -49,6 +50,13 @@ final class EventCenter {
     init(maxHistory: Int = 50, clock: any Clock<Duration> = ContinuousClock()) {
         self.maxHistory = maxHistory
         self.clock = clock
+    }
+
+    deinit {
+        autoDismissTasksStorage.withLock { tasks in
+            tasks.values.forEach { $0.cancel() }
+            tasks.removeAll()
+        }
     }
 
     // MARK: - Public API
@@ -63,7 +71,9 @@ final class EventCenter {
             let overflow = events.count - maxHistory
             let dropped = Array(events.suffix(overflow))
             events.removeLast(overflow)
-            for e in dropped { autoDismissTasks.removeValue(forKey: e.id)?.cancel() }
+            autoDismissTasksStorage.withLock { tasks in
+                for e in dropped { tasks.removeValue(forKey: e.id)?.cancel() }
+            }
         }
 
         logEvent(event)
@@ -75,7 +85,9 @@ final class EventCenter {
 
     func dismiss(_ id: UUID) {
         dismissed.insert(id)
-        autoDismissTasks.removeValue(forKey: id)?.cancel()
+        autoDismissTasksStorage.withLock { tasks in
+            tasks.removeValue(forKey: id)?.cancel()
+        }
     }
 
     /// Dismiss every error with this exact case (ignoring associated values).
@@ -84,7 +96,9 @@ final class EventCenter {
         for event in events {
             if case .error(let err) = event.payload, match(err) {
                 dismissed.insert(event.id)
-                autoDismissTasks.removeValue(forKey: event.id)?.cancel()
+                autoDismissTasksStorage.withLock { tasks in
+                    tasks.removeValue(forKey: event.id)?.cancel()
+                }
             }
         }
     }
@@ -92,8 +106,10 @@ final class EventCenter {
     func clearHistory() {
         events.removeAll()
         dismissed.removeAll()
-        for (_, task) in autoDismissTasks { task.cancel() }
-        autoDismissTasks.removeAll()
+        autoDismissTasksStorage.withLock { tasks in
+            tasks.values.forEach { $0.cancel() }
+            tasks.removeAll()
+        }
     }
 
     /// Write-only view for layers that post but never read.
@@ -109,12 +125,19 @@ final class EventCenter {
     private func scheduleAutoDismiss(id: UUID, after duration: Duration) {
         let clock = self.clock
         let task = Task { @MainActor [weak self] in
-            try? await clock.sleep(for: duration)
-            guard !Task.isCancelled else { return }
+            do {
+                try await clock.sleep(for: duration)
+            } catch {
+                return
+            }
             self?.dismiss(id)
-            self?.autoDismissTasks.removeValue(forKey: id)
+            self?.autoDismissTasksStorage.withLock { tasks in
+                _ = tasks.removeValue(forKey: id)
+            }
         }
-        autoDismissTasks[id] = task
+        autoDismissTasksStorage.withLock { tasks in
+            tasks[id] = task
+        }
     }
 
     private func logEvent(_ event: AppEvent) {

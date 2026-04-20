@@ -8,12 +8,19 @@ final class GitDirectoriesStore {
     private(set) var lastPrunedStaleCount = 0
     private let defaults: UserDefaults
     private let reporter: EventReporter
+    /// Cached resolution of the stored bookmark array keyed by its data
+    /// fingerprint. Invalidated whenever we mutate the stored array.
+    private var cachedBookmarksFingerprint: [Data]?
+    private var cachedURLs: [URL] = []
+    /// URLs for which `startAccessingSecurityScopedResource()` actually
+    /// returned `true`. Apple's docs require balancing only successful starts.
+    private var startedURLs: Set<URL> = []
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot",
         category: "GitDirectoriesStore"
     )
 
-    init(defaults: UserDefaults = .standard, reporter: EventReporter = .noop) {
+    init(defaults: UserDefaults, reporter: EventReporter = .noop) {
         self.defaults = defaults
         self.reporter = reporter
         migrateLegacyPathsIfNeeded()
@@ -23,7 +30,12 @@ final class GitDirectoriesStore {
 
     func load() -> [URL] {
         guard let bookmarksData = defaults.array(forKey: Self.key) as? [Data] else {
+            cachedBookmarksFingerprint = nil
+            cachedURLs = []
             return []
+        }
+        if let cached = cachedBookmarksFingerprint, cached == bookmarksData {
+            return cachedURLs
         }
         var validBookmarks: [Data] = []
         var urls: [URL] = []
@@ -40,6 +52,8 @@ final class GitDirectoriesStore {
             defaults.set(validBookmarks, forKey: Self.key)
             reporter.postError(.bookmarkPruned(count: prunedCount))
         }
+        cachedBookmarksFingerprint = validBookmarks
+        cachedURLs = urls
         return urls
     }
 
@@ -60,6 +74,7 @@ final class GitDirectoriesStore {
             bookmarkByPath[url.path] ?? createBookmark(for: url)
         }
         defaults.set(result, forKey: Self.key)
+        cachedBookmarksFingerprint = nil
     }
 
     func saveFromPanel(_ url: URL) -> URL? {
@@ -71,6 +86,7 @@ final class GitDirectoriesStore {
         var updated = existing
         updated.append(bookmarkData)
         defaults.set(updated, forKey: Self.key)
+        cachedBookmarksFingerprint = nil
         return url
     }
 
@@ -79,14 +95,16 @@ final class GitDirectoriesStore {
     func startAccessing(_ urls: [URL]) {
         for url in urls {
             if url.startAccessingSecurityScopedResource() {
+                startedURLs.insert(url)
                 logger.debug("Started accessing security-scoped resource: \(url.path, privacy: .private)")
             }
         }
     }
 
     func stopAccessing(_ urls: [URL]) {
-        for url in urls {
+        for url in urls where startedURLs.contains(url) {
             url.stopAccessingSecurityScopedResource()
+            startedURLs.remove(url)
         }
     }
 
@@ -145,6 +163,7 @@ final class GitDirectoriesStore {
             var updated = existing
             updated.append(contentsOf: newBookmarks)
             defaults.set(updated, forKey: Self.key)
+            cachedBookmarksFingerprint = nil
             logger.info("Migrated \(bookmarks.count, privacy: .public) directory bookmark(s) from legacy storage")
         }
         // Only remove legacy key if all paths were migrated successfully

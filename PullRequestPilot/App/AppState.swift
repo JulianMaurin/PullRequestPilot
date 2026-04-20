@@ -11,6 +11,7 @@ final class AppState {
     let gitDirectoriesStore: GitDirectoriesStore
     let localRepositoryService: LocalRepositoryService
     let events: EventCenter
+    let userDefaults: UserDefaults
 
     let dashboardViewModel: DashboardViewModel
     let prDetailViewModel: PRDetailViewModel
@@ -37,7 +38,7 @@ final class AppState {
         identityHolder.set(identity)
         let viewsStore = ViewsStore(defaults: defaults, reporter: reporter)
         let gitDirectoriesStore = GitDirectoriesStore(defaults: defaults, reporter: reporter)
-        let localRepositoryService = LocalRepositoryService()
+        let localRepositoryService = LocalRepositoryService(reporter: reporter)
 
         // Widget save path reports errors through the same center so the user
         // sees a toast rather than a silent log line.
@@ -50,6 +51,7 @@ final class AppState {
         self.gitDirectoriesStore = gitDirectoriesStore
         self.localRepositoryService = localRepositoryService
         self.events = events
+        self.userDefaults = defaults
         self.prDetailViewModel = PRDetailViewModel(gitHubClient: gitHubClient, reporter: reporter)
         self.dashboardViewModel = DashboardViewModel(
             gitHubClient: gitHubClient,

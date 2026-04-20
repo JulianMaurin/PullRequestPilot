@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 @MainActor
 @Observable
@@ -13,11 +14,23 @@ final class PRDetailViewModel {
 
     private let gitHubClient: GitHubClientProtocol
     private let reporter: EventReporter
-    private var fetchTask: Task<Void, Never>?
+    /// Lock-backed so deinit can cancel without hopping to MainActor.
+    private let fetchTaskStorage = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+    private var fetchTask: Task<Void, Never>? {
+        get { fetchTaskStorage.withLock { $0 } }
+        set { fetchTaskStorage.withLock { $0 = newValue } }
+    }
 
     init(gitHubClient: GitHubClientProtocol, reporter: EventReporter = .noop) {
         self.gitHubClient = gitHubClient
         self.reporter = reporter
+    }
+
+    deinit {
+        fetchTaskStorage.withLock { task in
+            task?.cancel()
+            task = nil
+        }
     }
 
     func selectPR(_ pr: PullRequest) {
@@ -56,7 +69,8 @@ final class PRDetailViewModel {
 
     private func fetchTimeline() {
         guard let pr = selectedPR else { return }
-        fetchTask = Task {
+        fetchTask = Task { [weak self] in
+            guard let self else { return }
             isLoading = true
             error = nil
             isNetworkError = false

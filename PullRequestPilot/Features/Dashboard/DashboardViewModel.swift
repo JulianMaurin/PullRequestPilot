@@ -72,11 +72,13 @@ final class DashboardViewModel: DashboardActionsProtocol {
     private let defaults: UserDefaults
     private let reporter: EventReporter
     private let pendingScheduledRefreshes = TaskMap()
+    private let pendingSideEffectTasks = TaskMap()
+    private var isRefreshingAll = false
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Dashboard")
 
     // MARK: - Init
 
-    init(gitHubClient: GitHubClientProtocol, identity: IdentityActor, viewsStore: any ViewsStoreProtocol, localRepositoryService: LocalRepositoryService, defaults: UserDefaults = .standard, reporter: EventReporter = .noop) {
+    init(gitHubClient: GitHubClientProtocol, identity: IdentityActor, viewsStore: any ViewsStoreProtocol, localRepositoryService: LocalRepositoryService, defaults: UserDefaults, reporter: EventReporter = .noop) {
         self.gitHubClient = gitHubClient
         self.identity = identity
         self.localRepositoryService = localRepositoryService
@@ -93,7 +95,20 @@ final class DashboardViewModel: DashboardActionsProtocol {
         let filterLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Dashboard.Filter")
         let filter: PRFetcher.PRFilter = { prs, view in
             guard view.hideReviewed else { return prs }
-            guard let login = await filterIdentity.currentViewerLogin() else {
+            let login: String?
+            do {
+                login = try await filterIdentity.currentViewerLogin()
+            } catch is CancellationError {
+                // Cancellation during view switch / auto-refresh restart — do
+                // not treat as a user-visible failure. Return the unfiltered
+                // list; the next refresh will produce the correct view.
+                return prs
+            } catch {
+                filterLogger.warning("viewer login fetch failed: \(error, privacy: .public)")
+                filterReporter.postError(.viewerIdentityUnavailable)
+                return prs
+            }
+            guard let login else {
                 filterLogger.warning("hideReviewed enabled but viewer login unavailable — skipping filter")
                 filterReporter.postError(.viewerIdentityUnavailable)
                 return prs
@@ -126,12 +141,17 @@ final class DashboardViewModel: DashboardActionsProtocol {
         fetcher.onFetched = { [weak self] outcome in
             guard let self else { return }
             self.handleFetchOutcome(outcome)
-            self.widgetSync.sync()
+            // During refreshAll, defer the widget write to a single sync at the
+            // end instead of N churned cancels-and-reschedules.
+            if !self.isRefreshingAll {
+                self.widgetSync.sync()
+            }
         }
     }
 
     deinit {
         pendingScheduledRefreshes.cancelAll()
+        pendingSideEffectTasks.cancelAll()
         // All other collaborators (scheduler, fetcher, widgetSync) cancel
         // their own Tasks in their own deinits, which run when this VM's
         // stored properties are released.
@@ -218,11 +238,13 @@ final class DashboardViewModel: DashboardActionsProtocol {
 
     func refreshAll() async {
         let viewsSnapshot = views
+        isRefreshingAll = true
         await withTaskGroup(of: Void.self) { group in
             for view in viewsSnapshot {
                 group.addTask { [fetcher] in await fetcher.refresh(for: view) }
             }
         }
+        isRefreshingAll = false
         guard !Task.isCancelled else { return }
         badgeTracker.pruneUnseen(viewStates: fetcher.states)
         widgetSync.sync()
@@ -345,7 +367,14 @@ final class DashboardViewModel: DashboardActionsProtocol {
         localRepositoryService.stopPeriodicRefresh()
         viewRegistry.clear()
         fetcher.clearAll()
-        Task { [identity] in await identity.invalidate(reason: .userSignedOut) }
+        let identity = self.identity
+        let key = UUID()
+        let tasks = pendingSideEffectTasks
+        let task = Task {
+            await identity.invalidate(reason: .userSignedOut)
+            tasks.remove(key)
+        }
+        pendingSideEffectTasks.insert(task, for: key)
         badgeTracker.reset()
         notificationService.reset()
         collapsedOrgs = []
@@ -430,9 +459,14 @@ final class DashboardViewModel: DashboardActionsProtocol {
         guard notifyEnabled else { return }
         guard let view = views.first(where: { $0.id == outcome.viewID }) else { return }
         let addedPRs = outcome.pullRequests.filter { addedIDs.contains($0.id) }
-        Task { [notificationService] in
+        let notificationService = self.notificationService
+        let key = UUID()
+        let tasks = pendingSideEffectTasks
+        let task = Task {
             await notificationService.deliver(viewTitle: view.title, viewID: outcome.viewID, addedPRs: addedPRs)
+            tasks.remove(key)
         }
+        pendingSideEffectTasks.insert(task, for: key)
     }
 
     private static func buildWidgetData(registry: ViewRegistry, fetcher: PRFetcher) -> WidgetData {

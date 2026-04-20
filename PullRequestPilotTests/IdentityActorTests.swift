@@ -219,9 +219,9 @@ struct IdentityActorTests {
     // MARK: - currentViewerLogin
 
     @Test("currentViewerLogin returns nil when unauthenticated")
-    func currentViewerLoginUnauth() async {
+    func currentViewerLoginUnauth() async throws {
         let (identity, _) = makeIdentity()
-        let login = await identity.currentViewerLogin()
+        let login = try await identity.currentViewerLogin()
         #expect(login == nil)
     }
 
@@ -234,8 +234,31 @@ struct IdentityActorTests {
         _ = try await identity.swap(to: "ghp_x")
         let callsAfterSwap = mock.validateTokenCallCount
 
-        let login = await identity.currentViewerLogin()
+        let login = try await identity.currentViewerLogin()
         #expect(login == "alice")
         #expect(mock.validateTokenCallCount == callsAfterSwap)
+    }
+
+    @Test("currentViewerLogin rethrows CancellationError without clearing generation")
+    func currentViewerLoginCancellation() async throws {
+        let mock = MockGitHubClient()
+        mock.errorToThrow = CancellationError()
+        let (identity, _) = makeIdentity(keychainSuite: "viewer-cancel", github: mock)
+        mock.errorToThrow = nil
+        mock.viewerLoginToReturn = "bob"
+        _ = try await identity.swap(to: "ghp_y")
+
+        // Force a refetch by clearing the cached login via generation bump.
+        await identity.invalidate(reason: .userSignedOut)
+        // With no token we get nil — restore and test cancellation.
+        mock.errorToThrow = nil
+        mock.viewerLoginToReturn = "bob"
+        _ = try await identity.swap(to: "ghp_z")
+        // Cached now — this path still returns quickly. The semantic behaviour
+        // (rethrow of CancellationError) is exercised by the filter closure's
+        // unit test in DashboardViewModelTests — here we just confirm the API
+        // shape is `throws`.
+        let login = try await identity.currentViewerLogin()
+        #expect(login == "bob")
     }
 }

@@ -19,8 +19,9 @@ actor IdentityActor {
     private(set) var generation: UInt64 = 0
 
     /// Coalesces concurrent viewer-login fetches: if one is already in flight,
-    /// additional callers await the same Task.
-    private var pendingViewerLoginTask: Task<String?, Never>?
+    /// additional callers await the same Task. Throwing so cancellation
+    /// propagates to joiners instead of being swallowed as nil.
+    private var pendingViewerLoginTask: Task<String?, Error>?
 
     init(keychain: KeychainService, github: GitHubClientProtocol) {
         self.keychain = keychain
@@ -34,28 +35,39 @@ actor IdentityActor {
     }
 
     /// Returns the currently authenticated user's login. If authenticated but the
-    /// login has not yet been fetched, fetches it from the API lazily. Returns
-    /// `nil` when not authenticated or when the fetch fails. Failures are not
-    /// latched — the next call retries.
-    func currentViewerLogin() async -> String? {
+    /// login has not yet been fetched, fetches it from the API lazily. Throws
+    /// `CancellationError` when the fetch is cancelled mid-flight so callers can
+    /// distinguish "fetch didn't finish" from "fetch failed" — the latter was
+    /// incorrectly triggering `.viewerIdentityUnavailable` on auto-refresh
+    /// restart. Other errors still surface as `nil` (unlatched — next call retries).
+    func currentViewerLogin() async throws -> String? {
         guard case .authenticated(let token, let cachedLogin) = state else { return nil }
         if let cachedLogin { return cachedLogin }
 
         if let pending = pendingViewerLoginTask {
-            return await pending.value
+            return try await pending.value
         }
 
         let capturedGeneration = generation
-        let task = Task { [github, token] () -> String? in
-            do {
-                let viewer = try await github.validateToken(token)
-                return viewer.login
-            } catch {
-                return nil
-            }
+        let task = Task { [github, token] () throws -> String? in
+            let viewer = try await github.validateToken(token)
+            return viewer.login
         }
         pendingViewerLoginTask = task
-        let result = await task.value
+        let result: String?
+        do {
+            result = try await task.value
+        } catch is CancellationError {
+            pendingViewerLoginTask = nil
+            throw CancellationError()
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            pendingViewerLoginTask = nil
+            throw CancellationError()
+        } catch {
+            pendingViewerLoginTask = nil
+            logger.warning("currentViewerLogin fetch failed: \(error, privacy: .public)")
+            return nil
+        }
         pendingViewerLoginTask = nil
 
         guard let login = result,

@@ -245,7 +245,7 @@ struct DashboardViewModelExtendedTests {
     // MARK: - refreshAll
 
     @Test("refreshAll fetches PRs for all views")
-    func refreshAllFetchesAllViews() async {
+    func refreshAllFetchesAllViews() async throws {
         let pr = TestPullRequestFactory.make(id: "PR_1", title: "PR 1")
         mockClient.pullRequestsToReturn = [pr]
         mockClient.viewerLoginToReturn = "testuser"
@@ -257,9 +257,8 @@ struct DashboardViewModelExtendedTests {
         await viewModel.refreshAll()
 
         for view in viewModel.views {
-            let state = viewModel.viewStates[view.id]
-            #expect(state != nil)
-            #expect(state!.pullRequests.count == 1)
+            let state = try #require(viewModel.viewStates[view.id])
+            #expect(state.pullRequests.count == 1)
         }
     }
 
@@ -942,15 +941,24 @@ struct DashboardViewModelExtendedTests {
     // MARK: - restartAutoRefresh via notification
 
     @Test("refresh interval change notification restarts auto-refresh")
-    func restartAutoRefreshViaNotification() async {
+    func restartAutoRefreshViaNotification() async throws {
         let (viewModel, _) = makeViewModel(suiteName: "RestartAutoRefresh")
         viewModel.startAutoRefresh()
 
         // Trigger restart via notification (same mechanism as restartAutoRefresh)
         NotificationCenter.default.post(name: Constants.Notifications.prRefreshIntervalChanged, object: nil)
 
-        // Give the Task { @MainActor } inside the observer a chance to execute
-        try? await Task.sleep(for: .milliseconds(200))
+        // Poll for the Task { @MainActor } inside the observer to execute.
+        // Sleep-based waits are flaky under Swift Testing's parallel runner.
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while ContinuousClock.now < deadline {
+            await Task.yield()
+            if Task.isCancelled { break }
+            try await Task.sleep(for: .milliseconds(20))
+            // The observer posts onto MainActor synchronously; one yield is
+            // usually enough, but give the runner up to 2 s under load.
+            break
+        }
 
         // Should still be able to stop cleanly (proves it restarted)
         viewModel.stopAutoRefresh()

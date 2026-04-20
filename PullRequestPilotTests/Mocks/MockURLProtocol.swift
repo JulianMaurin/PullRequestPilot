@@ -1,10 +1,23 @@
 import Foundation
+import os
 
-/// Thread-safe mock URL protocol for tests.
-/// Tests using this protocol must run with `.serialized` trait to prevent
-/// concurrent access to the shared `requestHandler`.
+/// Thread-safe mock URL protocol for tests. The request handler is stored
+/// behind an `OSAllocatedUnfairLock` so parallel suites can read/write without
+/// racing. The closure itself is *not* required to be `@Sendable` — tests
+/// often capture mutable local state (e.g. to record requests) and rely on
+/// `.serialized` at the suite level for that safety. The prior implementation
+/// was `@unchecked Sendable` on the protocol class plus `nonisolated(unsafe)`
+/// on the static; this version keeps the same capture contract for tests but
+/// replaces the `nonisolated(unsafe)` with a real lock.
 final class MockURLProtocol: URLProtocol, @unchecked Sendable {
-    nonisolated(unsafe) static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
+    typealias Handler = (URLRequest) throws -> (HTTPURLResponse, Data)
+
+    private static let handlerStorage = OSAllocatedUnfairLock<Handler?>(uncheckedState: nil)
+
+    static var requestHandler: Handler? {
+        get { handlerStorage.withLockUnchecked { $0 } }
+        set { handlerStorage.withLockUnchecked { $0 = newValue } }
+    }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
 
