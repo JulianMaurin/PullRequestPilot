@@ -441,32 +441,34 @@ struct ReviewQueueView: View {
         // Memoized on the view model — repeated body evaluations within a
         // render cycle return the cached grouping in O(1). See FINDING-005.
         let grouped = viewModel.groupedSelected
-        return TimelineView(.periodic(from: .now, by: 30)) { context in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(grouped.enumerated()), id: \.element.org) { _, orgGroup in
-                        orgSection(orgGroup, pullRequests: pullRequests, now: context.date)
-                    }
-                    if viewModel.selectedViewState.isLoadingMore {
-                        HStack {
-                            Spacer()
-                            ProgressView()
-                                .controlSize(.small)
-                            Text("Loading more...")
-                                .foregroundStyle(.secondary)
-                                .font(.caption)
-                            Spacer()
-                        }
-                        .padding(.vertical, 8)
-                    }
+        // Per-row relative timestamps tick via `RelativeTimestampText`, so the
+        // outer list is NOT wrapped in a `TimelineView(.periodic)`. Wrapping
+        // the whole list cascaded SwiftUI diff + layout across ~100 rows every
+        // 30 s. See FINDING-019.
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(grouped.enumerated()), id: \.element.org) { _, orgGroup in
+                    orgSection(orgGroup, pullRequests: pullRequests)
                 }
-                .padding(.vertical, 4)
+                if viewModel.selectedViewState.isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Loading more...")
+                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                        Spacer()
+                    }
+                    .padding(.vertical, 8)
+                }
             }
+            .padding(.vertical, 4)
         }
     }
 
     @ViewBuilder
-    private func orgSection(_ orgGroup: DashboardViewModel.OrgGroup, pullRequests: [PullRequest], now: Date) -> some View {
+    private func orgSection(_ orgGroup: DashboardViewModel.OrgGroup, pullRequests: [PullRequest]) -> some View {
         let isOrgCollapsed = viewModel.collapsedOrgs.contains(orgGroup.org)
         let prCount = orgGroup.repos.reduce(0) { $0 + $1.stacks.reduce(0) { $0 + $1.totalCount } }
 
@@ -544,13 +546,13 @@ struct ReviewQueueView: View {
 
         if !isOrgCollapsed {
             ForEach(orgGroup.repos, id: \.repo) { repoGroup in
-                repoSection(repoGroup, org: orgGroup.org, pullRequests: pullRequests, now: now)
+                repoSection(repoGroup, org: orgGroup.org, pullRequests: pullRequests)
             }
         }
     }
 
     @ViewBuilder
-    private func repoSection(_ repoGroup: DashboardViewModel.RepoGroup, org: String, pullRequests: [PullRequest], now: Date) -> some View {
+    private func repoSection(_ repoGroup: DashboardViewModel.RepoGroup, org: String, pullRequests: [PullRequest]) -> some View {
         let repoKey = "\(org)/\(repoGroup.repo)"
         let isRepoCollapsed = viewModel.collapsedRepos.contains(repoKey)
         let prCount = repoGroup.stacks.reduce(0) { $0 + $1.totalCount }
@@ -598,16 +600,16 @@ struct ReviewQueueView: View {
 
         if !isRepoCollapsed {
             ForEach(repoGroup.stacks) { stack in
-                stackView(stack, isLast: stack.root.id == pullRequests.last?.id, now: now)
+                stackView(stack, isLast: stack.root.id == pullRequests.last?.id)
             }
         }
     }
 
     @ViewBuilder
-    private func stackView(_ stack: DashboardViewModel.PRStack, isLast: Bool, now: Date) -> some View {
+    private func stackView(_ stack: DashboardViewModel.PRStack, isLast: Bool) -> some View {
         let isExpanded = expandedStacks.contains(stack.id)
 
-        pullRequestItem(stack.root, isLast: isLast && stack.children.isEmpty, stackSize: stack.totalCount, now: now) {
+        pullRequestItem(stack.root, isLast: isLast && stack.children.isEmpty, stackSize: stack.totalCount) {
             if stack.totalCount > 1 {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     if isExpanded {
@@ -621,7 +623,7 @@ struct ReviewQueueView: View {
 
         if isExpanded {
             ForEach(stack.children) { child in
-                pullRequestItem(child, isLast: isLast && child.id == stack.children.last?.id, stackSize: 0, isStacked: true, now: now) {}
+                pullRequestItem(child, isLast: isLast && child.id == stack.children.last?.id, stackSize: 0, isStacked: true) {}
             }
         }
     }
@@ -631,7 +633,6 @@ struct ReviewQueueView: View {
         isLast: Bool,
         stackSize: Int,
         isStacked: Bool = false,
-        now: Date,
         onToggleStack: @escaping () -> Void
     ) -> some View {
         HStack(spacing: 0) {
@@ -646,7 +647,7 @@ struct ReviewQueueView: View {
                 }
                 .frame(width: 24)
             }
-            PullRequestRowView(pullRequest: pr, stackSize: stackSize, now: now, onToggleStack: onToggleStack, onFilterBy: appendFilter) {
+            PullRequestRowView(pullRequest: pr, stackSize: stackSize, onToggleStack: onToggleStack, onFilterBy: appendFilter) {
                 Button("Open in Browser") {
                     viewModel.openInBrowser(pr)
                 }
