@@ -77,9 +77,14 @@ final class SettingsViewModel {
             let login = try await identity.swap(to: trimmedToken)
             viewerLogin = login
             // Pull avatar in a follow-up call — swap only returns the login.
-            // Avatar failure is non-fatal; token is already saved.
+            // Avatar failure is non-fatal; token is already saved. Cancellation
+            // must propagate so the outer handler resets `validationState`.
             do {
                 viewerAvatarURL = try await gitHubClient.validateToken(trimmedToken).avatarURL
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let urlError as URLError where urlError.code == .cancelled {
+                throw CancellationError()
             } catch {
                 logger.warning("Avatar fetch failed after successful token swap: \(error, privacy: .public)")
             }

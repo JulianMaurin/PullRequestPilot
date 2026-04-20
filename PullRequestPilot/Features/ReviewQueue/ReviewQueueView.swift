@@ -101,7 +101,11 @@ struct ReviewQueueView: View {
             syncEditingQuery()
         }
         .task {
-            try? await Task.sleep(for: .milliseconds(100))
+            do {
+                try await Task.sleep(for: .milliseconds(100))
+            } catch {
+                return
+            }
             isQueryFocused = false
         }
         .onChange(of: viewModel.selectedViewID) {

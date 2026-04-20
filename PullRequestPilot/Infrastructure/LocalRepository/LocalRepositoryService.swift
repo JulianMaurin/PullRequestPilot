@@ -79,7 +79,11 @@ final class LocalRepositoryService {
             while !Task.isCancelled {
                 let dirs = directories()
                 await self?.scan(directories: dirs)
-                try? await Task.sleep(for: .seconds(interval))
+                do {
+                    try await Task.sleep(for: .seconds(interval))
+                } catch {
+                    return
+                }
             }
         }
     }

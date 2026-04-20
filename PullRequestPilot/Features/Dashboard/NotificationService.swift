@@ -106,6 +106,8 @@ final class NotificationService {
 
         do {
             try await UNUserNotificationCenter.current().add(request)
+        } catch is CancellationError {
+            return
         } catch {
             logger.error("Failed to deliver notification: \(error, privacy: .public)")
         }
@@ -126,6 +128,10 @@ final class NotificationService {
     private func requestPermission() async -> Bool {
         do {
             return try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+        } catch is CancellationError {
+            // Cancellation isn't a permanent "denied" — callers re-query the
+            // authorization status on the next attempt.
+            return false
         } catch {
             logger.error("Notification permission error: \(error, privacy: .public)")
             return false
