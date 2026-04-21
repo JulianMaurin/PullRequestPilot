@@ -54,19 +54,30 @@ struct ViewsStoreTests {
         #expect(loaded.first?.title == "Second")
     }
 
-    @Test("load returns defaults and sets loadError when data is corrupted")
-    func loadCorruptedData() {
+    @Test("load returns defaults when data is corrupted and surfaces a decodeCorruption event")
+    func loadCorruptedData() async throws {
         let suiteName = "ViewsStoreCorrupted"
-        let defaults = UserDefaults(suiteName: suiteName)!
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
-        let store = ViewsStore(defaults: defaults)
+        let center = EventCenter()
+        let store = ViewsStore(defaults: defaults, reporter: center.reporter())
 
-        // Write invalid JSON data
         defaults.set(Data("not valid json".utf8), forKey: "dashboard_views")
 
         let views = store.load()
         #expect(views.isEmpty)
-        #expect(store.loadError != nil)
+
+        for _ in 0..<20 where center.events.isEmpty {
+            await Task.yield()
+        }
+
+        guard case .error(let error) = center.events.first?.payload,
+              case .decodeCorruption(let subsystem, _) = error
+        else {
+            Issue.record("Expected decodeCorruption event, got \(String(describing: center.events.first))")
+            return
+        }
+        #expect(subsystem == "dashboard views")
     }
 
     @Test("corrupted load writes a backup file and posts a decodeCorruption event")
@@ -99,22 +110,27 @@ struct ViewsStoreTests {
         try? FileManager.default.removeItem(atPath: path)
     }
 
-    @Test("loadError is cleared on successful load")
-    func loadErrorClearedOnSuccess() {
+    @Test("successful load after a corrupted load does not post a second decodeCorruption event")
+    func loadErrorClearedOnSuccess() async throws {
         let suiteName = "ViewsStoreErrorClear"
-        let defaults = UserDefaults(suiteName: suiteName)!
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
-        let store = ViewsStore(defaults: defaults)
+        let center = EventCenter()
+        let store = ViewsStore(defaults: defaults, reporter: center.reporter())
 
-        // First corrupt, then fix
         defaults.set(Data("bad".utf8), forKey: "dashboard_views")
         _ = store.load()
-        #expect(store.loadError != nil)
+        for _ in 0..<20 where center.events.isEmpty {
+            await Task.yield()
+        }
+        let firstEventCount = center.events.count
+        #expect(firstEventCount == 1)
 
-        // Save valid data, then reload
         store.save([DashboardView(id: UUID(), title: "Valid", query: "q")])
         let views = store.load()
         #expect(views.count == 1)
-        #expect(store.loadError == nil)
+
+        for _ in 0..<20 { await Task.yield() }
+        #expect(center.events.count == firstEventCount)
     }
 }

@@ -14,7 +14,6 @@ struct ViewRegistryTests {
     @MainActor
     final class InMemoryViewsStore: ViewsStoreProtocol {
         var storedViews: [DashboardView]
-        var loadError: String?
         init(initial: [DashboardView] = []) { self.storedViews = initial }
         func load() -> [DashboardView] { storedViews }
         func save(_ views: [DashboardView]) { storedViews = views }

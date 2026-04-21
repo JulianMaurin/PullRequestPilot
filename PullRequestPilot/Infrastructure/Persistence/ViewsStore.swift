@@ -7,7 +7,6 @@ import os
 protocol ViewsStoreProtocol {
     func load() -> [DashboardView]
     func save(_ views: [DashboardView])
-    var loadError: String? { get }
 }
 
 // MARK: - Implementation
@@ -20,28 +19,21 @@ final class ViewsStore: ViewsStoreProtocol {
     private let reporter: EventReporter
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "ViewsStore")
 
-    /// Kept for backward compatibility with existing tests/UI. Populated alongside
-    /// the EventCenter post so either surface can read it.
-    private(set) var loadError: String?
-
-    init(defaults: UserDefaults = .standard, reporter: EventReporter = .noop) {
+    init(defaults: UserDefaults, reporter: EventReporter = .noop) {
         self.defaults = defaults
         self.reporter = reporter
     }
 
     func load() -> [DashboardView] {
         guard let data = defaults.data(forKey: Self.key) else {
-            loadError = nil
             return DashboardView.defaultViews
         }
         do {
             let views = try JSONDecoder().decode([DashboardView].self, from: data)
-            loadError = nil
             return views.isEmpty ? DashboardView.defaultViews : views
         } catch {
             let backupPath = backupCorruptedData(data)
             logger.error("Failed to decode saved views: \(error, privacy: .public). Backup: \(backupPath ?? "n/a", privacy: .public)")
-            loadError = "Your saved views could not be loaded and were reset. A backup was saved."
             reporter.postError(.decodeCorruption(subsystem: "dashboard views", backupPath: backupPath))
             return DashboardView.defaultViews
         }
@@ -51,7 +43,6 @@ final class ViewsStore: ViewsStoreProtocol {
         do {
             let data = try JSONEncoder().encode(views)
             defaults.set(data, forKey: Self.key)
-            loadError = nil
         } catch {
             logger.error("Failed to encode views for saving: \(error, privacy: .public)")
             reporter.postError(.decodeCorruption(subsystem: "dashboard views", backupPath: nil))
