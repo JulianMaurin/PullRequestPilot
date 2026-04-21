@@ -58,12 +58,23 @@ struct ReviewQueueView: View {
                                 Color.clear
                                     .onChange(of: geo.size.width) { _, newWidth in
                                         detailPanelWidth = newWidth
-                                        userDefaults.set(newWidth, forKey: Self.detailPanelWidthKey)
                                     }
                             }
                         }
                         .background {
                             SplitDividerRestorer(detailWidth: detailPanelWidth)
+                        }
+                        // Debounce: only persist once the drag settles. The
+                        // task is cancelled whenever `detailPanelWidth` changes
+                        // again before 250ms elapse, so a live drag produces a
+                        // single write at drop time.
+                        .task(id: detailPanelWidth) {
+                            do {
+                                try await Task.sleep(for: .milliseconds(250))
+                            } catch {
+                                return
+                            }
+                            userDefaults.set(detailPanelWidth, forKey: Self.detailPanelWidthKey)
                         }
                 }
             }

@@ -60,13 +60,13 @@ enum GitHubGraphQL {
                   login
                   avatarUrl
                 }
-                reviewThreads(first: 100) {
+                reviewThreads(first: 50) {
                   totalCount
                   nodes {
                     isResolved
                   }
                 }
-                latestReviews(first: 100) {
+                latestReviews(first: 20) {
                   nodes {
                     author { login }
                     state

@@ -16,6 +16,16 @@ struct PullRequestStateIconView: View {
 
     private static let iconCache = NSCache<NSString, NSImage>()
 
+    /// Populate the icon cache for every `(state, isDraft)` combination so
+    /// the first PR list render doesn't pay SVG-decode cost on the main
+    /// thread. Safe to call multiple times.
+    static func prewarmIconCache() {
+        _ = cachedIcon(state: .open, isDraft: false)
+        _ = cachedIcon(state: .open, isDraft: true)
+        _ = cachedIcon(state: .closed, isDraft: false)
+        _ = cachedIcon(state: .merged, isDraft: false)
+    }
+
     private static func cachedIcon(state: PullRequestState, isDraft: Bool) -> NSImage {
         let key = "\(state.rawValue)-\(isDraft)" as NSString
         if let cached = iconCache.object(forKey: key) {

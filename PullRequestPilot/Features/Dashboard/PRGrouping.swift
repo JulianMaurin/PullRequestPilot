@@ -34,6 +34,7 @@ enum PRGrouping {
 
     static func buildStacks(_ pullRequests: [PullRequest]) -> [PRStack] {
         let headToPR = Dictionary(pullRequests.map { ($0.headRefName, $0) }, uniquingKeysWith: { first, _ in first })
+        let byBase = Dictionary(grouping: pullRequests, by: { $0.baseRefName })
         let childIDs = Set(pullRequests.compactMap { pr -> String? in
             guard headToPR[pr.baseRefName] != nil else { return nil }
             return pr.id
@@ -44,10 +45,9 @@ enum PRGrouping {
             var children: [PullRequest] = []
             var currentHead = root.headRefName
             var visited: Set<String> = [root.id]
-            // Cap depth to prevent infinite loops from circular branch dependencies
             let maxDepth = pullRequests.count
             while children.count < maxDepth,
-                  let next = pullRequests.first(where: { $0.baseRefName == currentHead && !visited.contains($0.id) }) {
+                  let next = byBase[currentHead]?.first(where: { !visited.contains($0.id) }) {
                 children.append(next)
                 visited.insert(next.id)
                 currentHead = next.headRefName

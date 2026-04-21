@@ -520,12 +520,19 @@ final class DashboardViewModel: DashboardActionsProtocol {
                     state: pr.state.rawValue
                 )
             }
+            let decisionCounts = prs.reduce(into: (approved: 0, changesRequested: 0)) { acc, pr in
+                switch pr.reviewDecision {
+                case .approved: acc.approved += 1
+                case .changesRequested: acc.changesRequested += 1
+                default: break
+                }
+            }
             return WidgetViewData(
                 id: view.id.uuidString,
                 title: view.title,
                 count: prs.count,
-                approvedCount: prs.filter { $0.reviewDecision == .approved }.count,
-                changesRequestedCount: prs.filter { $0.reviewDecision == .changesRequested }.count,
+                approvedCount: decisionCounts.approved,
+                changesRequestedCount: decisionCounts.changesRequested,
                 pullRequests: Array(widgetPRs)
             )
         }
