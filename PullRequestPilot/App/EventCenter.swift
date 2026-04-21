@@ -36,9 +36,6 @@ final class EventCenter {
     /// The entries rendered by the toast overlay (not yet dismissed).
     var activeEvents: [AppEvent] { events.filter { !dismissed.contains($0.id) } }
 
-    /// Full log for the Settings diagnostics panel, bounded to `maxHistory`.
-    var history: [AppEvent] { events }
-
     private var dismissed: Set<UUID> = []
     private var dedupeWindow: [DedupeKey: Date] = [:]
     /// Lock-backed so deinit can cancel tasks without hopping to MainActor.
@@ -100,15 +97,6 @@ final class EventCenter {
                     tasks.removeValue(forKey: event.id)?.cancel()
                 }
             }
-        }
-    }
-
-    func clearHistory() {
-        events.removeAll()
-        dismissed.removeAll()
-        autoDismissTasksStorage.withLock { tasks in
-            tasks.values.forEach { $0.cancel() }
-            tasks.removeAll()
         }
     }
 

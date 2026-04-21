@@ -3,15 +3,12 @@ import SwiftUI
 struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
     @Bindable var viewModel: SettingsViewModel
     var dashboard: Dashboard
-    var events: EventCenter
     var isInitialSetup: Bool = false
     var onDismiss: (() -> Void)?
     @State private var showResetConfirmation = false
     @State private var presetToReset: DashboardView?
     @State private var showSignOutConfirmation = false
     @State private var directoryToRemove: URL?
-    @State private var showClearLogConfirmation = false
-
     var body: some View {
         Form {
             Section {
@@ -265,30 +262,6 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
                 Text("About")
             }
 
-            Section {
-                if events.history.isEmpty {
-                    Text("No recent events.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(events.history.prefix(20)) { event in
-                        diagnosticRow(event)
-                    }
-                    if events.history.count > 1 {
-                        Button("Clear Log", role: .destructive) {
-                            showClearLogConfirmation = true
-                        }
-                        .controlSize(.small)
-                    }
-                }
-            } header: {
-                Text("Diagnostics")
-            } footer: {
-                Text("A log of recent user-visible events. Useful for support: include the bottom entry when reporting a bug.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             if isInitialSetup && viewModel.validationState == .valid {
                 Section {
                     Button {
@@ -333,53 +306,6 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
             Button("Cancel", role: .cancel) { directoryToRemove = nil }
         } message: { directory in
             Text("Pull Request Pilot will stop matching pull requests to repositories under \(directory.path).")
-        }
-        .confirmationDialog(
-            "Clear diagnostics log?",
-            isPresented: $showClearLogConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Clear Log", role: .destructive) {
-                events.clearHistory()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The recent events shown above will be discarded.")
-        }
-    }
-
-    @ViewBuilder
-    private func diagnosticRow(_ event: AppEvent) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: diagnosticIcon(for: event))
-                .foregroundStyle(diagnosticColor(for: event))
-                .font(.caption)
-                .frame(width: 14, alignment: .center)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(event.message)
-                    .font(.caption)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(event.postedAt, format: .relative(presentation: .named))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
-    private func diagnosticIcon(for event: AppEvent) -> String {
-        switch event.level {
-        case .error: return "exclamationmark.triangle.fill"
-        case .warning: return "exclamationmark.circle.fill"
-        case .info: return "info.circle.fill"
-        }
-    }
-
-    private func diagnosticColor(for event: AppEvent) -> Color {
-        switch event.level {
-        case .error: return .red
-        case .warning: return .orange
-        case .info: return .accentColor
         }
     }
 

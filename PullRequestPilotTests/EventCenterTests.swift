@@ -14,14 +14,14 @@ struct EventCenterTests {
         #expect(center.events.first?.appError == .unauthorized)
     }
 
-    @Test("dismiss removes event from activeEvents but keeps it in history")
-    func dismissKeepsHistory() throws {
+    @Test("dismiss removes event from activeEvents but keeps it in events")
+    func dismissKeepsEvent() throws {
         let center = EventCenter()
         center.post(.info("hello"))
         let id = try #require(center.events.first?.id)
         center.dismiss(id)
         #expect(center.activeEvents.isEmpty)
-        #expect(center.history.count == 1)
+        #expect(center.events.count == 1)
     }
 
     @Test("reporter posts through to the center")
@@ -66,15 +66,6 @@ struct EventCenterTests {
         #expect(center.events.first?.message == "c")
     }
 
-    @Test("clearHistory wipes everything")
-    func clearHistoryWipesAll() {
-        let center = EventCenter()
-        center.post(.info("x"))
-        center.post(.error(.unauthorized))
-        center.clearHistory()
-        #expect(center.events.isEmpty)
-        #expect(center.activeEvents.isEmpty)
-    }
 }
 
 @Suite("AppError")

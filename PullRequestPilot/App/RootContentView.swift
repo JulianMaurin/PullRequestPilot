@@ -26,7 +26,6 @@ struct RootContentView: View {
                 SettingsView(
                     viewModel: settingsViewModel,
                     dashboard: dashboardViewModel,
-                    events: events,
                     isInitialSetup: needsInitialSetup,
                     onDismiss: {
                         needsInitialSetup = false
