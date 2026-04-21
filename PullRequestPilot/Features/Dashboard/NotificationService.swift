@@ -135,6 +135,14 @@ final class NotificationService {
             // Cancellation isn't a permanent "denied" — callers re-query the
             // authorization status on the next attempt.
             return false
+        } catch let error as UNError where error.code == .notificationsNotAllowed {
+            // Equivalent to .denied. macOS can throw this from requestAuthorization
+            // when notifications are blocked at system level (e.g., stale state from
+            // a prior install — see scripts/nuke-notifications.sh). Don't surface as
+            // a toast: callers (Settings "Open Settings" button, view toggle) are
+            // already guiding the user to System Settings to fix it.
+            logger.info("Notifications not allowed at system level — treating as denied")
+            return false
         } catch {
             logger.error("Notification permission error: \(error, privacy: .public)")
             reporter.postError(.notificationSystemError(detail: error.localizedDescription))
