@@ -82,9 +82,10 @@ debug: $(PROJECT)/project.pbxproj
 run: build
 	@open "$(BUILD_DIR)/$(CONFIG)/$(BUNDLE_NAME)"
 
-# Run tests
+# Run tests — Xcode requires a concrete device for `test`, not `generic/platform`.
 test: $(PROJECT)/project.pbxproj lint
-	$(XCODEBUILD_BASE) -configuration Debug test 2>&1 | $(XCB_FILTER)
+	xcodebuild -scheme $(SCHEME) -project $(PROJECT) \
+		-destination 'platform=macOS' -configuration Debug test 2>&1 | $(XCB_FILTER)
 
 # Clean build artifacts
 clean:
