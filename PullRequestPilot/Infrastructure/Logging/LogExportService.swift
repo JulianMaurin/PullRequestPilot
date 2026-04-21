@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import os
 import OSLog
 
 // MARK: - Dependencies
@@ -74,7 +75,11 @@ final class LogExportService {
 
     func openConsole() async {
         let predicate = "subsystem == \"\(bundleID)\""
-        _ = await pasteboard.setString(predicate)
+        let wrote = await pasteboard.setString(predicate)
+        if !wrote {
+            Logger(subsystem: bundleID, category: "LogExport")
+                .warning("Pasteboard write failed — user must type the predicate manually in Console.")
+        }
 
         let url = await workspace.consoleAppURL() ?? URL(fileURLWithPath: "/System/Applications/Utilities/Console.app")
         let opened = await workspace.open(url)
@@ -82,7 +87,11 @@ final class LogExportService {
             reporter.postError(.externalAppLaunchFailed(appName: "Console"))
             return
         }
-        reporter.postInfo("Filter copied — paste into Console's search field.")
+        if wrote {
+            reporter.postInfo("Filter copied — paste into Console's search field.")
+        } else {
+            reporter.postWarning("Console opened. Search for: subsystem == \"\(bundleID)\"")
+        }
     }
 
     // MARK: - Private

@@ -197,4 +197,37 @@ struct LogExportServiceOpenConsoleTests {
             Issue.record("Expected externalAppLaunchFailed, got \(String(describing: recorder.events.first))")
         }
     }
+
+    @Test("falls back to warning message when pasteboard write fails")
+    @MainActor
+    func openConsolePasteboardFailureStillLaunches() async throws {
+        let pasteboard = MockPasteboard(shouldSucceed: false)
+        let consoleURL = URL(fileURLWithPath: "/System/Applications/Utilities/Console.app")
+        let workspace = MockWorkspace(openShouldSucceed: true, consoleURL: consoleURL)
+        let recorder = EventRecorder()
+
+        let service = LogExportService(
+            reporter: recorder.reporter(),
+            store: MockLogEntrySource(),
+            pasteboard: pasteboard,
+            workspace: workspace,
+            tempDirectory: FileManager.default.temporaryDirectory,
+            bundleID: "com.test.app",
+            appVersion: "1.0.0",
+            appBuild: "1",
+            osVersion: "macOS 14.4"
+        )
+
+        await service.openConsole()
+
+        let opens = await workspace.recordedOpens()
+        #expect(opens == [consoleURL])
+
+        #expect(recorder.events.count == 1)
+        if case .warning(let text) = recorder.events.first?.payload {
+            #expect(text == "Console opened. Search for: subsystem == \"com.test.app\"")
+        } else {
+            Issue.record("Expected warning event, got \(String(describing: recorder.events.first))")
+        }
+    }
 }
