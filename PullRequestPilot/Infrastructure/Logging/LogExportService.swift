@@ -61,10 +61,69 @@ final class LogExportService {
     }
 
     func exportLogs() async {
-        // Implemented in Task 4/5.
+        do {
+            let entries = try await store.currentProcessEntries(subsystem: bundleID)
+            let contents = renderExport(entries: entries)
+            let url = try writeExport(contents: contents)
+            await workspace.revealInFinder(url)
+            reporter.postInfo("Logs saved — revealed in Finder.")
+        } catch {
+            reporter.postError(.logExportFailed(underlying: error.localizedDescription))
+        }
     }
 
     func openConsole() async {
         // Implemented in Task 6/7.
+    }
+
+    // MARK: - Private
+
+    private func renderExport(entries: [LogEntry]) -> String {
+        var lines: [String] = []
+        lines.append("Pull Request Pilot — log export")
+        lines.append("App version: \(appVersion) (\(appBuild))")
+        lines.append("macOS: \(osVersion)")
+        lines.append("Exported: \(ISO8601DateFormatter().string(from: .now))")
+        lines.append("Subsystem: \(bundleID)")
+        lines.append("")
+        if entries.isEmpty {
+            lines.append("No log entries were recorded during this app run.")
+        } else {
+            let formatter = entryDateFormatter()
+            for entry in entries {
+                lines.append("\(formatter.string(from: entry.date)) [\(entry.level.rawValue)] [\(entry.category)] \(entry.message)")
+            }
+        }
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    private func writeExport(contents: String) throws -> URL {
+        let name = "pull-request-pilot-logs-\(filenameDateFormatter().string(from: .now)).txt"
+        let finalURL = tempDirectory.appendingPathComponent(name)
+        let stagingURL = tempDirectory.appendingPathComponent(name + ".partial")
+        try contents.write(to: stagingURL, atomically: true, encoding: .utf8)
+        if fileManager.fileExists(atPath: finalURL.path) {
+            try fileManager.removeItem(at: finalURL)
+        }
+        try fileManager.moveItem(at: stagingURL, to: finalURL)
+        return finalURL
+    }
+
+    private func entryDateFormatter() -> DateFormatter {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .iso8601)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone.current
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+        return f
+    }
+
+    private func filenameDateFormatter() -> DateFormatter {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .iso8601)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone.current
+        f.dateFormat = "yyyyMMdd-HHmmss"
+        return f
     }
 }
