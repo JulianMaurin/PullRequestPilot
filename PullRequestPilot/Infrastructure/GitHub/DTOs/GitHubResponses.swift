@@ -613,7 +613,10 @@ private func parseISO8601Date(_ string: String) -> Date? {
 
 extension PullRequestNode {
     func toDomain() -> PullRequest? {
-        guard let url = URL(string: url) else { return nil }
+        guard let url = URL(string: url) else {
+            os_log(.error, "Dropping PR #%d — URL failed to parse: %{public}@", number, url)
+            return nil
+        }
 
         guard let created = parseISO8601Date(createdAt),
               let updated = parseISO8601Date(updatedAt) else {
