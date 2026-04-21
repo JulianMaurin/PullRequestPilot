@@ -11,6 +11,7 @@ final class AppState {
     let gitDirectoriesStore: GitDirectoriesStore
     let localRepositoryService: LocalRepositoryService
     let events: EventCenter
+    let logExportService: LogExportService
     let userDefaults: UserDefaults
 
     let dashboardViewModel: DashboardViewModel
@@ -40,6 +41,21 @@ final class AppState {
         let gitDirectoriesStore = GitDirectoriesStore(defaults: defaults, reporter: reporter)
         let localRepositoryService = LocalRepositoryService(reporter: reporter)
 
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.pullrequestpilot.app"
+        let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–"
+        let appBuild = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "–"
+        let osVersion = ProcessInfo.processInfo.operatingSystemVersionString
+        let logExportService = LogExportService(
+            reporter: events.reporter(),
+            store: OSLogEntrySource(),
+            pasteboard: NSPasteboardAdapter(),
+            workspace: NSWorkspaceAdapter(),
+            bundleID: bundleID,
+            appVersion: appVersion,
+            appBuild: appBuild,
+            osVersion: osVersion
+        )
+
         // Widget save path reports errors through the same center so the user
         // sees a toast rather than a silent log line.
         WidgetData.setErrorReporter { message in reporter.postError(.widgetSaveFailed(underlying: message)) }
@@ -51,6 +67,7 @@ final class AppState {
         self.gitDirectoriesStore = gitDirectoriesStore
         self.localRepositoryService = localRepositoryService
         self.events = events
+        self.logExportService = logExportService
         self.userDefaults = defaults
         self.prDetailViewModel = PRDetailViewModel(gitHubClient: gitHubClient, reporter: reporter)
         self.dashboardViewModel = DashboardViewModel(
