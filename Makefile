@@ -83,9 +83,11 @@ run: build
 	@open "$(BUILD_DIR)/$(CONFIG)/$(BUNDLE_NAME)"
 
 # Run tests — Xcode requires a concrete device for `test`, not `generic/platform`.
+# arch disambiguates when multiple macOS destinations match (Catalyst, Designed for iPad).
+HOST_ARCH := $(shell uname -m)
 test: $(PROJECT)/project.pbxproj lint
 	xcodebuild -scheme $(SCHEME) -project $(PROJECT) \
-		-destination 'platform=macOS' -configuration Debug test 2>&1 | $(XCB_FILTER)
+		-destination 'platform=macOS,arch=$(HOST_ARCH)' -configuration Debug test 2>&1 | $(XCB_FILTER)
 
 # Clean build artifacts
 clean:
