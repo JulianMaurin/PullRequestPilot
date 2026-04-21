@@ -137,3 +137,64 @@ final class LogExportService {
         return f
     }
 }
+
+// MARK: - Real adapters
+
+struct OSLogEntrySource: LogEntrySource {
+    func currentProcessEntries(subsystem: String) async throws -> [LogEntry] {
+        // Hop off the caller (@MainActor service) to avoid blocking UI while
+        // OSLogStore walks the unified log.
+        try await Task.detached(priority: .utility) {
+            let store = try OSLogStore(scope: .currentProcessIdentifier)
+            let predicate = NSPredicate(format: "subsystem == %@", subsystem)
+            let enumerator = try store.getEntries(matching: predicate)
+            return enumerator.compactMap { entry -> LogEntry? in
+                guard let log = entry as? OSLogEntryLog else { return nil }
+                return LogEntry(
+                    date: log.date,
+                    level: OSLogEntrySource.mapLevel(log.level),
+                    category: log.category,
+                    message: log.composedMessage
+                )
+            }
+        }.value
+    }
+
+    private static func mapLevel(_ level: OSLogEntryLog.Level) -> LogEntry.Level {
+        switch level {
+        case .debug: return .debug
+        case .info: return .info
+        case .notice: return .notice
+        case .error: return .error
+        case .fault: return .fault
+        case .undefined: return .notice
+        @unknown default: return .notice
+        }
+    }
+}
+
+struct NSPasteboardAdapter: PasteboardWriting {
+    func setString(_ value: String) async -> Bool {
+        await MainActor.run {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            return pasteboard.setString(value, forType: .string)
+        }
+    }
+}
+
+struct NSWorkspaceAdapter: WorkspaceOpening {
+    func open(_ url: URL) async -> Bool {
+        await MainActor.run { NSWorkspace.shared.open(url) }
+    }
+
+    func revealInFinder(_ url: URL) async {
+        await MainActor.run { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+    }
+
+    func consoleAppURL() async -> URL? {
+        await MainActor.run {
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Console")
+        }
+    }
+}
