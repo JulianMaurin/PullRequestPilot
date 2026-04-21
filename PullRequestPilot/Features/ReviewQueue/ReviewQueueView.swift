@@ -542,6 +542,15 @@ struct ReviewQueueView: View {
                 )
             }
             .disabled(viewModel.queryContainsFilter(qualifier: "org:\(orgGroup.org)"))
+            Button {
+                appendFilter("-org:\(orgGroup.org)")
+            } label: {
+                SwiftUI.Label(
+                    "Exclude org \"\(orgGroup.org)\"",
+                    systemImage: "minus.circle"
+                )
+            }
+            .disabled(viewModel.queryContainsFilter(qualifier: "-org:\(orgGroup.org)"))
         }
 
         if !isOrgCollapsed {
@@ -596,6 +605,15 @@ struct ReviewQueueView: View {
                 )
             }
             .disabled(viewModel.queryContainsFilter(qualifier: "repo:\(org)/\(repoGroup.repo)"))
+            Button {
+                appendFilter("-repo:\(org)/\(repoGroup.repo)")
+            } label: {
+                SwiftUI.Label(
+                    "Exclude repo \"\(org)/\(repoGroup.repo)\"",
+                    systemImage: "minus.circle"
+                )
+            }
+            .disabled(viewModel.queryContainsFilter(qualifier: "-repo:\(org)/\(repoGroup.repo)"))
         }
 
         if !isRepoCollapsed {

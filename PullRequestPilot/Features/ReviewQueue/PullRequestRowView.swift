@@ -56,6 +56,15 @@ struct PullRequestRowView<RowMenu: View>: View {
             )
         }
 
+        Button {
+            onFilterBy("-author:\(pullRequest.author.login)")
+        } label: {
+            SwiftUI.Label(
+                "Exclude author \"\(pullRequest.author.login)\"",
+                systemImage: "minus.circle"
+            )
+        }
+
         if pullRequest.labels.count == 1, let label = pullRequest.labels.first {
             Button {
                 let escaped = label.name.replacingOccurrences(of: "\"", with: "\\\"")
@@ -65,6 +74,16 @@ struct PullRequestRowView<RowMenu: View>: View {
                 SwiftUI.Label(
                     "Filter by label \"\(label.name)\"",
                     systemImage: "line.3.horizontal.decrease.circle"
+                )
+            }
+            Button {
+                let escaped = label.name.replacingOccurrences(of: "\"", with: "\\\"")
+                let value = label.name.contains(" ") ? "\"\(escaped)\"" : escaped
+                onFilterBy("-label:\(value)")
+            } label: {
+                SwiftUI.Label(
+                    "Exclude label \"\(label.name)\"",
+                    systemImage: "minus.circle"
                 )
             }
         } else if pullRequest.labels.count > 1 {
@@ -83,6 +102,22 @@ struct PullRequestRowView<RowMenu: View>: View {
                 }
             } label: {
                 SwiftUI.Label("Filter by label", systemImage: "line.3.horizontal.decrease.circle")
+            }
+            Menu {
+                ForEach(Array(pullRequest.labels.prefix(10)), id: \.name) { label in
+                    Button {
+                        let escaped = label.name.replacingOccurrences(of: "\"", with: "\\\"")
+                        let value = label.name.contains(" ") ? "\"\(escaped)\"" : escaped
+                        onFilterBy("-label:\(value)")
+                    } label: {
+                        SwiftUI.Label(
+                            label.name,
+                            systemImage: "tag"
+                        )
+                    }
+                }
+            } label: {
+                SwiftUI.Label("Exclude label", systemImage: "minus.circle")
             }
         }
     }
