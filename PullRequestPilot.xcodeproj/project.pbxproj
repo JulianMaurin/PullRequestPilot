@@ -29,6 +29,7 @@
 		3CBE5A8CBBF5CBB5C25DC51A /* ViewRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F3EE689253C5A1E57D22FB6 /* ViewRegistry.swift */; };
 		409CBA2DBF0F6F4F9DB94F77 /* PullRequestPilotApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDDC85340ABAEFB5AFFCA2D7 /* PullRequestPilotApp.swift */; };
 		435918A905F6D46F867F9348 /* DashboardViewEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D10578F537D4DBC84E5E685 /* DashboardViewEntity.swift */; };
+		439551A075FDE6BD39E80B43 /* MockLogExportDependencies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0539E1E1791241E971A9DFF2 /* MockLogExportDependencies.swift */; };
 		475BD10DC23B7EB7B3CA38B3 /* ViewsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B7FA651CACE3D0E219A4E5D /* ViewsStoreTests.swift */; };
 		49693E22DFAE27F128D996A0 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B8BDE16E235A1F6B8BF97E7 /* AppState.swift */; };
 		4AEB0F26BFD153CADA81E314 /* MockGitHubClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DCD9C373C64F2C4FBAB5FFA /* MockGitHubClient.swift */; };
@@ -83,6 +84,7 @@
 		B3C40A539AD3B4176BBEB3D7 /* PRDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA99630A67726BEAA7144942 /* PRDetailView.swift */; };
 		B51C83326BFAF9253C5C16C7 /* PullRequestRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF59345098F5CC8904F67224 /* PullRequestRowView.swift */; };
 		B73D7594DD891F3F5DE1D799 /* CheckRunTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77412D15C854BB2FFB5413F8 /* CheckRunTests.swift */; };
+		B865F31D2E3AB41DB1F695D6 /* LogExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7D299CBF8585DBACFE3C1AE /* LogExportService.swift */; };
 		BE07D374871AC955C82F0FD8 /* GitDirectoriesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D15F556448815396EF8A8ED2 /* GitDirectoriesStore.swift */; };
 		C254EF559D6F54242472095A /* WidgetDataMappingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA2789B3716FCB47739B65B0 /* WidgetDataMappingTests.swift */; };
 		C4661C6E78FDFC7475EB8D7B /* RequestCoalescerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7327C67190D6C1480482AC7 /* RequestCoalescerTests.swift */; };
@@ -146,6 +148,7 @@
 
 /* Begin PBXFileReference section */
 		03D42FF48B4D23A41767D466 /* MockURLProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockURLProtocol.swift; sourceTree = "<group>"; };
+		0539E1E1791241E971A9DFF2 /* MockLogExportDependencies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockLogExportDependencies.swift; sourceTree = "<group>"; };
 		085F45B5BF4F3403433ECB4B /* PullRequestPilotTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PullRequestPilotTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		08DDD5EB3A16488F3DB32BEA /* PullRequestPilot.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PullRequestPilot.entitlements; sourceTree = "<group>"; };
 		0EA9F295500B33C7EC981469 /* AppEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEvent.swift; sourceTree = "<group>"; };
@@ -222,6 +225,7 @@
 		AE7DBBCDED1A5D00DF910CA4 /* PullRequestPilotWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PullRequestPilotWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B0D02B906D240CFF2D812EAA /* RelativeTimestampText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelativeTimestampText.swift; sourceTree = "<group>"; };
 		B7327C67190D6C1480482AC7 /* RequestCoalescerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestCoalescerTests.swift; sourceTree = "<group>"; };
+		B7D299CBF8585DBACFE3C1AE /* LogExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogExportService.swift; sourceTree = "<group>"; };
 		B919383AC965AD29C544D35C /* LocalRepositoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRepositoryService.swift; sourceTree = "<group>"; };
 		BB660149F1FC0178896350F0 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		BCF9B101CD089F762872F9AF /* DashboardActionsProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardActionsProtocol.swift; sourceTree = "<group>"; };
@@ -401,6 +405,7 @@
 			isa = PBXGroup;
 			children = (
 				E3ACE77AC1302A6D425C48CB /* LogEntry.swift */,
+				B7D299CBF8585DBACFE3C1AE /* LogExportService.swift */,
 			);
 			path = Logging;
 			sourceTree = "<group>";
@@ -591,6 +596,7 @@
 			isa = PBXGroup;
 			children = (
 				9DCD9C373C64F2C4FBAB5FFA /* MockGitHubClient.swift */,
+				0539E1E1791241E971A9DFF2 /* MockLogExportDependencies.swift */,
 				03D42FF48B4D23A41767D466 /* MockURLProtocol.swift */,
 			);
 			path = Mocks;
@@ -763,6 +769,7 @@
 				D112C14519578FF1ED82E5D5 /* KeychainService.swift in Sources */,
 				10B00C7E1FFC9F019FD5B701 /* LocalRepositoryService.swift in Sources */,
 				F1DE770210315B9A4B8FF478 /* LogEntry.swift in Sources */,
+				B865F31D2E3AB41DB1F695D6 /* LogExportService.swift in Sources */,
 				59CDE2449BEDE0BE5FDFB3BF /* NotificationService.swift in Sources */,
 				B3C40A539AD3B4176BBEB3D7 /* PRDetailView.swift in Sources */,
 				52C68063535522DF4E714C6F /* PRDetailViewModel.swift in Sources */,
@@ -816,6 +823,7 @@
 				A6344738B55CAE1A1CBAD3B5 /* LocalRepositoryGitParsingTests.swift in Sources */,
 				E61F9ADB7469BCE775EF9CB4 /* LocalRepositoryServiceTests.swift in Sources */,
 				4AEB0F26BFD153CADA81E314 /* MockGitHubClient.swift in Sources */,
+				439551A075FDE6BD39E80B43 /* MockLogExportDependencies.swift in Sources */,
 				A695E5D237DE79F0C4C2BEDA /* MockURLProtocol.swift in Sources */,
 				63CAE8E5BAA27B337249CE9C /* PRDetailRetryTests.swift in Sources */,
 				1B60D5C21D449ECB5263957A /* PRDetailViewModelTests.swift in Sources */,
