@@ -102,6 +102,7 @@ final class LogExportService {
         let finalURL = tempDirectory.appendingPathComponent(name)
         let stagingURL = tempDirectory.appendingPathComponent(name + ".partial")
         try contents.write(to: stagingURL, atomically: true, encoding: .utf8)
+        defer { try? fileManager.removeItem(at: stagingURL) }
         if fileManager.fileExists(atPath: finalURL.path) {
             try fileManager.removeItem(at: finalURL)
         }
