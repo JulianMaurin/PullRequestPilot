@@ -56,4 +56,77 @@ struct LogExportServiceExportTests {
             Issue.record("Expected info event, got \(String(describing: recorder.events.first))")
         }
     }
+
+    @Test("writes header + no-entries message when store is empty")
+    @MainActor
+    func exportsEmptyRun() async throws {
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let store = MockLogEntrySource(entries: [])
+        let recorder = EventRecorder()
+
+        let service = LogExportService(
+            reporter: recorder.reporter(),
+            store: store,
+            pasteboard: MockPasteboard(),
+            workspace: MockWorkspace(),
+            tempDirectory: tmp,
+            bundleID: "com.test.app",
+            appVersion: "1.0.0",
+            appBuild: "1",
+            osVersion: "macOS 14.4"
+        )
+
+        await service.exportLogs()
+
+        let files = try FileManager.default.contentsOfDirectory(at: tmp, includingPropertiesForKeys: nil)
+        let logFile = try #require(files.first)
+        let contents = try String(contentsOf: logFile, encoding: .utf8)
+
+        #expect(contents.contains("No log entries were recorded during this app run."))
+        #expect(recorder.events.count == 1)
+        if case .error = recorder.events.first?.payload {
+            Issue.record("Empty run should not post an error event.")
+        }
+    }
+
+    @Test("posts logExportFailed when the store throws")
+    @MainActor
+    func exportsSurfaceStoreErrors() async throws {
+        struct BoomError: Error, LocalizedError {
+            var errorDescription: String? { "boom" }
+        }
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let store = MockLogEntrySource(entries: [], errorToThrow: BoomError())
+        let recorder = EventRecorder()
+
+        let service = LogExportService(
+            reporter: recorder.reporter(),
+            store: store,
+            pasteboard: MockPasteboard(),
+            workspace: MockWorkspace(),
+            tempDirectory: tmp,
+            bundleID: "com.test.app",
+            appVersion: "1.0.0",
+            appBuild: "1",
+            osVersion: "macOS 14.4"
+        )
+
+        await service.exportLogs()
+
+        let files = try FileManager.default.contentsOfDirectory(at: tmp, includingPropertiesForKeys: nil)
+        #expect(files.isEmpty)
+
+        #expect(recorder.events.count == 1)
+        if case .error(.logExportFailed(let underlying)) = recorder.events.first?.payload {
+            #expect(underlying == "boom")
+        } else {
+            Issue.record("Expected .logExportFailed, got \(String(describing: recorder.events.first))")
+        }
+    }
 }
