@@ -116,21 +116,27 @@ struct RequestCoalescerTests {
     func oneCallerCancelDoesNotAffectOther() async throws {
         let coalescer = RequestCoalescer<String, Int>()
 
+        // Deterministic start-signal: the inner closure yields on the stream
+        // as soon as it enters, so the outer test can wait on that instead of
+        // a wall-clock sleep. Parallel test runners don't affect correctness.
+        let (startedStream, startedContinuation) = AsyncStream.makeStream(of: Void.self)
+
         let cancellableTask = Task {
             try await coalescer.run(key: "k") {
+                startedContinuation.yield()
                 try await Task.sleep(for: .milliseconds(50))
                 return 7
             }
         }
-        // Give the inner task a chance to start.
-        try await Task.sleep(for: .milliseconds(5))
+
+        var iter = startedStream.makeAsyncIterator()
+        _ = await iter.next()
         cancellableTask.cancel()
 
         // A second caller joining while the task is in flight should still
         // receive the underlying result (coalescer intentionally does not
         // propagate cancellation to the shared task).
         let joined = try await coalescer.run(key: "k") {
-            // Should not be invoked — task is still in flight.
             Issue.record("operation re-invoked after cancellation of first caller")
             return -1
         }

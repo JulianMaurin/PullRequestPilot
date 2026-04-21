@@ -28,8 +28,7 @@ struct GitHubClientCoalescingTests {
             callCount.withLock { $0 += 1 }
             // Hold the response a beat so the two callers have time to coalesce.
             Thread.sleep(forTimeInterval: 0.02)
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, Data(body.utf8))
+            return try TestHTTP.response(for: request, body: Data(body.utf8))
         }
 
         async let first = client.fetchPullRequests(query: "is:pr review-requested:@me", cursor: nil)
@@ -48,8 +47,7 @@ struct GitHubClientCoalescingTests {
         MockURLProtocol.requestHandler = { request in
             callCount.withLock { $0 += 1 }
             Thread.sleep(forTimeInterval: 0.02)
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, Data(body.utf8))
+            return try TestHTTP.response(for: request, body: Data(body.utf8))
         }
 
         async let first = client.fetchPullRequests(query: "is:pr author:alice", cursor: nil)
@@ -70,8 +68,7 @@ struct GitHubClientCoalescingTests {
         MockURLProtocol.requestHandler = { request in
             callCount.withLock { $0 += 1 }
             Thread.sleep(forTimeInterval: 0.03)
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, Data(body.utf8))
+            return try TestHTTP.response(for: request, body: Data(body.utf8))
         }
 
         // 10 fetches across 2 distinct queries (8 of "shared", 2 of "unique").

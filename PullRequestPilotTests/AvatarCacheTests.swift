@@ -41,8 +41,7 @@ struct AvatarCacheTests {
         var fetchCount = 0
         MockURLProtocol.requestHandler = { _ in
             fetchCount += 1
-            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, imageData)
+            return try TestHTTP.response(url: url, body: imageData)
         }
 
         let first = await cache.image(for: url)
@@ -63,8 +62,7 @@ struct AvatarCacheTests {
         let imageData = sampleImageData()
 
         MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, imageData)
+            try TestHTTP.response(for: request, body: imageData)
         }
 
         let img1 = await cache.image(for: url1)
@@ -94,8 +92,7 @@ struct AvatarCacheTests {
         let url = URL(string: "https://avatars.example.com/bad.png")!
 
         MockURLProtocol.requestHandler = { _ in
-            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, Data("not an image".utf8))
+            try TestHTTP.response(url: url, body: Data("not an image".utf8))
         }
 
         let result = await cache.image(for: url)
@@ -127,8 +124,7 @@ struct AvatarCacheTests {
         MockURLProtocol.requestHandler = { _ in
             fetchCount.withLock { $0 += 1 }
             Thread.sleep(forTimeInterval: 0.02)
-            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, imageData)
+            return try TestHTTP.response(url: url, body: imageData)
         }
 
         async let first = cache.image(for: url)

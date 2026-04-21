@@ -70,8 +70,7 @@ struct GitHubClientTests {
         let client = makeClient()
         let responseJSON = #"{"data": null, "errors": [{"message": "Field error"}]}"#
         MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, responseJSON.data(using: .utf8)!)
+            try TestHTTP.response(for: request, body: Data(responseJSON.utf8))
         }
 
         do {
@@ -95,8 +94,7 @@ struct GitHubClientTests {
         let client = makeClient()
         let responseJSON = makeSearchResponseJSON()
         MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, responseJSON.data(using: .utf8)!)
+            try TestHTTP.response(for: request, body: Data(responseJSON.utf8))
         }
 
         let page = try await client.fetchPullRequests(query: "is:pr", cursor: nil)
@@ -110,8 +108,7 @@ struct GitHubClientTests {
         let client = makeClient()
         let responseJSON = makeSearchResponseJSON(hasNextPage: true, endCursor: "cursor_abc")
         MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, responseJSON.data(using: .utf8)!)
+            try TestHTTP.response(for: request, body: Data(responseJSON.utf8))
         }
 
         let page = try await client.fetchPullRequests(query: "is:pr", cursor: nil)
@@ -126,8 +123,7 @@ struct GitHubClientTests {
         let client = makeClient()
         let responseJSON = #"{"data": {"viewer": {"login": "octocat", "avatarUrl": "https://avatars.githubusercontent.com/u/1?v=4"}}}"#
         MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, responseJSON.data(using: .utf8)!)
+            try TestHTTP.response(for: request, body: Data(responseJSON.utf8))
         }
 
         let viewer = try await client.fetchViewer()
@@ -140,8 +136,7 @@ struct GitHubClientTests {
         let client = makeClient()
         let responseJSON = #"{"data": null, "errors": [{"message": "Bad credentials"}]}"#
         MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, responseJSON.data(using: .utf8)!)
+            try TestHTTP.response(for: request, body: Data(responseJSON.utf8))
         }
 
         await #expect(throws: GitHubClientError.self) {
@@ -178,8 +173,7 @@ struct GitHubClientTests {
     func decodingErrorWrapped() async {
         let client = makeClient()
         MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, "not json".data(using: .utf8)!)
+            try TestHTTP.response(for: request, body: Data("not json".utf8))
         }
 
         do {
@@ -205,8 +199,7 @@ struct GitHubClientTests {
         MockURLProtocol.requestHandler = { request in
             capturedRequest = request
             let responseJSON = #"{"data": {"viewer": {"login": "test"}}}"#
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, responseJSON.data(using: .utf8)!)
+            return try TestHTTP.response(for: request, body: Data(responseJSON.utf8))
         }
 
         _ = try await client.fetchViewer()

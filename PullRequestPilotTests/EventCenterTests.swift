@@ -103,33 +103,39 @@ struct EventCenterTests {
 
     @Test("pauseAutoDismiss prevents the scheduled dismissal from firing")
     func pausePreventsDismissal() async throws {
-        let center = EventCenter()
+        let clock = TestClock()
+        let center = EventCenter(clock: clock)
         center.post(AppEvent(payload: .info("hi"), autoDismissAfter: .milliseconds(50)))
         let id = try #require(center.events.first?.id)
         center.pauseAutoDismiss(id)
 
-        // Wait well past the original duration — should still be active.
-        try await Task.sleep(for: .milliseconds(200))
+        // Advance well past the original duration — toast must still be active.
+        clock.advance(by: .milliseconds(200))
+        await yieldRepeatedly()
         #expect(!center.activeEvents.isEmpty)
     }
 
     @Test("resumeAutoDismiss reschedules after a pause")
     func resumeReschedulesDismissal() async throws {
-        let center = EventCenter()
+        let clock = TestClock()
+        let center = EventCenter(clock: clock)
         center.post(AppEvent(payload: .info("hi"), autoDismissAfter: .milliseconds(50)))
         let id = try #require(center.events.first?.id)
         center.pauseAutoDismiss(id)
-        try await Task.sleep(for: .milliseconds(100))
+        clock.advance(by: .milliseconds(100))
+        await yieldRepeatedly()
         #expect(!center.activeEvents.isEmpty, "pause should hold the toast")
 
         center.resumeAutoDismiss(id)
+        clock.advance(by: .milliseconds(50))
         try await waitUntil { center.activeEvents.isEmpty }
         #expect(center.activeEvents.isEmpty)
     }
 
     @Test("resumeAutoDismiss called twice does not leave a second stale task")
     func resumeDoesNotLeak() async throws {
-        let center = EventCenter()
+        let clock = TestClock()
+        let center = EventCenter(clock: clock)
         center.post(AppEvent(payload: .info("hi"), autoDismissAfter: .milliseconds(80)))
         let id = try #require(center.events.first?.id)
 
@@ -137,12 +143,14 @@ struct EventCenterTests {
         // cancelled before the second one takes over, otherwise the first fires
         // earlier than the second's fresh window.
         center.resumeAutoDismiss(id)
-        try await Task.sleep(for: .milliseconds(20))
+        clock.advance(by: .milliseconds(20))
+        await yieldRepeatedly()
         center.resumeAutoDismiss(id)
 
         // 40ms after the 2nd resume: first-scheduled task would have fired by now
         // (80ms from post). If we're still active, replacement worked.
-        try await Task.sleep(for: .milliseconds(40))
+        clock.advance(by: .milliseconds(40))
+        await yieldRepeatedly()
         #expect(!center.activeEvents.isEmpty, "2nd resume must cancel the 1st task")
     }
 
@@ -158,6 +166,13 @@ struct EventCenterTests {
             if ContinuousClock.now >= deadline { return }
             try await Task.sleep(for: .milliseconds(5))
         }
+    }
+
+    /// Yield the current task repeatedly so any other scheduled task (e.g., the
+    /// event-center auto-dismiss task that just resumed from a TestClock
+    /// advance) gets a chance to observe the resumption before the assertion.
+    private func yieldRepeatedly(count: Int = 10) async {
+        for _ in 0..<count { await Task.yield() }
     }
 
 }
