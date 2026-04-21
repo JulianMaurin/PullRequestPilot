@@ -169,4 +169,32 @@ struct LogExportServiceOpenConsoleTests {
             Issue.record("Expected info event, got \(String(describing: recorder.events.first))")
         }
     }
+
+    @Test("posts externalAppLaunchFailed when Console refuses to launch")
+    @MainActor
+    func openConsoleSurfacesLaunchFailure() async throws {
+        let workspace = MockWorkspace(openShouldSucceed: false, consoleURL: URL(fileURLWithPath: "/System/Applications/Utilities/Console.app"))
+        let recorder = EventRecorder()
+
+        let service = LogExportService(
+            reporter: recorder.reporter(),
+            store: MockLogEntrySource(),
+            pasteboard: MockPasteboard(),
+            workspace: workspace,
+            tempDirectory: FileManager.default.temporaryDirectory,
+            bundleID: "com.test.app",
+            appVersion: "1.0.0",
+            appBuild: "1",
+            osVersion: "macOS 14.4"
+        )
+
+        await service.openConsole()
+
+        #expect(recorder.events.count == 1)
+        if case .error(.externalAppLaunchFailed(let appName)) = recorder.events.first?.payload {
+            #expect(appName == "Console")
+        } else {
+            Issue.record("Expected externalAppLaunchFailed, got \(String(describing: recorder.events.first))")
+        }
+    }
 }
