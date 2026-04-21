@@ -73,7 +73,16 @@ final class LogExportService {
     }
 
     func openConsole() async {
-        // Implemented in Task 6/7.
+        let predicate = "subsystem == \"\(bundleID)\""
+        _ = await pasteboard.setString(predicate)
+
+        let url = await workspace.consoleAppURL() ?? URL(fileURLWithPath: "/System/Applications/Utilities/Console.app")
+        let opened = await workspace.open(url)
+        if !opened {
+            reporter.postError(.externalAppLaunchFailed(appName: "Console"))
+            return
+        }
+        reporter.postInfo("Filter copied — paste into Console's search field.")
     }
 
     // MARK: - Private

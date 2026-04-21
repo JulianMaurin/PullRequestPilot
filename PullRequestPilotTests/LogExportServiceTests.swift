@@ -130,3 +130,43 @@ struct LogExportServiceExportTests {
         }
     }
 }
+
+@Suite("LogExportService.openConsole")
+struct LogExportServiceOpenConsoleTests {
+
+    @Test("copies subsystem predicate, launches Console, posts info toast")
+    @MainActor
+    func opensConsoleWithFilter() async throws {
+        let pasteboard = MockPasteboard()
+        let consoleURL = URL(fileURLWithPath: "/System/Applications/Utilities/Console.app")
+        let workspace = MockWorkspace(openShouldSucceed: true, consoleURL: consoleURL)
+        let recorder = EventRecorder()
+
+        let service = LogExportService(
+            reporter: recorder.reporter(),
+            store: MockLogEntrySource(),
+            pasteboard: pasteboard,
+            workspace: workspace,
+            tempDirectory: FileManager.default.temporaryDirectory,
+            bundleID: "com.test.app",
+            appVersion: "1.0.0",
+            appBuild: "1",
+            osVersion: "macOS 14.4"
+        )
+
+        await service.openConsole()
+
+        let writes = await pasteboard.recordedWrites()
+        #expect(writes == ["subsystem == \"com.test.app\""])
+
+        let opens = await workspace.recordedOpens()
+        #expect(opens == [consoleURL])
+
+        #expect(recorder.events.count == 1)
+        if case .info(let text) = recorder.events.first?.payload {
+            #expect(text == "Filter copied — paste into Console's search field.")
+        } else {
+            Issue.record("Expected info event, got \(String(describing: recorder.events.first))")
+        }
+    }
+}
