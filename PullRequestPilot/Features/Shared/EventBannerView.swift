@@ -4,28 +4,46 @@ import SwiftUI
 /// surface a persistent failure (e.g., hide-reviewed disabled because the
 /// viewer identity is unavailable) render this and pass a filter predicate.
 struct EventBannerView: View {
+    struct Action {
+        let label: String
+        let run: () -> Void
+    }
+
     let events: EventCenter
     let filter: (AppError) -> Bool
+    var actionFor: ((AppError) -> Action?)?
 
-    private var match: AppEvent? {
-        events.activeEvents.first(where: { event in
-            guard case .error(let err) = event.payload else { return false }
-            return filter(err)
-        })
+    init(events: EventCenter, filter: @escaping (AppError) -> Bool, actionFor: ((AppError) -> Action?)? = nil) {
+        self.events = events
+        self.filter = filter
+        self.actionFor = actionFor
+    }
+
+    private var match: (event: AppEvent, error: AppError)? {
+        for event in events.activeEvents {
+            guard case .error(let err) = event.payload, filter(err) else { continue }
+            return (event, err)
+        }
+        return nil
     }
 
     var body: some View {
-        if let event = match {
+        if let match {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
-                Text(event.message)
+                Text(match.event.message)
                     .font(.callout)
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
+                if let action = actionFor?(match.error) {
+                    Button(action.label, action: action.run)
+                        .buttonStyle(.borderless)
+                        .controlSize(.small)
+                }
                 Button {
-                    events.dismiss(event.id)
+                    events.dismiss(match.event.id)
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .semibold))

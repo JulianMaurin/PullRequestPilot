@@ -179,6 +179,11 @@ final class DashboardViewModel: DashboardActionsProtocol {
 
     func setBadge(for viewID: UUID, enabled: Bool) {
         badgeTracker.setEnabled(for: viewID, enabled: enabled, currentPRs: fetcher.state(for: viewID).pullRequests)
+        if !enabled {
+            // Drop any unseen IDs that were tracked for this view and are not
+            // still surfaced by another enabled view.
+            badgeTracker.pruneUnseen(viewStates: fetcher.states)
+        }
     }
 
     func markBadgeAsSeen() {
@@ -322,6 +327,10 @@ final class DashboardViewModel: DashboardActionsProtocol {
         var updated = views[index]
         updated.hideReviewed.toggle()
         viewRegistry.updateView(updated)
+        // Clear the cached PR list so the user sees a loading state rather than
+        // the stale pre-toggle list while the refresh is in flight. Mirrors
+        // commitQueryEdit / appendFilter.
+        fetcher.resetState(for: viewID)
         scheduleRefresh(for: updated)
     }
 

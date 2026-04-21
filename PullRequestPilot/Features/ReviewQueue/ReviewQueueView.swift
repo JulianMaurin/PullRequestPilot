@@ -38,11 +38,20 @@ struct ReviewQueueView: View {
             viewTabs
             queryBar
             if let events {
-                EventBannerView(events: events) { err in
-                    if case .viewerIdentityUnavailable = err { return true }
-                    if case .bookmarkPruned = err { return true }
-                    return false
-                }
+                EventBannerView(
+                    events: events,
+                    filter: { err in
+                        if case .viewerIdentityUnavailable = err { return true }
+                        if case .bookmarkPruned = err { return true }
+                        return false
+                    },
+                    actionFor: { err in
+                        if case .bookmarkPruned = err {
+                            return EventBannerView.Action(label: "Open Settings", run: onOpenSettings)
+                        }
+                        return nil
+                    }
+                )
                 .padding(.horizontal, 12)
                 .padding(.top, 6)
             }
