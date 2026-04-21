@@ -70,6 +70,22 @@ struct PullRequestPilotApp: App {
                     .keyboardShortcut("0", modifiers: .command)
                 }
             }
+            CommandGroup(after: .help) {
+                Divider()
+                Button("Export Logs\u{2026}") {
+                    if let service = appState?.logExportService {
+                        Task { await service.exportLogs() }
+                    }
+                }
+                .disabled(appState == nil)
+
+                Button("Open Console") {
+                    if let service = appState?.logExportService {
+                        Task { await service.openConsole() }
+                    }
+                }
+                .disabled(appState == nil)
+            }
         }
     }
 }
