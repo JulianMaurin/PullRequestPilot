@@ -85,6 +85,7 @@ enum AppError: LocalizedError, Sendable, Hashable {
     case widgetSaveFailed(underlying: String)
     case externalAppLaunchFailed(appName: String)
     case notificationSystemError(detail: String)
+    case logExportFailed(underlying: String)
 
     var errorDescription: String? {
         switch self {
@@ -135,6 +136,8 @@ enum AppError: LocalizedError, Sendable, Hashable {
             return "Couldn't open \(appName). Make sure it's installed and try again."
         case .notificationSystemError(let detail):
             return "Notifications unavailable: \(detail)"
+        case .logExportFailed(let underlying):
+            return "Couldn't export logs: \(underlying)"
         }
     }
 
