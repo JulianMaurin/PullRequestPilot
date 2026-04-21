@@ -15,11 +15,21 @@ struct ToastOverlay: View {
     var body: some View {
         VStack(spacing: 8) {
             ForEach(visible) { event in
-                ToastBanner(event: event) { events.dismiss(event.id) }
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .top).combined(with: .opacity),
-                        removal: .opacity
-                    ))
+                ToastBanner(
+                    event: event,
+                    onDismiss: { events.dismiss(event.id) },
+                    onHoverChange: { hovering in
+                        if hovering {
+                            events.pauseAutoDismiss(event.id)
+                        } else {
+                            events.resumeAutoDismiss(event.id)
+                        }
+                    }
+                )
+                .transition(.asymmetric(
+                    insertion: .move(edge: .top).combined(with: .opacity),
+                    removal: .opacity
+                ))
             }
         }
         .padding(.horizontal, 12)
@@ -35,6 +45,7 @@ struct ToastOverlay: View {
 private struct ToastBanner: View {
     let event: AppEvent
     let onDismiss: () -> Void
+    let onHoverChange: (Bool) -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -66,6 +77,7 @@ private struct ToastBanner: View {
                 )
                 .shadow(color: .black.opacity(0.12), radius: 6, x: 0, y: 2)
         )
+        .onHover(perform: onHoverChange)
     }
 
     private var iconName: String {

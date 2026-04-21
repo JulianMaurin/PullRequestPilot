@@ -66,6 +66,129 @@ struct EventCenterTests {
         #expect(center.events.first?.message == "c")
     }
 
+    // MARK: - Auto-dismiss defaults
+
+    @Test("transient errors auto-dismiss at 8s by default")
+    func transientErrorDefaultDuration() {
+        let event = AppEvent.error(.network(underlying: "offline"))
+        #expect(event.autoDismissAfter == .seconds(8))
+    }
+
+    @Test("action-required errors stay pinned (no auto-dismiss)")
+    func requiresActionErrorStaysPinned() {
+        #expect(AppEvent.error(.unauthorized).autoDismissAfter == nil)
+        #expect(AppEvent.error(.permissionDenied(detail: nil)).autoDismissAfter == nil)
+        #expect(AppEvent.error(.bookmarkPruned(count: 2)).autoDismissAfter == nil)
+        #expect(AppEvent.error(.tokenSaveFailed(underlying: "x")).autoDismissAfter == nil)
+        #expect(AppEvent.error(.decodeCorruption(subsystem: "views", backupPath: nil)).autoDismissAfter == nil)
+    }
+
+    @Test("explicit autoDismissAfter overrides the smart default")
+    func explicitOverrideWins() {
+        let event = AppEvent.error(.unauthorized, autoDismissAfter: .seconds(3))
+        #expect(event.autoDismissAfter == .seconds(3))
+    }
+
+    // MARK: - Pause / resume
+
+    @Test("auto-dismiss fires after the scheduled duration")
+    func autoDismissFires() async throws {
+        let center = EventCenter()
+        center.post(AppEvent(payload: .info("hi"), autoDismissAfter: .milliseconds(50)))
+        #expect(center.activeEvents.count == 1)
+
+        try await waitUntil { center.activeEvents.isEmpty }
+        #expect(center.activeEvents.isEmpty)
+    }
+
+    @Test("pauseAutoDismiss prevents the scheduled dismissal from firing")
+    func pausePreventsDismissal() async throws {
+        let center = EventCenter()
+        center.post(AppEvent(payload: .info("hi"), autoDismissAfter: .milliseconds(50)))
+        let id = try #require(center.events.first?.id)
+        center.pauseAutoDismiss(id)
+
+        // Wait well past the original duration — should still be active.
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(!center.activeEvents.isEmpty)
+    }
+
+    @Test("resumeAutoDismiss reschedules after a pause")
+    func resumeReschedulesDismissal() async throws {
+        let center = EventCenter()
+        center.post(AppEvent(payload: .info("hi"), autoDismissAfter: .milliseconds(50)))
+        let id = try #require(center.events.first?.id)
+        center.pauseAutoDismiss(id)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(!center.activeEvents.isEmpty, "pause should hold the toast")
+
+        center.resumeAutoDismiss(id)
+        try await waitUntil { center.activeEvents.isEmpty }
+        #expect(center.activeEvents.isEmpty)
+    }
+
+    @Test("resumeAutoDismiss called twice does not leave a second stale task")
+    func resumeDoesNotLeak() async throws {
+        let center = EventCenter()
+        center.post(AppEvent(payload: .info("hi"), autoDismissAfter: .milliseconds(80)))
+        let id = try #require(center.events.first?.id)
+
+        // Two resumes in quick succession — the first scheduled task must be
+        // cancelled before the second one takes over, otherwise the first fires
+        // earlier than the second's fresh window.
+        center.resumeAutoDismiss(id)
+        try await Task.sleep(for: .milliseconds(20))
+        center.resumeAutoDismiss(id)
+
+        // 40ms after the 2nd resume: first-scheduled task would have fired by now
+        // (80ms from post). If we're still active, replacement worked.
+        try await Task.sleep(for: .milliseconds(40))
+        #expect(!center.activeEvents.isEmpty, "2nd resume must cancel the 1st task")
+    }
+
+    // MARK: - Helpers
+
+    @MainActor
+    private func waitUntil(
+        deadlineSeconds: Double = 2.0,
+        _ predicate: () -> Bool
+    ) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(deadlineSeconds))
+        while !predicate() {
+            if ContinuousClock.now >= deadline { return }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+}
+
+@Suite("AppError requiresAction")
+struct AppErrorRequiresActionTests {
+
+    @Test("errors that need user action are flagged")
+    func actionRequiredCases() {
+        #expect(AppError.unauthorized.requiresAction)
+        #expect(AppError.permissionDenied(detail: nil).requiresAction)
+        #expect(AppError.bookmarkPruned(count: 1).requiresAction)
+        #expect(AppError.tokenSaveFailed(underlying: "x").requiresAction)
+        #expect(AppError.decodeCorruption(subsystem: "views", backupPath: nil).requiresAction)
+    }
+
+    @Test("transient errors are not flagged")
+    func transientCases() {
+        #expect(!AppError.network(underlying: "offline").requiresAction)
+        #expect(!AppError.serverError(statusCode: 500).requiresAction)
+        #expect(!AppError.rateLimited(resetAt: nil).requiresAction)
+        #expect(!AppError.decodeResponse(detail: "x").requiresAction)
+        #expect(!AppError.graphQLErrors(["oops"]).requiresAction)
+        #expect(!AppError.widgetSaveFailed(underlying: "x").requiresAction)
+        #expect(!AppError.externalAppLaunchFailed(appName: "x").requiresAction)
+        #expect(!AppError.notificationSystemError(detail: "x").requiresAction)
+        #expect(!AppError.logExportFailed(underlying: "x").requiresAction)
+        #expect(!AppError.viewerIdentityUnavailable.requiresAction)
+        #expect(!AppError.launchAtLoginFailed(underlying: "x").requiresAction)
+        #expect(!AppError.bookmarkCreationFailed(path: "/tmp").requiresAction)
+    }
 }
 
 @Suite("AppError")

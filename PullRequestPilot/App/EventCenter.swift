@@ -87,6 +87,26 @@ final class EventCenter {
         }
     }
 
+    /// Cancel the auto-dismiss timer for `id` so the toast stays visible.
+    /// Paired with `resumeAutoDismiss(_:)` — used by the toast overlay to
+    /// pause dismissal while the user hovers.
+    func pauseAutoDismiss(_ id: UUID) {
+        autoDismissTasksStorage.withLock { tasks in
+            tasks.removeValue(forKey: id)?.cancel()
+        }
+    }
+
+    /// Reschedule the auto-dismiss timer for `id` using the event's original
+    /// `autoDismissAfter` duration. No-op when the event has no duration, is
+    /// already dismissed, or no longer exists in history.
+    func resumeAutoDismiss(_ id: UUID) {
+        guard !dismissed.contains(id),
+              let event = events.first(where: { $0.id == id }),
+              let duration = event.autoDismissAfter
+        else { return }
+        scheduleAutoDismiss(id: id, after: duration)
+    }
+
     /// Dismiss every error with this exact case (ignoring associated values).
     /// Used when a subsystem recovers and wants to clear its prior banner.
     func dismissAll(matching match: (AppError) -> Bool) {
@@ -124,7 +144,7 @@ final class EventCenter {
             }
         }
         autoDismissTasksStorage.withLock { tasks in
-            tasks[id] = task
+            tasks.updateValue(task, forKey: id)?.cancel()
         }
     }
 

@@ -51,7 +51,17 @@ struct AppEvent: Sendable, Identifiable, Equatable {
 
     // MARK: - Convenience constructors
 
-    static func error(_ error: AppError, autoDismissAfter: Duration? = nil) -> AppEvent {
+    /// Errors auto-dismiss at 8s unless the error requires user action
+    /// (`AppError.requiresAction`), in which case the toast stays pinned
+    /// until explicitly dismissed.
+    static func error(_ error: AppError) -> AppEvent {
+        let duration: Duration? = error.requiresAction ? nil : .seconds(8)
+        return AppEvent(payload: .error(error), autoDismissAfter: duration)
+    }
+
+    /// Explicit-duration overload: callers opt into a non-default dismissal
+    /// window (including `nil` to pin an otherwise-transient error).
+    static func error(_ error: AppError, autoDismissAfter: Duration?) -> AppEvent {
         AppEvent(payload: .error(error), autoDismissAfter: autoDismissAfter)
     }
 
@@ -147,6 +157,34 @@ enum AppError: LocalizedError, Sendable, Hashable {
         switch self {
         case .network: return true
         default: return false
+        }
+    }
+
+    /// True when the user must take action before the error is meaningfully
+    /// resolved (update a token, re-grant sandbox access, read a backup path).
+    /// These errors stay pinned on the toast overlay; transient failures
+    /// auto-dismiss.
+    var requiresAction: Bool {
+        switch self {
+        case .unauthorized,
+             .permissionDenied,
+             .tokenSaveFailed,
+             .decodeCorruption,
+             .bookmarkPruned:
+            return true
+        case .rateLimited,
+             .network,
+             .serverError,
+             .graphQLErrors,
+             .decodeResponse,
+             .bookmarkCreationFailed,
+             .viewerIdentityUnavailable,
+             .launchAtLoginFailed,
+             .widgetSaveFailed,
+             .externalAppLaunchFailed,
+             .notificationSystemError,
+             .logExportFailed:
+            return false
         }
     }
 }
