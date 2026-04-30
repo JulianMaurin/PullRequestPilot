@@ -36,13 +36,103 @@ struct EventCenterTests {
         #expect(center.events.first?.appError == .viewerIdentityUnavailable)
     }
 
-    @Test("identical events posted in quick succession are deduped")
-    func dedupeWindow() {
+    // MARK: - Dedupe while visible
+
+    @Test("rapid same-payload posts coalesce into one event")
+    func samePayloadRapidFirePosts_resultInSingleEvent() {
         let center = EventCenter()
         center.post(.error(.unauthorized))
         center.post(.error(.unauthorized))
         center.post(.error(.unauthorized))
         #expect(center.events.count == 1)
+        #expect(center.activeEvents.count == 1)
+    }
+
+    @Test("same-payload re-post past the old 3s window still coalesces while visible")
+    func samePayloadRePost_pastOldDedupeWindow_stillCoalescesWhileVisible() async {
+        let clock = TestClock()
+        let center = EventCenter(clock: clock)
+
+        center.post(AppEvent(payload: .info("ongoing"), autoDismissAfter: .seconds(8)))
+        clock.advance(by: .seconds(4)) // past the legacy 3s suppression window
+        await yieldRepeatedly()
+
+        center.post(AppEvent(payload: .info("ongoing"), autoDismissAfter: .seconds(8)))
+        #expect(center.events.count == 1, "second post must not insert a new event while the first is still visible")
+        #expect(center.activeEvents.count == 1)
+    }
+
+    @Test("same-payload re-post resets the auto-dismiss timer")
+    func samePayloadRePost_refreshesAutoDismissTimer() async throws {
+        let clock = TestClock()
+        let center = EventCenter(clock: clock)
+
+        center.post(AppEvent(payload: .info("ongoing"), autoDismissAfter: .seconds(8)))
+        clock.advance(by: .seconds(4))
+        await yieldRepeatedly()
+
+        center.post(AppEvent(payload: .info("ongoing"), autoDismissAfter: .seconds(8)))
+        // Yield so the refreshed dismiss task computes its deadline
+        // (clock.now + 8s) before any further advance — TestClock reads `now`
+        // lazily inside the task body, so an advance before the body runs
+        // would shift the deadline forward.
+        await yieldRepeatedly()
+
+        // T = 4s post-second-post = 8s post-first-post (the original timer
+        // would have fired now had it not been cancelled by the refresh).
+        clock.advance(by: .seconds(4))
+        await yieldRepeatedly()
+        #expect(!center.activeEvents.isEmpty, "timer must be reset on the second post — toast still visible past the original 8s")
+
+        // T = 9s post-second-post = beyond the refreshed 8s window
+        clock.advance(by: .seconds(5))
+        try await waitUntil { center.activeEvents.isEmpty }
+        #expect(center.activeEvents.isEmpty)
+    }
+
+    @Test("same-payload re-post after manual dismiss inserts a new event")
+    func samePayloadRePost_afterManualDismiss_insertsNewEvent() throws {
+        let center = EventCenter()
+        center.post(.error(.network(underlying: "offline")))
+        let firstID = try #require(center.events.first?.id)
+        center.dismiss(firstID)
+
+        center.post(.error(.network(underlying: "offline")))
+        #expect(center.events.count == 2)
+        #expect(center.activeEvents.count == 1)
+        #expect(center.activeEvents.first?.id != firstID)
+    }
+
+    @Test("same-payload re-post after auto-dismiss inserts a new event")
+    func samePayloadRePost_afterAutoDismiss_insertsNewEvent() async throws {
+        let center = EventCenter()
+        center.post(AppEvent(payload: .info("hi"), autoDismissAfter: .milliseconds(50)))
+        try await waitUntil { center.activeEvents.isEmpty }
+
+        center.post(AppEvent(payload: .info("hi"), autoDismissAfter: .milliseconds(50)))
+        #expect(center.events.count == 2)
+        #expect(center.activeEvents.count == 1)
+    }
+
+    @Test("different payloads stay independent (distinct associated values)")
+    func differentPayloads_areIndependent() {
+        let center = EventCenter()
+        center.post(.error(.serverError(statusCode: 503)))
+        center.post(.error(.serverError(statusCode: 502)))
+        #expect(center.events.count == 2)
+        #expect(center.activeEvents.count == 2)
+    }
+
+    @Test("pinned error re-post is a no-op")
+    func pinnedError_rePost_isNoOp() throws {
+        let center = EventCenter()
+        center.post(.error(.unauthorized))
+        let firstID = try #require(center.events.first?.id)
+
+        center.post(.error(.unauthorized))
+        #expect(center.events.count == 1)
+        #expect(center.events.first?.id == firstID)
+        #expect(center.activeEvents.count == 1)
     }
 
     @Test("dismissAll(matching:) removes events matching the predicate")

@@ -37,7 +37,6 @@ final class EventCenter {
     var activeEvents: [AppEvent] { events.filter { !dismissed.contains($0.id) } }
 
     private var dismissed: Set<UUID> = []
-    private var dedupeWindow: [DedupeKey: Date] = [:]
     /// Lock-backed so deinit can cancel tasks without hopping to MainActor.
     private let autoDismissTasksStorage = OSAllocatedUnfairLock<[UUID: Task<Void, Never>]>(initialState: [:])
     private let maxHistory: Int
@@ -58,10 +57,21 @@ final class EventCenter {
 
     // MARK: - Public API
 
-    /// Post an event. Identical events within a short window are deduped to
-    /// avoid toast fatigue when a failing subsystem retries in a tight loop.
+    /// Post an event. If a matching payload is already visible (not dismissed,
+    /// not auto-expired), refresh that toast's auto-dismiss timer instead of
+    /// inserting a copy. This keeps the UI to one toast per ongoing problem
+    /// while still logging every occurrence for incident timelines.
     func post(_ event: AppEvent) {
-        if shouldSuppressDuplicate(event) { return }
+        logEvent(event)
+
+        if let existing = events.first(where: { existing in
+            !dismissed.contains(existing.id) && existing.payload == event.payload
+        }) {
+            if let duration = existing.autoDismissAfter {
+                scheduleAutoDismiss(id: existing.id, after: duration)
+            }
+            return
+        }
 
         events.insert(event, at: 0)
         if events.count > maxHistory {
@@ -72,8 +82,6 @@ final class EventCenter {
                 for e in dropped { tasks.removeValue(forKey: e.id)?.cancel() }
             }
         }
-
-        logEvent(event)
 
         if let duration = event.autoDismissAfter {
             scheduleAutoDismiss(id: event.id, after: duration)
@@ -159,30 +167,4 @@ final class EventCenter {
         }
     }
 
-    // MARK: - Dedupe
-
-    /// Squash repeat posts of the same payload inside a 3-second window.
-    private func shouldSuppressDuplicate(_ event: AppEvent) -> Bool {
-        let key = DedupeKey(payload: event.payload)
-        let now = Date.now
-        if let last = dedupeWindow[key], now.timeIntervalSince(last) < 3 {
-            return true
-        }
-        dedupeWindow[key] = now
-        // Opportunistic cleanup
-        dedupeWindow = dedupeWindow.filter { now.timeIntervalSince($0.value) < 30 }
-        return false
-    }
-
-    private struct DedupeKey: Hashable {
-        let discriminator: String
-
-        init(payload: AppEvent.Payload) {
-            switch payload {
-            case .error(let err): self.discriminator = "error:" + String(describing: err)
-            case .warning(let text): self.discriminator = "warning:" + text
-            case .info(let text): self.discriminator = "info:" + text
-            }
-        }
-    }
 }
