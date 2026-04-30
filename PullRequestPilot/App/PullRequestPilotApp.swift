@@ -24,6 +24,9 @@ struct PullRequestPilotApp: App {
                     userDefaults: appState.userDefaults
                 )
                 .background(WindowAccessor())
+                .overlay(alignment: .top) {
+                    ToastOverlay(events: appState.events)
+                }
                 .onOpenURL { url in
                     handleIncomingURL(url)
                 }

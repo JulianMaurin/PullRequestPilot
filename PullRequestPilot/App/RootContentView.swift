@@ -59,9 +59,6 @@ struct RootContentView: View {
                 .navigationTitle("PR Views")
             }
         }
-        .overlay(alignment: .top) {
-            ToastOverlay(events: events)
-        }
         .onChange(of: settingsViewModel.hasSavedToken) { _, hasSaved in
             if !hasSaved {
                 needsInitialSetup = true
