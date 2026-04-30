@@ -24,6 +24,9 @@ struct PullRequestPilotApp: App {
                     userDefaults: appState.userDefaults
                 )
                 .background(WindowAccessor())
+                // Anchor toasts at the Window scene root, not inside
+                // NavigationStack — the navigation frame shifts between
+                // windowed and fullscreen modes, this rect is stable.
                 .overlay(alignment: .top) {
                     ToastOverlay(events: appState.events)
                 }
