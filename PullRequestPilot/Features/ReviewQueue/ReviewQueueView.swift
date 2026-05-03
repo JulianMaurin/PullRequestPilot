@@ -686,27 +686,29 @@ struct ReviewQueueView: View {
                 .frame(width: 24)
             }
             PullRequestRowView(pullRequest: pr, stackSize: stackSize, onToggleStack: onToggleStack, onFilterBy: appendFilter) {
-                Button("Open in Browser") {
-                    viewModel.openInBrowser(pr)
-                }
-                if let match = viewModel.localMatch(for: pr) {
-                    if viewModel.isVSCodeAvailable {
-                        Button("Open in VS Code") {
-                            viewModel.openInEditor(pr)
-                        }
-                        .help(openInEditorHelp(match))
+                Menu("Open in") {
+                    Button("Browser") {
+                        viewModel.openInBrowser(pr)
                     }
-                    if viewModel.isITermAvailable {
-                        Button("Open in iTerm") {
-                            viewModel.openInTerminal(pr)
+                    if let match = viewModel.localMatch(for: pr) {
+                        if viewModel.isVSCodeAvailable {
+                            Button("VS Code") {
+                                viewModel.openInEditor(pr)
+                            }
+                            .help(openInEditorHelp(match))
                         }
-                        .help(openInEditorHelp(match))
-                    }
-                    if viewModel.isCmuxAvailable {
-                        Button("Open in cmux") {
-                            viewModel.openInCmux(pr)
+                        if viewModel.isITermAvailable {
+                            Button("iTerm") {
+                                viewModel.openInTerminal(pr)
+                            }
+                            .help(openInEditorHelp(match))
                         }
-                        .help(openInEditorHelp(match))
+                        if viewModel.isCmuxAvailable {
+                            Button("cmux") {
+                                viewModel.openInCmux(pr)
+                            }
+                            .help(openInEditorHelp(match))
+                        }
                     }
                 }
                 Divider()
