@@ -702,6 +702,12 @@ struct ReviewQueueView: View {
                         }
                         .help(openInEditorHelp(match))
                     }
+                    if viewModel.isCmuxAvailable {
+                        Button("Open in cmux") {
+                            viewModel.openInCmux(pr)
+                        }
+                        .help(openInEditorHelp(match))
+                    }
                 }
                 Divider()
                 Button("Copy URL") {

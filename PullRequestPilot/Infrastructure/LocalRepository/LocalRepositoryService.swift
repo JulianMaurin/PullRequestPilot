@@ -170,6 +170,11 @@ final class LocalRepositoryService {
         return NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil
     }
 
+    var isCmuxAvailable: Bool {
+        guard let bundleID = Self.appBundleIDs["cmux"] else { return false }
+        return NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil
+    }
+
     func openInVSCode(path: URL) {
         launchApp("Visual Studio Code", path: path)
     }
@@ -178,9 +183,14 @@ final class LocalRepositoryService {
         launchApp("iTerm", path: path)
     }
 
+    func openInCmux(path: URL) {
+        launchApp("cmux", path: path)
+    }
+
     private static let appBundleIDs: [String: String] = [
         "Visual Studio Code": "com.microsoft.VSCode",
         "iTerm": "com.googlecode.iterm2",
+        "cmux": "com.cmuxterm.app",
     ]
 
     private func launchApp(_ appName: String, path: URL) {

@@ -728,7 +728,7 @@ struct DashboardViewModelExtendedTests {
         viewModel.stopAutoRefresh()
     }
 
-    // MARK: - openInEditor / openInTerminal with no match
+    // MARK: - openInEditor / openInTerminal / openInCmux with no match
 
     @Test("openInEditor is no-op when no local match")
     func openInEditorNoMatch() {
@@ -744,6 +744,14 @@ struct DashboardViewModelExtendedTests {
         let pr = TestPullRequestFactory.make()
         // Should not crash
         viewModel.openInTerminal(pr)
+    }
+
+    @Test("openInCmux is no-op when no local match")
+    func openInCmuxNoMatch() {
+        let (viewModel, _) = makeViewModel(suiteName: "OpenCmuxNoMatch")
+        let pr = TestPullRequestFactory.make()
+        // Should not crash
+        viewModel.openInCmux(pr)
     }
 
     // MARK: - notifiedViewIDs persistence
@@ -1069,7 +1077,7 @@ struct DashboardViewModelExtendedTests {
         #expect(try #require(viewModel.viewStates[testView.id]).pullRequests.count == 6)
     }
 
-    // MARK: - isVSCodeAvailable / isITermAvailable delegation
+    // MARK: - isVSCodeAvailable / isITermAvailable / isCmuxAvailable delegation
 
     @Test("isVSCodeAvailable delegates to localRepositoryService")
     func isVSCodeAvailableDelegation() {
@@ -1081,6 +1089,12 @@ struct DashboardViewModelExtendedTests {
     func isITermAvailableDelegation() {
         let (viewModel, _) = makeViewModel(suiteName: "ITermAvail")
         #expect(viewModel.isITermAvailable == localRepoService.isITermAvailable)
+    }
+
+    @Test("isCmuxAvailable delegates to localRepositoryService")
+    func isCmuxAvailableDelegation() {
+        let (viewModel, _) = makeViewModel(suiteName: "CmuxAvail")
+        #expect(viewModel.isCmuxAvailable == localRepoService.isCmuxAvailable)
     }
 
 }

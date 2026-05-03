@@ -428,6 +428,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
 
     var isVSCodeAvailable: Bool { localRepositoryService.isVSCodeAvailable }
     var isITermAvailable: Bool { localRepositoryService.isITermAvailable }
+    var isCmuxAvailable: Bool { localRepositoryService.isCmuxAvailable }
 
     func localMatch(for pr: PullRequest) -> LocalRepoMatch? {
         localRepositoryService.findLocalDirectory(for: pr)
@@ -445,6 +446,11 @@ final class DashboardViewModel: DashboardActionsProtocol {
     func openInTerminal(_ pr: PullRequest) {
         guard let match = localMatch(for: pr) else { return }
         localRepositoryService.openInITerm(path: match.path)
+    }
+
+    func openInCmux(_ pr: PullRequest) {
+        guard let match = localMatch(for: pr) else { return }
+        localRepositoryService.openInCmux(path: match.path)
     }
 
     // MARK: - Query Editing
