@@ -151,6 +151,13 @@ struct ReviewQueueView: View {
             syncEditingQuery()
             prDetailViewModel.deselect()
         }
+        .onChange(of: isQueryFocused) {
+            // Click-away without Return abandons the edit; revert the field
+            // to the active query rather than displaying uncommitted text.
+            if !isQueryFocused {
+                syncEditingQuery()
+            }
+        }
         .onKeyPress(.escape) {
             prDetailViewModel.deselect()
             return .handled
@@ -193,6 +200,10 @@ struct ReviewQueueView: View {
     // MARK: - Subviews
 
     private var viewTabs: some View {
+        // The bar-level drop delegate is the fallback that clears the drag
+        // marker when a tab is released between tabs, after the last tab, or
+        // on the add button — releases the per-tab delegates never see.
+        // Without it the dragged tab stays at 40% opacity indefinitely.
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
                 ForEach(viewModel.views) { dashView in
@@ -217,6 +228,7 @@ struct ReviewQueueView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
         }
+        .onDrop(of: [.text], delegate: TabDragCleanupDelegate(draggedID: $draggedViewID))
     }
 
     private var addButton: some View {
@@ -312,6 +324,10 @@ struct ReviewQueueView: View {
     private func commitQueryEdit() {
         guard let id = viewModel.selectedViewID else { return }
         viewModel.commitQueryEdit(viewID: id, newQuery: editingQuery)
+        // The view model rejects empty/unchanged commits; resync so the field
+        // never displays text that is not the active query (same pattern as
+        // appendFilter).
+        syncEditingQuery()
     }
 
     private var addViewPopover: some View {
@@ -358,22 +374,45 @@ struct ReviewQueueView: View {
         Task { await viewModel.refresh(viewID: newView.id) }
     }
 
-    @ViewBuilder
     private var contentArea: some View {
-        if viewModel.views.isEmpty {
-            noViewsMessage
-        } else {
-            let state = viewModel.selectedViewState
-            if state.isLoading && !state.hasData {
-                loadingView
-            } else if let error = state.error, !state.hasData {
-                errorView(error, isNetworkError: state.isNetworkError)
-            } else if state.isEmpty {
-                emptyView
+        Group {
+            if viewModel.views.isEmpty {
+                noViewsMessage
             } else {
-                listView(state.pullRequests)
+                let state = viewModel.selectedViewState
+                if state.isLoading && !state.hasData {
+                    loadingView
+                } else if let error = state.error, !state.hasData {
+                    errorView(error, isNetworkError: state.isNetworkError)
+                } else if state.isEmpty {
+                    // A page can arrive fully filtered (hide-reviewed, non-PR
+                    // items) while nextCursor is still set — showing "No pull
+                    // requests" there is a lie; keep fetching until a page
+                    // yields rows or paging genuinely ends. The error gate
+                    // mirrors the list sentinel's: no auto-retry of a failed
+                    // page (the errorView branch above normally intercepts,
+                    // but this must not loop if that ordering ever changes).
+                    if state.error == nil, state.canLoadMore || state.isLoadingMore {
+                        loadingView
+                            .id(state.nextCursor)
+                            .onAppear {
+                                guard viewModel.selectedViewState.canLoadMore,
+                                      viewModel.selectedViewState.error == nil,
+                                      let id = viewModel.selectedViewID else { return }
+                                Task { await viewModel.loadMore(viewID: id) }
+                            }
+                    } else {
+                        emptyView
+                    }
+                } else {
+                    listView
+                }
             }
         }
+        // Fallback for tab drags released over the list/detail area — the
+        // per-tab drop delegates never fire there, which left the dragged
+        // tab stuck at 40% opacity.
+        .onDrop(of: [.text], delegate: TabDragCleanupDelegate(draggedID: $draggedViewID))
     }
 
     private var noViewsMessage: some View {
@@ -457,7 +496,7 @@ struct ReviewQueueView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func listView(_ pullRequests: [PullRequest]) -> some View {
+    private var listView: some View {
         // Memoized on the view model — repeated body evaluations within a
         // render cycle return the cached grouping in O(1). See FINDING-005.
         let grouped = viewModel.groupedSelected
@@ -468,7 +507,28 @@ struct ReviewQueueView: View {
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(grouped.enumerated()), id: \.element.org) { _, orgGroup in
-                    orgSection(orgGroup, pullRequests: pullRequests)
+                    orgSection(orgGroup)
+                }
+                // Load-more sentinel. Keyed to the row identity, the trigger
+                // went dead whenever the fetch-order last PR was a stack
+                // child, inside a collapsed section, or filtered out — page 2
+                // became unreachable. The sentinel fires on reaching the
+                // rendered bottom regardless of grouping; `.id(nextCursor)`
+                // re-creates it per page so it re-arms while still visible.
+                // The error gate stops the remove/re-insert cycle from
+                // retrying a failed page in a tight loop (offline, rate
+                // limit); the next successful refresh clears the error and
+                // re-arms the sentinel.
+                if viewModel.selectedViewState.canLoadMore, viewModel.selectedViewState.error == nil {
+                    Color.clear
+                        .frame(height: 1)
+                        .id(viewModel.selectedViewState.nextCursor)
+                        .onAppear {
+                            guard viewModel.selectedViewState.canLoadMore,
+                                  viewModel.selectedViewState.error == nil,
+                                  let id = viewModel.selectedViewID else { return }
+                            Task { await viewModel.loadMore(viewID: id) }
+                        }
                 }
                 if viewModel.selectedViewState.isLoadingMore {
                     HStack {
@@ -488,7 +548,7 @@ struct ReviewQueueView: View {
     }
 
     @ViewBuilder
-    private func orgSection(_ orgGroup: DashboardViewModel.OrgGroup, pullRequests: [PullRequest]) -> some View {
+    private func orgSection(_ orgGroup: DashboardViewModel.OrgGroup) -> some View {
         let isOrgCollapsed = viewModel.collapsedOrgs.contains(orgGroup.org)
         let prCount = orgGroup.repos.reduce(0) { $0 + $1.stacks.reduce(0) { $0 + $1.totalCount } }
 
@@ -575,13 +635,13 @@ struct ReviewQueueView: View {
 
         if !isOrgCollapsed {
             ForEach(orgGroup.repos, id: \.repo) { repoGroup in
-                repoSection(repoGroup, org: orgGroup.org, pullRequests: pullRequests)
+                repoSection(repoGroup, org: orgGroup.org)
             }
         }
     }
 
     @ViewBuilder
-    private func repoSection(_ repoGroup: DashboardViewModel.RepoGroup, org: String, pullRequests: [PullRequest]) -> some View {
+    private func repoSection(_ repoGroup: DashboardViewModel.RepoGroup, org: String) -> some View {
         let repoKey = "\(org)/\(repoGroup.repo)"
         let isRepoCollapsed = viewModel.collapsedRepos.contains(repoKey)
         let prCount = repoGroup.stacks.reduce(0) { $0 + $1.totalCount }
@@ -638,16 +698,16 @@ struct ReviewQueueView: View {
 
         if !isRepoCollapsed {
             ForEach(repoGroup.stacks) { stack in
-                stackView(stack, isLast: stack.root.id == pullRequests.last?.id)
+                stackView(stack)
             }
         }
     }
 
     @ViewBuilder
-    private func stackView(_ stack: DashboardViewModel.PRStack, isLast: Bool) -> some View {
+    private func stackView(_ stack: DashboardViewModel.PRStack) -> some View {
         let isExpanded = expandedStacks.contains(stack.id)
 
-        pullRequestItem(stack.root, isLast: isLast && stack.children.isEmpty, stackSize: stack.totalCount) {
+        pullRequestItem(stack.root, stackSize: stack.totalCount) {
             if stack.totalCount > 1 {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     if isExpanded {
@@ -661,14 +721,13 @@ struct ReviewQueueView: View {
 
         if isExpanded {
             ForEach(stack.children) { child in
-                pullRequestItem(child, isLast: isLast && child.id == stack.children.last?.id, stackSize: 0, isStacked: true) {}
+                pullRequestItem(child, stackSize: 0, isStacked: true) {}
             }
         }
     }
 
     private func pullRequestItem(
         _ pr: PullRequest,
-        isLast: Bool,
         stackSize: Int,
         isStacked: Bool = false,
         onToggleStack: @escaping () -> Void
@@ -738,15 +797,6 @@ struct ReviewQueueView: View {
         }
         .onTapGesture {
             prDetailViewModel.selectPR(pr)
-        }
-        .onAppear {
-            if isLast, viewModel.selectedViewState.canLoadMore {
-                Task {
-                    if let id = viewModel.selectedViewID {
-                        await viewModel.loadMore(viewID: id)
-                    }
-                }
-            }
         }
     }
 
@@ -868,6 +918,30 @@ private struct TabDropDelegate: DropDelegate {
         withAnimation(.easeInOut(duration: 0.2)) {
             viewModel.moveView(from: sourceID, to: targetID)
         }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+}
+
+/// Clears the drag marker for releases the per-tab delegates never see
+/// (between tabs, on the add button, over the content area). The clearing
+/// must NOT live in `TabDropDelegate.dropExited`: exit/enter ordering between
+/// adjacent tabs is not guaranteed, and the gaps in the tab bar fire
+/// `dropExited` mid-drag — clearing there would nil the marker and break
+/// live reordering. `validateDrop` keeps this target inert for text drags
+/// that did not originate from a tab.
+private struct TabDragCleanupDelegate: DropDelegate {
+    @Binding var draggedID: UUID?
+
+    func validateDrop(info: DropInfo) -> Bool {
+        draggedID != nil
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggedID = nil
+        return true
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
