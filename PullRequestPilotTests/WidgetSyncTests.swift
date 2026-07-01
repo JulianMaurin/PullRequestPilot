@@ -19,9 +19,27 @@ struct WidgetSyncTests {
 
     private static let emptyData = WidgetData(views: [], lastUpdated: Date(timeIntervalSince1970: 0))
 
+    private static func tempStorageURL() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("widget-sync-tests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("widget-data.json")
+    }
+
+    /// Storage points at a per-test temp file and the reload action defaults
+    /// to a no-op, so no test write reaches the real app-group container or
+    /// pokes the widget daemon.
     @MainActor
-    private static func makeSync(throttleInterval: TimeInterval, counter: BuildCounter) -> WidgetSync {
-        WidgetSync(throttleInterval: throttleInterval) {
+    private static func makeSync(
+        throttleInterval: TimeInterval,
+        counter: BuildCounter,
+        storageURL: URL? = nil,
+        reloadTimelines: @escaping @Sendable () -> Void = {}
+    ) -> WidgetSync {
+        WidgetSync(
+            throttleInterval: throttleInterval,
+            storageURL: storageURL ?? tempStorageURL(),
+            reloadTimelines: reloadTimelines
+        ) {
             counter.increment()
             return emptyData
         }
@@ -89,6 +107,26 @@ struct WidgetSyncTests {
         // writeNow() must write immediately anyway.
         sync.writeNow()
         #expect(counter.count == 2)
+    }
+
+    @MainActor
+    @Test("writeNow() saves through the injected storage URL and reloads timelines")
+    func writeNowUsesInjectedStorage() throws {
+        let counter = BuildCounter()
+        let reloads = BuildCounter()
+        let url = Self.tempStorageURL()
+        let sync = Self.makeSync(
+            throttleInterval: 1.0,
+            counter: counter,
+            storageURL: url,
+            reloadTimelines: { reloads.increment() }
+        )
+        sync.writeNow()
+        #expect(counter.count == 1)
+        #expect(reloads.count == 1)
+        let saved = try #require(WidgetData.load(from: url))
+        #expect(saved.views.isEmpty)
+        #expect(saved.lastUpdated == Date(timeIntervalSince1970: 0))
     }
 
     @MainActor

@@ -9,6 +9,10 @@ final class WidgetSync {
 
     private let buildWidgetData: @MainActor () -> WidgetData
     private let throttleInterval: TimeInterval
+    /// Write destination override; nil uses the shared app-group container.
+    /// Injected by tests so writes never touch real widget data.
+    private let storageURL: URL?
+    private let reloadTimelines: @Sendable () -> Void
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "WidgetSync")
 
     private var lastSyncAt: Date?
@@ -16,9 +20,16 @@ final class WidgetSync {
 
     // MARK: - Init
 
-    init(throttleInterval: TimeInterval = 0.5, buildWidgetData: @escaping @MainActor () -> WidgetData) {
+    init(
+        throttleInterval: TimeInterval = 0.5,
+        storageURL: URL? = nil,
+        reloadTimelines: @escaping @Sendable () -> Void = WidgetSync.reloadRealTimelines,
+        buildWidgetData: @escaping @MainActor () -> WidgetData
+    ) {
         self.buildWidgetData = buildWidgetData
         self.throttleInterval = throttleInterval
+        self.storageURL = storageURL
+        self.reloadTimelines = reloadTimelines
     }
 
     deinit {
@@ -52,12 +63,24 @@ final class WidgetSync {
     func writeNow() {
         pendingSyncTask.withLock { $0?.cancel(); $0 = nil }
         let data = buildWidgetData()
-        data.save()
+        if let storageURL {
+            data.save(to: storageURL)
+        } else {
+            data.save()
+        }
         lastSyncAt = .now
-        WidgetCenter.shared.reloadAllTimelines()
+        reloadTimelines()
     }
 
     // MARK: - Private
+
+    /// Default reload action. Skips the real WidgetCenter poke under unit
+    /// tests (same guard as NotificationService.deliver) — DashboardViewModel
+    /// builds its own WidgetSync, so tests cannot inject a no-op there.
+    private nonisolated static func reloadRealTimelines() {
+        guard NSClassFromString("XCTestCase") == nil else { return }
+        WidgetCenter.shared.reloadAllTimelines()
+    }
 
     private func scheduleDeferredWrite(after delay: TimeInterval) {
         let task = Task { @MainActor [weak self] in

@@ -9,6 +9,14 @@ struct WidgetDataMappingTests {
     private let localRepoService = LocalRepositoryService()
 
     private func makeViewModel(suiteName: String) -> (DashboardViewModel, UUID) {
+        // Redirect widget writes to a per-test file: DashboardViewModel builds
+        // its own WidgetSync, so the process-global seam is the only injection
+        // point. Never reset — no later write may reach the real app-group
+        // container.
+        let widgetFileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("widget-mapping-\(suiteName)-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("widget-data.json")
+        WidgetData.setStorageURLOverride(widgetFileURL)
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         let store = ViewsStore(defaults: defaults)

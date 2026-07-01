@@ -71,6 +71,18 @@ struct WidgetDataTests {
         #expect(pr.compactAge == "1mo")
     }
 
+    @Test("compactAge clamps future-dated createdAt to 0m")
+    func compactAgeFutureDate() {
+        let pr = makeWidgetPR(createdAt: Date.now.addingTimeInterval(300))
+        #expect(pr.compactAge == "0m")
+    }
+
+    @Test("compactAge clamps large future clock skew to 0m")
+    func compactAgeLargeFutureSkew() {
+        let pr = makeWidgetPR(createdAt: Date.now.addingTimeInterval(3 * 86400))
+        #expect(pr.compactAge == "0m")
+    }
+
     // MARK: - repoShortName
 
     @Test("repoShortName extracts name after slash")
@@ -165,6 +177,60 @@ struct WidgetDataTests {
         #expect(decoded.views.count == 1)
         #expect(decoded.views[0].pullRequests[0].createdAt == Date(timeIntervalSince1970: 1700000000))
         #expect(decoded.lastUpdated == Date(timeIntervalSince1970: 1700000100))
+    }
+
+    // MARK: - load(from:) / save(to:)
+
+    private static func tempFileURL() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("widget-data-tests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("widget-data.json")
+    }
+
+    @Test("save(to:) then load(from:) round-trips through an explicit URL")
+    func saveLoadRoundTrip() throws {
+        let url = Self.tempFileURL()
+        let pr = makeWidgetPR(createdAt: Date(timeIntervalSince1970: 1700000000))
+        let viewData = WidgetViewData(id: "v1", title: "View", count: 1, approvedCount: 0, changesRequestedCount: 0, pullRequests: [pr])
+        let original = WidgetData(views: [viewData], lastUpdated: Date(timeIntervalSince1970: 1700000100))
+
+        original.save(to: url)
+
+        let loaded = try #require(WidgetData.load(from: url))
+        #expect(loaded.views == [viewData])
+        #expect(loaded.lastUpdated == Date(timeIntervalSince1970: 1700000100))
+    }
+
+    @Test("load(from:) returns nil when the file does not exist")
+    func loadMissingFile() {
+        #expect(WidgetData.load(from: Self.tempFileURL()) == nil)
+    }
+
+    @Test("load(from:) returns nil for undecodable data")
+    func loadCorruptData() throws {
+        let url = Self.tempFileURL()
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("not json".utf8).write(to: url)
+        #expect(WidgetData.load(from: url) == nil)
+    }
+
+    // No suspension between override, save(), and load() — the MainActor
+    // stretch keeps parallel suites that also set the override from
+    // interleaving between the write and the read-back.
+    @MainActor
+    @Test("setStorageURLOverride redirects load() and save()")
+    func storageOverrideRedirects() throws {
+        let url = Self.tempFileURL()
+        WidgetData.setStorageURLOverride(url)
+        let data = WidgetData(views: [], lastUpdated: Date(timeIntervalSince1970: 42))
+        data.save()
+        #expect(FileManager.default.fileExists(atPath: url.path))
+        let loaded = try #require(WidgetData.load())
+        #expect(loaded.views.isEmpty)
+        #expect(loaded.lastUpdated == Date(timeIntervalSince1970: 42))
     }
 
     // MARK: - WidgetPullRequest Hashable & Identifiable
