@@ -105,8 +105,7 @@ struct DashboardViewModelTests {
         defaults.removePersistentDomain(forName: "HideReviewedTests")
         let store = ViewsStore(defaults: defaults)
         await mockClient.setViewerLogin("testuser")
-        let identity = IdentityActorTestFactory.make(github: mockClient)
-        _ = try await identity.swap(to: "ghp_test_token")
+        let identity = try await IdentityActorTestFactory.makeAuthenticated(github: mockClient, token: "ghp_test_token")
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: identity, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Review", query: "is:pr", hideReviewed: true)
         viewModel.addView(testView)
@@ -307,7 +306,7 @@ struct DashboardViewModelTests {
 
     @Test("isBadgeEnabled and setBadge toggle correctly")
     func badgeToggle() {
-        let (viewModel, viewID) = makeViewModel(suiteName: "BadgeToggle")
+        let (viewModel, viewID) = makeViewModel(suiteName: "DashboardViewModelTests.BadgeToggle")
 
         #expect(!viewModel.isBadgeEnabled(for: viewID))
         viewModel.setBadge(for: viewID, enabled: true)
@@ -382,8 +381,8 @@ struct DashboardViewModelTests {
         let pr1 = makePullRequest(number: 1, title: "PR 1")
         let pr2 = makePullRequest(number: 2, title: "PR 2")
 
-        let defaults = UserDefaults(suiteName: "BadgeCallback")!
-        defaults.removePersistentDomain(forName: "BadgeCallback")
+        let defaults = UserDefaults(suiteName: "DashboardViewModelTests.BadgeCallback")!
+        defaults.removePersistentDomain(forName: "DashboardViewModelTests.BadgeCallback")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
@@ -447,7 +446,8 @@ struct DashboardViewModelTests {
         let defaults = UserDefaults(suiteName: "SwapViewer")!
         defaults.removePersistentDomain(forName: "SwapViewer")
         let store = ViewsStore(defaults: defaults)
-        let identity = IdentityActorTestFactory.make(github: mockClient)
+        let harness = IdentityActorTestFactory.makeHarness(github: mockClient)
+        let identity = harness.identity
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: identity, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
         let testView = DashboardView(id: UUID(), title: "Review", query: "is:pr", hideReviewed: true)
         viewModel.addView(testView)
@@ -455,6 +455,7 @@ struct DashboardViewModelTests {
         // First identity: "testuser"
         await mockClient.setViewerLogin("testuser")
         _ = try await identity.swap(to: "ghp_first")
+        try harness.deleteStoredToken()
 
         let approvedPR = makePullRequest(number: 1, title: "Approved", reviews: [
             UserReview(login: "testuser", state: .approved)
@@ -467,6 +468,7 @@ struct DashboardViewModelTests {
         // Swap to second identity: "otheruser"
         await mockClient.setViewerLogin("otheruser")
         _ = try await identity.swap(to: "ghp_second")
+        try harness.deleteStoredToken()
 
         await viewModel.refresh(viewID: testView.id)
         // Visible — the new user hasn't reviewed it, regression from 802d1bc9.

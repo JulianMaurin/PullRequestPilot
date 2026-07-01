@@ -11,15 +11,8 @@ import Testing
 @MainActor
 struct AvatarCacheTests {
 
-    private func makeSession() -> URLSession {
-        let config = URLSessionConfiguration.ephemeral
-        config.protocolClasses = [MockURLProtocol.self]
-        return URLSession(configuration: config)
-    }
-
-    private func makeCache(session: URLSession) -> AvatarCache {
-        let cache = AvatarCache(session: session)
-        return cache
+    private func makeCache(http: MockHTTPSession) -> AvatarCache {
+        AvatarCache(session: http.urlSession)
     }
 
     private func sampleImageData() -> Data {
@@ -33,13 +26,13 @@ struct AvatarCacheTests {
     // MARK: - Success Paths
 
     @Test func fetchesAndCachesImage() async {
-        let session = makeSession()
-        let cache = makeCache(session: session)
+        let http = MockHTTPSession()
+        let cache = makeCache(http: http)
         let url = URL(string: "https://avatars.example.com/user1.png")!
         let imageData = sampleImageData()
 
         var fetchCount = 0
-        MockURLProtocol.requestHandler = { _ in
+        http.handler = { _ in
             fetchCount += 1
             return try TestHTTP.response(url: url, body: imageData)
         }
@@ -55,13 +48,13 @@ struct AvatarCacheTests {
     }
 
     @Test func returnsDifferentImagesForDifferentURLs() async {
-        let session = makeSession()
-        let cache = makeCache(session: session)
+        let http = MockHTTPSession()
+        let cache = makeCache(http: http)
         let url1 = URL(string: "https://avatars.example.com/user1.png")!
         let url2 = URL(string: "https://avatars.example.com/user2.png")!
         let imageData = sampleImageData()
 
-        MockURLProtocol.requestHandler = { request in
+        http.handler = { request in
             try TestHTTP.response(for: request, body: imageData)
         }
 
@@ -74,11 +67,11 @@ struct AvatarCacheTests {
     // MARK: - Error Paths
 
     @Test func returnsNilOnNetworkError() async {
-        let session = makeSession()
-        let cache = makeCache(session: session)
+        let http = MockHTTPSession()
+        let cache = makeCache(http: http)
         let url = URL(string: "https://avatars.example.com/fail.png")!
 
-        MockURLProtocol.requestHandler = { _ in
+        http.handler = { _ in
             throw URLError(.notConnectedToInternet)
         }
 
@@ -87,11 +80,11 @@ struct AvatarCacheTests {
     }
 
     @Test func returnsNilForInvalidImageData() async {
-        let session = makeSession()
-        let cache = makeCache(session: session)
+        let http = MockHTTPSession()
+        let cache = makeCache(http: http)
         let url = URL(string: "https://avatars.example.com/bad.png")!
 
-        MockURLProtocol.requestHandler = { _ in
+        http.handler = { _ in
             try TestHTTP.response(url: url, body: Data("not an image".utf8))
         }
 
@@ -100,11 +93,11 @@ struct AvatarCacheTests {
     }
 
     @Test func returnsNilOnCancellation() async {
-        let session = makeSession()
-        let cache = makeCache(session: session)
+        let http = MockHTTPSession()
+        let cache = makeCache(http: http)
         let url = URL(string: "https://avatars.example.com/cancel.png")!
 
-        MockURLProtocol.requestHandler = { _ in
+        http.handler = { _ in
             throw CancellationError()
         }
 
@@ -115,13 +108,13 @@ struct AvatarCacheTests {
     // MARK: - Coalescing
 
     @Test func concurrentRequestsForSameURLFetchOnce() async {
-        let session = makeSession()
-        let cache = makeCache(session: session)
+        let http = MockHTTPSession()
+        let cache = makeCache(http: http)
         let url = URL(string: "https://avatars.example.com/shared.png")!
         let imageData = sampleImageData()
 
         let fetchCount = OSAllocatedUnfairLock<Int>(initialState: 0)
-        MockURLProtocol.requestHandler = { _ in
+        http.handler = { _ in
             fetchCount.withLock { $0 += 1 }
             Thread.sleep(forTimeInterval: 0.02)
             return try TestHTTP.response(url: url, body: imageData)

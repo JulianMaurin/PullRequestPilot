@@ -7,24 +7,19 @@ import Testing
 @Suite("GitHubClient coalescing", .serialized)
 struct GitHubClientCoalescingTests {
 
-    private func makeSession() -> URLSession {
-        let config = URLSessionConfiguration.ephemeral
-        config.protocolClasses = [MockURLProtocol.self]
-        return URLSession(configuration: config)
-    }
-
-    private func makeClient(token: String = "valid") -> GitHubClient {
-        GitHubClient(tokenProvider: { token }, session: makeSession())
+    private func makeClient(token: String = "valid") -> (client: GitHubClient, http: MockHTTPSession) {
+        let http = MockHTTPSession()
+        return (GitHubClient(tokenProvider: { token }, session: http.urlSession), http)
     }
 
     /// Two concurrent fetches for the same query + token should hit the
     /// network once. This is the core promise of the coalescer.
     @Test("identical concurrent queries hit the network once")
     func concurrentIdenticalQueriesShareOneRequest() async throws {
-        let client = makeClient()
+        let (client, http) = makeClient()
         let callCount = OSAllocatedUnfairLock<Int>(initialState: 0)
         let body = #"{"data":{"search":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}"#
-        MockURLProtocol.requestHandler = { request in
+        http.handler = { request in
             callCount.withLock { $0 += 1 }
             // Hold the response a beat so the two callers have time to coalesce.
             Thread.sleep(forTimeInterval: 0.02)
@@ -41,10 +36,10 @@ struct GitHubClientCoalescingTests {
     /// Distinct queries must not be coalesced — both must reach the network.
     @Test("distinct queries each hit the network")
     func distinctQueriesRunSeparately() async throws {
-        let client = makeClient()
+        let (client, http) = makeClient()
         let callCount = OSAllocatedUnfairLock<Int>(initialState: 0)
         let body = #"{"data":{"search":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}"#
-        MockURLProtocol.requestHandler = { request in
+        http.handler = { request in
             callCount.withLock { $0 += 1 }
             Thread.sleep(forTimeInterval: 0.02)
             return try TestHTTP.response(for: request, body: Data(body.utf8))
@@ -62,10 +57,10 @@ struct GitHubClientCoalescingTests {
     /// count on the wire.
     @Test("10 concurrent refreshes with 80% overlap drop to distinct count")
     func heavyOverlapDropsToDistinct() async throws {
-        let client = makeClient()
+        let (client, http) = makeClient()
         let callCount = OSAllocatedUnfairLock<Int>(initialState: 0)
         let body = #"{"data":{"search":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}"#
-        MockURLProtocol.requestHandler = { request in
+        http.handler = { request in
             callCount.withLock { $0 += 1 }
             Thread.sleep(forTimeInterval: 0.03)
             return try TestHTTP.response(for: request, body: Data(body.utf8))

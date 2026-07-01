@@ -7,17 +7,18 @@ import UserNotifications
 @MainActor
 struct NotificationServiceTests {
 
-    private func makeService() -> (NotificationService, EventCenter) {
-        let defaults = UserDefaults(suiteName: "NotificationServiceTests.\(UUID().uuidString)")!
-        defaults.removePersistentDomain(forName: defaults.dictionaryRepresentation().keys.first ?? "")
+    private func makeService() throws -> (NotificationService, EventCenter) {
+        let suiteName = "NotificationServiceTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
         let center = EventCenter()
         let service = NotificationService(defaults: defaults, reporter: center.reporter())
         return (service, center)
     }
 
     @Test("notificationsNotAllowed is treated as denied and does not post a toast")
-    func notificationsNotAllowedSuppressesToast() async {
-        let (service, center) = makeService()
+    func notificationsNotAllowedSuppressesToast() async throws {
+        let (service, center) = try makeService()
         let error = NSError(
             domain: UNErrorDomain,
             code: UNError.Code.notificationsNotAllowed.rawValue,
@@ -33,8 +34,8 @@ struct NotificationServiceTests {
     }
 
     @Test("CancellationError is treated as denied and does not post a toast")
-    func cancellationSuppressesToast() async {
-        let (service, center) = makeService()
+    func cancellationSuppressesToast() async throws {
+        let (service, center) = try makeService()
 
         let granted = service.handlePermissionError(CancellationError())
         #expect(granted == false)
@@ -44,8 +45,8 @@ struct NotificationServiceTests {
     }
 
     @Test("other errors post a notificationSystemError toast")
-    func otherErrorsPostToast() async {
-        let (service, center) = makeService()
+    func otherErrorsPostToast() async throws {
+        let (service, center) = try makeService()
         struct Boom: LocalizedError { var errorDescription: String? { "boom" } }
 
         let granted = service.handlePermissionError(Boom())

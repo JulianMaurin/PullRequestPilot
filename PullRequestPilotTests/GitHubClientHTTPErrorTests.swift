@@ -5,30 +5,19 @@ import Foundation
 @Suite("GitHubClient HTTP Error Handling", .serialized)
 struct GitHubClientHTTPErrorTests {
 
-    private func makeSession() -> URLSession {
-        let config = URLSessionConfiguration.ephemeral
-        config.protocolClasses = [MockURLProtocol.self]
-        return URLSession(configuration: config)
-    }
-
-    private func makeClient(token: String = "valid-token") -> GitHubClient {
-        GitHubClient(tokenProvider: { token }, session: makeSession())
+    private func makeClient(token: String = "valid-token") -> (client: GitHubClient, http: MockHTTPSession) {
+        let http = MockHTTPSession()
+        return (GitHubClient(tokenProvider: { token }, session: http.urlSession), http)
     }
 
     // MARK: - HTTP 403
 
     @Test("HTTP 403 without rate-limit headers throws permissionDenied")
     func http403WithoutRateHeadersThrowsPermissionDenied() async {
-        let client = makeClient()
-        let body = #"{"message":"Resource not accessible by integration"}"#.data(using: .utf8)!
-        MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(
-                url: request.url!,
-                statusCode: 403,
-                httpVersion: nil,
-                headerFields: nil
-            )!
-            return (response, body)
+        let (client, http) = makeClient()
+        let body = Data(#"{"message":"Resource not accessible by integration"}"#.utf8)
+        http.handler = { request in
+            try TestHTTP.response(for: request, statusCode: 403, body: body)
         }
 
         do {
@@ -47,19 +36,17 @@ struct GitHubClientHTTPErrorTests {
 
     @Test("HTTP 403 with X-RateLimit-Remaining:0 throws rateLimited")
     func http403WithRateHeadersThrowsRateLimited() async {
-        let client = makeClient()
-        MockURLProtocol.requestHandler = { request in
+        let (client, http) = makeClient()
+        http.handler = { request in
             let resetAt = Int(Date.now.timeIntervalSince1970 + 120)
-            let response = HTTPURLResponse(
-                url: request.url!,
+            return try TestHTTP.response(
+                for: request,
                 statusCode: 403,
-                httpVersion: nil,
-                headerFields: [
+                headers: [
                     "X-RateLimit-Remaining": "0",
                     "X-RateLimit-Reset": String(resetAt)
                 ]
-            )!
-            return (response, Data())
+            )
         }
 
         do {
@@ -80,15 +67,9 @@ struct GitHubClientHTTPErrorTests {
 
     @Test("throws serverError on HTTP 500 response")
     func http500ThrowsServerError() async {
-        let client = makeClient()
-        MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(
-                url: request.url!,
-                statusCode: 500,
-                httpVersion: nil,
-                headerFields: nil
-            )!
-            return (response, Data())
+        let (client, http) = makeClient()
+        http.handler = { request in
+            try TestHTTP.response(for: request, statusCode: 500)
         }
 
         do {
@@ -107,15 +88,9 @@ struct GitHubClientHTTPErrorTests {
 
     @Test("throws serverError on HTTP 502 response")
     func http502ThrowsServerError() async {
-        let client = makeClient()
-        MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(
-                url: request.url!,
-                statusCode: 502,
-                httpVersion: nil,
-                headerFields: nil
-            )!
-            return (response, Data())
+        let (client, http) = makeClient()
+        http.handler = { request in
+            try TestHTTP.response(for: request, statusCode: 502)
         }
 
         do {
@@ -136,15 +111,9 @@ struct GitHubClientHTTPErrorTests {
 
     @Test("throws clientError on HTTP 400 response")
     func http400ThrowsClientError() async {
-        let client = makeClient()
-        MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(
-                url: request.url!,
-                statusCode: 400,
-                httpVersion: nil,
-                headerFields: nil
-            )!
-            return (response, Data())
+        let (client, http) = makeClient()
+        http.handler = { request in
+            try TestHTTP.response(for: request, statusCode: 400)
         }
 
         do {
@@ -163,15 +132,9 @@ struct GitHubClientHTTPErrorTests {
 
     @Test("throws clientError on HTTP 422 response")
     func http422ThrowsClientError() async {
-        let client = makeClient()
-        MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(
-                url: request.url!,
-                statusCode: 422,
-                httpVersion: nil,
-                headerFields: nil
-            )!
-            return (response, Data())
+        let (client, http) = makeClient()
+        http.handler = { request in
+            try TestHTTP.response(for: request, statusCode: 422)
         }
 
         do {
@@ -192,15 +155,9 @@ struct GitHubClientHTTPErrorTests {
 
     @Test("throws rateLimited on HTTP 429 response")
     func http429ThrowsRateLimited() async {
-        let client = makeClient()
-        MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(
-                url: request.url!,
-                statusCode: 429,
-                httpVersion: nil,
-                headerFields: ["Retry-After": "60"]
-            )!
-            return (response, Data())
+        let (client, http) = makeClient()
+        http.handler = { request in
+            try TestHTTP.response(for: request, statusCode: 429, headers: ["Retry-After": "60"])
         }
 
         do {
@@ -222,19 +179,14 @@ struct GitHubClientHTTPErrorTests {
     @Test("throws unauthorized on HTTP 401 and invokes onUnauthorized callback")
     func http401ThrowsUnauthorized() async {
         nonisolated(unsafe) var capturedToken: String?
+        let http = MockHTTPSession()
         let client = GitHubClient(
             tokenProvider: { "test-token" },
             onUnauthorized: { token in capturedToken = token },
-            session: makeSession()
+            session: http.urlSession
         )
-        MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(
-                url: request.url!,
-                statusCode: 401,
-                httpVersion: nil,
-                headerFields: nil
-            )!
-            return (response, Data())
+        http.handler = { request in
+            try TestHTTP.response(for: request, statusCode: 401)
         }
 
         do {
