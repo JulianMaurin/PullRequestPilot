@@ -227,6 +227,56 @@ struct PRDetailViewModelTests {
         #expect(await client.fetchChecksCallCount == 1)
     }
 
+    // MARK: - Pagination Cancellation
+
+    /// Wait until a fetch is suspended at the mock's gate (page in flight).
+    private func waitForGateSuspension(
+        _ client: PaginatingMockGitHubClient,
+        timeout: Duration = .milliseconds(2000)
+    ) async throws {
+        let deadline = ContinuousClock.now + timeout
+        while !(await client.isGateSuspended), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(await client.isGateSuspended)
+    }
+
+    @Test("deselect during timeline pagination stops subsequent page fetches")
+    func deselectStopsTimelinePagination() async throws {
+        let client = PaginatingMockGitHubClient(gatedCall: .firstTimelineCall)
+        let vm = PRDetailViewModel(gitHubClient: client)
+
+        vm.selectPR(makePR(id: "PR_1"))
+        try await waitForGateSuspension(client)
+
+        vm.deselect()
+        try #require(await client.resumeGate())
+
+        // The second fetch's normal completion is the barrier proving the
+        // cancelled task had every opportunity to keep paginating.
+        vm.selectPR(makePR(id: "PR_2"))
+        try await waitForLoad(vm)
+
+        #expect(await client.timelineCallCount(nodeID: "PR_1") <= 2)
+    }
+
+    @Test("deselect during checks pagination stops subsequent page fetches")
+    func deselectStopsChecksPagination() async throws {
+        let client = PaginatingMockGitHubClient(gatedCall: .firstChecksCall)
+        let vm = PRDetailViewModel(gitHubClient: client)
+
+        vm.selectPR(makePR(id: "PR_1"))
+        try await waitForGateSuspension(client)
+
+        vm.deselect()
+        try #require(await client.resumeGate())
+
+        vm.selectPR(makePR(id: "PR_2"))
+        try await waitForLoad(vm)
+
+        #expect(await client.checksCallCount(nodeID: "PR_1") <= 2)
+    }
+
     // MARK: - updateSelectedPR
 
     @Test("updateSelectedPR updates when ID matches")
@@ -262,5 +312,98 @@ struct PRDetailViewModelTests {
         let pr = TestPullRequestFactory.make(id: "PR_1")
         vm.updateSelectedPR(pr)
         #expect(vm.selectedPR == nil)
+    }
+}
+
+// MARK: - Paginating Mock
+
+/// Every page returns a fresh cursor, so pagination only stops at the loop's
+/// own bounds — cancellation or maxPages. One designated call suspends until
+/// `resumeGate()`, letting a test cancel while that page is in flight
+/// (mirroring RequestCoalescer, which completes in-flight requests for
+/// cancelled callers).
+private actor PaginatingMockGitHubClient: GitHubClientProtocol {
+
+    enum GatedCall {
+        case firstTimelineCall
+        case firstChecksCall
+    }
+
+    private let gatedCall: GatedCall
+    private var gateContinuation: CheckedContinuation<Void, Never>?
+    private var timelineCallCounts: [String: Int] = [:]
+    private var checksCallCounts: [String: Int] = [:]
+    private var totalTimelineCalls = 0
+    private var totalChecksCalls = 0
+
+    init(gatedCall: GatedCall) {
+        self.gatedCall = gatedCall
+    }
+
+    var isGateSuspended: Bool { gateContinuation != nil }
+
+    func timelineCallCount(nodeID: String) -> Int { timelineCallCounts[nodeID, default: 0] }
+
+    func checksCallCount(nodeID: String) -> Int { checksCallCounts[nodeID, default: 0] }
+
+    /// Returns false if no call was suspended at the gate.
+    func resumeGate() -> Bool {
+        guard let continuation = gateContinuation else { return false }
+        gateContinuation = nil
+        continuation.resume()
+        return true
+    }
+
+    func fetchTimeline(
+        nodeID: String,
+        cursor: String?,
+        eventPageOffset: Int,
+        checksPageOffset: Int
+    ) async throws -> TimelinePage {
+        totalTimelineCalls += 1
+        timelineCallCounts[nodeID, default: 0] += 1
+        if gatedCall == .firstTimelineCall, totalTimelineCalls == 1 {
+            await withCheckedContinuation { gateContinuation = $0 }
+        }
+        switch gatedCall {
+        case .firstTimelineCall:
+            return TimelinePage(
+                events: [],
+                checkRuns: [],
+                reviewers: [],
+                nextCursor: "timeline-cursor-\(totalTimelineCalls)",
+                checksNextCursor: nil
+            )
+        case .firstChecksCall:
+            // Single timeline page whose checks continue via fetchChecks.
+            return TimelinePage(
+                events: [],
+                checkRuns: [],
+                reviewers: [],
+                nextCursor: nil,
+                checksNextCursor: "checks-start-cursor-\(totalTimelineCalls)"
+            )
+        }
+    }
+
+    func fetchChecks(nodeID: String, cursor: String, checksPageOffset: Int) async throws -> ChecksPage {
+        totalChecksCalls += 1
+        checksCallCounts[nodeID, default: 0] += 1
+        if gatedCall == .firstChecksCall, totalChecksCalls == 1 {
+            await withCheckedContinuation { gateContinuation = $0 }
+        }
+        return ChecksPage(checkRuns: [], nextCursor: "checks-cursor-\(totalChecksCalls)")
+    }
+
+    func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage {
+        PullRequestPage(pullRequests: [], nextCursor: nil, skippedNodeCount: 0)
+    }
+
+    func fetchViewer() async throws -> (login: String, avatarURL: URL?) {
+        (login: "testuser", avatarURL: nil)
+    }
+
+    func validateToken(_ token: String) async throws -> (login: String, avatarURL: URL?) {
+        (login: "testuser", avatarURL: nil)
     }
 }

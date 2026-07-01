@@ -89,6 +89,10 @@ final class PRDetailViewModel {
                 var timelinePages = 0
                 let maxPages = 20
                 repeat {
+                    // Coalesced requests don't propagate cancellation, so each
+                    // iteration must check explicitly or an abandoned fetch
+                    // paginates to maxPages in the background.
+                    try Task.checkCancellation()
                     timelinePages += 1
                     let page = try await gitHubClient.fetchTimeline(
                         nodeID: pr.id,
@@ -115,6 +119,7 @@ final class PRDetailViewModel {
                 var previousChecksCursor: String?
                 var checksPages = 0
                 while let nextChecksCursor = checksCursor, checksPages < maxPages {
+                    try Task.checkCancellation()
                     checksPages += 1
                     // Guard against duplicate cursors that would cause an infinite loop
                     guard nextChecksCursor != previousChecksCursor else { break }
