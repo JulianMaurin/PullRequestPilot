@@ -363,29 +363,32 @@ final class LocalRepositoryService {
             } else {
                 pathPart = afterDomain
             }
-            let trimmed = pathPart
-                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                .replacingOccurrences(of: ".git", with: "")
+            let trimmed = strippingGitSuffix(
+                pathPart.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            )
             return trimmed.isEmpty ? nil : trimmed.lowercased()
         }
 
         // SCP-style SSH: git@github.com:owner/repo.git
         if url.contains("github.com:") && !url.hasPrefix("ssh://") {
             guard let afterColon = url.components(separatedBy: "github.com:").last else { return nil }
-            return afterColon
-                .replacingOccurrences(of: ".git", with: "")
-                .lowercased()
+            return strippingGitSuffix(afterColon).lowercased()
         }
 
         // HTTPS: https://github.com/owner/repo.git
         if url.contains("github.com/") {
             guard let afterDomain = url.components(separatedBy: "github.com/").last else { return nil }
-            return afterDomain
-                .replacingOccurrences(of: ".git", with: "")
-                .lowercased()
+            return strippingGitSuffix(afterDomain).lowercased()
         }
 
         return nil
+    }
+
+    /// Removes only a trailing `.git` clone suffix. A substring replace would
+    /// mangle repo names containing `.git` (e.g. `octocat/octocat.github.io`),
+    /// breaking the index match against the PR's `nameWithOwner`.
+    nonisolated private static func strippingGitSuffix(_ name: String) -> String {
+        name.hasSuffix(".git") ? String(name.dropLast(".git".count)) : name
     }
 
     /// Reads `HEAD` to get the current branch name.

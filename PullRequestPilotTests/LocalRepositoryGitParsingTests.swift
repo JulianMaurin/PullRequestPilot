@@ -449,6 +449,62 @@ struct LocalRepositoryGitParsingTests {
         #expect(service.repoIndex.first?.nameWithOwner == "owner/custom-port-repo")
     }
 
+    @Test("scan preserves interior .git in repo name for SCP-style remote")
+    func scanSCPGitHubPagesRepo() async throws {
+        let tempDir = try makeTempDir()
+        defer { try? fm.removeItem(at: tempDir) }
+
+        let repoDir = tempDir.appendingPathComponent("octocat.github.io")
+        try createFakeRepo(at: repoDir, remoteURL: "git@github.com:octocat/octocat.github.io.git")
+
+        let service = LocalRepositoryService()
+        await service.scan(directories: [tempDir])
+
+        #expect(service.repoIndex.first?.nameWithOwner == "octocat/octocat.github.io")
+    }
+
+    @Test("scan preserves interior .git in repo name for HTTPS remote")
+    func scanHTTPSGitHubPagesRepo() async throws {
+        let tempDir = try makeTempDir()
+        defer { try? fm.removeItem(at: tempDir) }
+
+        let repoDir = tempDir.appendingPathComponent("org.github.io")
+        try createFakeRepo(at: repoDir, remoteURL: "https://github.com/org/org.github.io.git")
+
+        let service = LocalRepositoryService()
+        await service.scan(directories: [tempDir])
+
+        #expect(service.repoIndex.first?.nameWithOwner == "org/org.github.io")
+    }
+
+    @Test("scan preserves interior .git in repo name for ssh:// remote")
+    func scanSSHSchemeInteriorGitRepo() async throws {
+        let tempDir = try makeTempDir()
+        defer { try? fm.removeItem(at: tempDir) }
+
+        let repoDir = tempDir.appendingPathComponent("my.gitops")
+        try createFakeRepo(at: repoDir, remoteURL: "ssh://git@github.com/owner/my.gitops.git")
+
+        let service = LocalRepositoryService()
+        await service.scan(directories: [tempDir])
+
+        #expect(service.repoIndex.first?.nameWithOwner == "owner/my.gitops")
+    }
+
+    @Test("scan preserves .github.io repo name without trailing .git suffix")
+    func scanGitHubPagesRepoNoSuffix() async throws {
+        let tempDir = try makeTempDir()
+        defer { try? fm.removeItem(at: tempDir) }
+
+        let repoDir = tempDir.appendingPathComponent("pages-repo")
+        try createFakeRepo(at: repoDir, remoteURL: "https://github.com/org/org.github.io")
+
+        let service = LocalRepositoryService()
+        await service.scan(directories: [tempDir])
+
+        #expect(service.repoIndex.first?.nameWithOwner == "org/org.github.io")
+    }
+
     @Test("scan handles config with multiple remotes, picks origin")
     func scanMultipleRemotes() async throws {
         let tempDir = try makeTempDir()
