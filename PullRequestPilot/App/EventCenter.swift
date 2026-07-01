@@ -33,13 +33,23 @@ final class EventCenter {
     /// Most recent events first. Bounded to `maxHistory` entries.
     private(set) var events: [AppEvent] = []
 
-    /// The entries rendered by the toast overlay (not yet dismissed).
-    var activeEvents: [AppEvent] { events.filter { !dismissed.contains($0.id) } }
+    /// The entries rendered by the toast overlay: neither explicitly
+    /// dismissed nor timed out.
+    var activeEvents: [AppEvent] { events.filter { !dismissed.contains($0.id) && !autoDismissed.contains($0.id) } }
 
-    /// IDs hidden from the toast overlay. Invariant: always a subset of
-    /// `events`' IDs — pruned when overflow drops events — so it stays
-    /// bounded to `maxHistory`.
+    /// The entries rendered by inline banners (persistent surfaces). A timed
+    /// toast expiry hides the toast only; a banner clears on explicit
+    /// dismissal or a recovery `dismissAll(matching:)`.
+    var standingEvents: [AppEvent] { events.filter { !dismissed.contains($0.id) } }
+
+    /// IDs hidden everywhere (user dismissal or subsystem recovery).
+    /// Invariant: always a subset of `events`' IDs — pruned when overflow
+    /// drops events — so it stays bounded to `maxHistory`.
     private(set) var dismissed: Set<UUID> = []
+
+    /// IDs whose auto-dismiss timer fired: hidden from toasts, still standing
+    /// for banners. Same bounding invariant as `dismissed`.
+    private(set) var autoDismissed: Set<UUID> = []
     /// Lock-backed so deinit can cancel tasks without hopping to MainActor.
     private let autoDismissTasksStorage = OSAllocatedUnfairLock<[UUID: Task<Void, Never>]>(initialState: [:])
     private let maxHistory: Int
@@ -60,16 +70,19 @@ final class EventCenter {
 
     // MARK: - Public API
 
-    /// Post an event. If a matching payload is already visible (not dismissed,
-    /// not auto-expired), refresh that toast's auto-dismiss timer instead of
-    /// inserting a copy. This keeps the UI to one toast per ongoing problem
-    /// while still logging every occurrence for incident timelines.
+    /// Post an event. If a matching payload is already standing (not
+    /// explicitly dismissed), re-surface that event's toast and refresh its
+    /// timer instead of inserting a copy. This keeps the UI to one event per
+    /// ongoing problem while still logging every occurrence for incident
+    /// timelines.
     func post(_ event: AppEvent) {
         logEvent(event)
 
         if let existing = events.first(where: { existing in
             !dismissed.contains(existing.id) && existing.payload == event.payload
         }) {
+            // A recurrence re-shows the toast if it had timed out.
+            autoDismissed.remove(existing.id)
             if let duration = existing.autoDismissAfter {
                 scheduleAutoDismiss(id: existing.id, after: duration)
             }
@@ -82,6 +95,7 @@ final class EventCenter {
             let dropped = Array(events.suffix(overflow))
             events.removeLast(overflow)
             dismissed.subtract(dropped.map(\.id))
+            autoDismissed.subtract(dropped.map(\.id))
             autoDismissTasksStorage.withLock { tasks in
                 for e in dropped { tasks.removeValue(forKey: e.id)?.cancel() }
             }
@@ -97,6 +111,7 @@ final class EventCenter {
         // event that overflow already dropped must not re-grow `dismissed`.
         if events.contains(where: { $0.id == id }) {
             dismissed.insert(id)
+            autoDismissed.remove(id)
         }
         autoDismissTasksStorage.withLock { tasks in
             tasks.removeValue(forKey: id)?.cancel()
@@ -114,9 +129,10 @@ final class EventCenter {
 
     /// Reschedule the auto-dismiss timer for `id` using the event's original
     /// `autoDismissAfter` duration. No-op when the event has no duration, is
-    /// already dismissed, or no longer exists in history.
+    /// already dismissed or timed out, or no longer exists in history.
     func resumeAutoDismiss(_ id: UUID) {
         guard !dismissed.contains(id),
+              !autoDismissed.contains(id),
               let event = events.first(where: { $0.id == id }),
               let duration = event.autoDismissAfter
         else { return }
@@ -129,6 +145,7 @@ final class EventCenter {
         for event in events {
             if case .error(let err) = event.payload, match(err) {
                 dismissed.insert(event.id)
+                autoDismissed.remove(event.id)
                 autoDismissTasksStorage.withLock { tasks in
                     tasks.removeValue(forKey: event.id)?.cancel()
                 }
@@ -154,13 +171,20 @@ final class EventCenter {
             } catch {
                 return
             }
-            self?.dismiss(id)
-            self?.autoDismissTasksStorage.withLock { tasks in
-                _ = tasks.removeValue(forKey: id)
-            }
+            self?.expireToast(id)
         }
         autoDismissTasksStorage.withLock { tasks in
             tasks.updateValue(task, forKey: id)?.cancel()
+        }
+    }
+
+    /// Timer expiry: hide the toast, keep the event standing for banners.
+    private func expireToast(_ id: UUID) {
+        if events.contains(where: { $0.id == id }) {
+            autoDismissed.insert(id)
+        }
+        autoDismissTasksStorage.withLock { tasks in
+            _ = tasks.removeValue(forKey: id)
         }
     }
 

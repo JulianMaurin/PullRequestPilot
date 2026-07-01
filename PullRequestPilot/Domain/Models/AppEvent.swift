@@ -51,11 +51,12 @@ struct AppEvent: Sendable, Identifiable, Equatable {
 
     // MARK: - Convenience constructors
 
-    /// Errors auto-dismiss at 8s unless the error requires user action
-    /// (`AppError.requiresAction`), in which case the toast stays pinned
-    /// until explicitly dismissed.
+    /// Every error toast auto-dismisses — a toast that never leaves reads as
+    /// the app being stuck. Action-required errors get a longer window and
+    /// stay visible in `EventCenter.standingEvents` (the inline banner
+    /// surface) until explicitly dismissed or resolved.
     static func error(_ error: AppError) -> AppEvent {
-        let duration: Duration? = error.requiresAction ? nil : .seconds(8)
+        let duration: Duration = error.requiresAction ? .seconds(20) : .seconds(8)
         return AppEvent(payload: .error(error), autoDismissAfter: duration)
     }
 
@@ -165,8 +166,8 @@ enum AppError: LocalizedError, Sendable, Hashable {
 
     /// True when the user must take action before the error is meaningfully
     /// resolved (update a token, re-grant sandbox access, read a backup path).
-    /// These errors stay pinned on the toast overlay; transient failures
-    /// auto-dismiss.
+    /// These errors get a longer toast window and persist on the inline
+    /// banner (`standingEvents`) until explicitly dismissed or resolved.
     var requiresAction: Bool {
         switch self {
         case .unauthorized,

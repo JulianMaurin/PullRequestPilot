@@ -20,7 +20,10 @@ struct EventBannerView: View {
     }
 
     private var match: (event: AppEvent, error: AppError)? {
-        for event in events.activeEvents {
+        // standingEvents, not activeEvents: the banner is the persistent
+        // surface — it must survive the toast's auto-dismiss and clear only
+        // on explicit dismissal or subsystem recovery.
+        for event in events.standingEvents {
             guard case .error(let err) = event.payload, filter(err) else { continue }
             return (event, err)
         }

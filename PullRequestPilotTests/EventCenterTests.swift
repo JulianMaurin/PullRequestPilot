@@ -103,15 +103,18 @@ struct EventCenterTests {
         #expect(center.activeEvents.first?.id != firstID)
     }
 
-    @Test("same-payload re-post after auto-dismiss inserts a new event")
-    func samePayloadRePost_afterAutoDismiss_insertsNewEvent() async throws {
+    @Test("same-payload re-post after toast expiry re-surfaces the same event")
+    func samePayloadRePost_afterToastExpiry_reSurfacesSameEvent() async throws {
         let center = EventCenter()
         center.post(AppEvent(payload: .info("hi"), autoDismissAfter: .milliseconds(50)))
+        let firstID = try #require(center.events.first?.id)
         try await waitUntil { center.activeEvents.isEmpty }
 
+        // The event is still standing (only the toast timed out), so a
+        // recurrence re-shows the same toast instead of inserting a copy.
         center.post(AppEvent(payload: .info("hi"), autoDismissAfter: .milliseconds(50)))
-        #expect(center.events.count == 2)
-        #expect(center.activeEvents.count == 1)
+        #expect(center.events.count == 1)
+        #expect(center.activeEvents.first?.id == firstID)
     }
 
     @Test("different payloads stay independent (distinct associated values)")
@@ -123,8 +126,8 @@ struct EventCenterTests {
         #expect(center.activeEvents.count == 2)
     }
 
-    @Test("pinned error re-post is a no-op")
-    func pinnedError_rePost_isNoOp() throws {
+    @Test("standing error re-post coalesces into the existing event")
+    func standingError_rePost_isNoOp() throws {
         let center = EventCenter()
         center.post(.error(.unauthorized))
         let firstID = try #require(center.events.first?.id)
@@ -204,13 +207,50 @@ struct EventCenterTests {
         #expect(event.autoDismissAfter == .seconds(8))
     }
 
-    @Test("action-required errors stay pinned (no auto-dismiss)")
-    func requiresActionErrorStaysPinned() {
-        #expect(AppEvent.error(.unauthorized).autoDismissAfter == nil)
-        #expect(AppEvent.error(.permissionDenied(detail: nil)).autoDismissAfter == nil)
-        #expect(AppEvent.error(.bookmarkPruned(count: 2)).autoDismissAfter == nil)
-        #expect(AppEvent.error(.tokenSaveFailed(underlying: "x")).autoDismissAfter == nil)
-        #expect(AppEvent.error(.decodeCorruption(subsystem: "views", backupPath: nil)).autoDismissAfter == nil)
+    @Test("action-required errors auto-dismiss with a longer window")
+    func requiresActionErrorLongerWindow() {
+        #expect(AppEvent.error(.unauthorized).autoDismissAfter == .seconds(20))
+        #expect(AppEvent.error(.permissionDenied(detail: nil)).autoDismissAfter == .seconds(20))
+        #expect(AppEvent.error(.bookmarkPruned(count: 2)).autoDismissAfter == .seconds(20))
+        #expect(AppEvent.error(.tokenSaveFailed(underlying: "x")).autoDismissAfter == .seconds(20))
+        #expect(AppEvent.error(.decodeCorruption(subsystem: "views", backupPath: nil)).autoDismissAfter == .seconds(20))
+    }
+
+    // MARK: - Toast expiry vs standing events
+
+    @Test("toast expiry keeps the event standing for banners")
+    func toastExpiryKeepsStanding() async throws {
+        let center = EventCenter()
+        center.post(AppEvent(payload: .error(.bookmarkPruned(count: 1)), autoDismissAfter: .milliseconds(50)))
+        try await waitUntil { center.activeEvents.isEmpty }
+
+        #expect(center.activeEvents.isEmpty)
+        #expect(center.standingEvents.count == 1)
+    }
+
+    @Test("explicit dismiss clears both the toast and the standing surface")
+    func explicitDismissClearsStanding() throws {
+        let center = EventCenter()
+        center.post(.error(.bookmarkPruned(count: 1)))
+        let id = try #require(center.events.first?.id)
+        center.dismiss(id)
+
+        #expect(center.activeEvents.isEmpty)
+        #expect(center.standingEvents.isEmpty)
+    }
+
+    @Test("dismissAll(matching:) clears the standing surface on recovery")
+    func dismissAllClearsStanding() async throws {
+        let center = EventCenter()
+        center.post(AppEvent(payload: .error(.viewerIdentityUnavailable), autoDismissAfter: .milliseconds(50)))
+        try await waitUntil { center.activeEvents.isEmpty }
+        #expect(center.standingEvents.count == 1)
+
+        center.dismissAll { error in
+            if case .viewerIdentityUnavailable = error { return true }
+            return false
+        }
+        #expect(center.standingEvents.isEmpty)
     }
 
     @Test("explicit autoDismissAfter overrides the smart default")
