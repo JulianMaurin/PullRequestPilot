@@ -110,17 +110,52 @@ struct BuildStacksTests {
         #expect(stacks[0].children.map(\.id) == ["2", "3"])
     }
 
-    @Test("cycle in branch names produces no stacks because no root is found")
+    @Test("two-PR cycle emits both PRs as standalone stacks")
     func cycleProtection() {
         let vm = makeViewModel(suiteName: "Cycle")
         // a -> b -> a (cycle): each PR's base matches the other's head,
-        // so both are identified as children and neither qualifies as a root.
-        // The algorithm terminates and returns an empty stacks array.
+        // so both are classified as children and neither qualifies as a root.
+        // Cycle members must still be emitted, not silently dropped.
         let pr1 = TestPullRequestFactory.make(id: "1", baseRefName: "b", headRefName: "a")
         let pr2 = TestPullRequestFactory.make(id: "2", baseRefName: "a", headRefName: "b")
         let groups = vm.groupedByOrgAndRepo([pr1, pr2])
         let stacks = groups[0].repos[0].stacks
-        #expect(stacks.isEmpty)
+        #expect(stacks.count == 2)
+        #expect(stacks.reduce(0) { $0 + $1.totalCount } == 2)
+        #expect(Set(stacks.map(\.root.id)) == ["1", "2"])
+        #expect(stacks.allSatisfy { $0.children.isEmpty })
+    }
+
+    @Test("three-PR cycle emits all PRs as standalone stacks")
+    func threePRCycle() {
+        let vm = makeViewModel(suiteName: "ThreePRCycle")
+        // a -> b -> c -> a: every PR's base matches another's head, so
+        // no root exists and all three fall through to the standalone pass.
+        let pr1 = TestPullRequestFactory.make(id: "1", baseRefName: "c", headRefName: "a")
+        let pr2 = TestPullRequestFactory.make(id: "2", baseRefName: "a", headRefName: "b")
+        let pr3 = TestPullRequestFactory.make(id: "3", baseRefName: "b", headRefName: "c")
+        let groups = vm.groupedByOrgAndRepo([pr1, pr2, pr3])
+        let stacks = groups[0].repos[0].stacks
+        #expect(stacks.count == 3)
+        #expect(stacks.reduce(0) { $0 + $1.totalCount } == 3)
+        #expect(Set(stacks.map(\.root.id)) == ["1", "2", "3"])
+        #expect(stacks.allSatisfy { $0.children.isEmpty })
+    }
+
+    @Test("cycle alongside a normal stack loses no PRs")
+    func cycleAlongsideNormalStack() {
+        let vm = makeViewModel(suiteName: "CycleAndStack")
+        let root = TestPullRequestFactory.make(id: "root", baseRefName: "main", headRefName: "feat")
+        let child = TestPullRequestFactory.make(id: "child", baseRefName: "feat", headRefName: "feat-2")
+        let cycleA = TestPullRequestFactory.make(id: "cycleA", baseRefName: "develop", headRefName: "release")
+        let cycleB = TestPullRequestFactory.make(id: "cycleB", baseRefName: "release", headRefName: "develop")
+        let groups = vm.groupedByOrgAndRepo([root, child, cycleA, cycleB])
+        let stacks = groups[0].repos[0].stacks
+        #expect(stacks.reduce(0) { $0 + $1.totalCount } == 4)
+        #expect(stacks.count == 3)
+        let rootStack = stacks.first { $0.root.id == "root" }
+        #expect(rootStack?.children.map(\.id) == ["child"])
+        #expect(Set(stacks.map(\.root.id)) == ["root", "cycleA", "cycleB"])
     }
 
     @Test("partial cycle with root terminates due to max depth guard")

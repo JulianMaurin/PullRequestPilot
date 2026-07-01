@@ -41,7 +41,9 @@ enum PRGrouping {
         })
         let roots = pullRequests.filter { !childIDs.contains($0.id) }
 
-        return roots.map { root in
+        var emittedIDs: Set<String> = []
+        var stacks: [PRStack] = []
+        for root in roots {
             var children: [PullRequest] = []
             var currentHead = root.headRefName
             var visited: Set<String> = [root.id]
@@ -52,7 +54,16 @@ enum PRGrouping {
                 visited.insert(next.id)
                 currentHead = next.headRefName
             }
-            return PRStack(root: root, children: children)
+            emittedIDs.formUnion(visited)
+            stacks.append(PRStack(root: root, children: children))
         }
+
+        // Base/head cycles (e.g. release PR + back-merge PR referencing each
+        // other's branches) classify every member as a child, so no root walk
+        // reaches them; emit them as standalone stacks instead of dropping them.
+        for pr in pullRequests where !emittedIDs.contains(pr.id) {
+            stacks.append(PRStack(root: pr, children: []))
+        }
+        return stacks
     }
 }
