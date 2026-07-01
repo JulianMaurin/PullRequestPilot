@@ -156,6 +156,46 @@ struct EventCenterTests {
         #expect(center.events.first?.message == "c")
     }
 
+    // MARK: - Dismissed-set pruning
+
+    @Test("overflow prunes dropped events' IDs from the dismissed set")
+    func overflowPrunesDismissedIDs() throws {
+        let center = EventCenter(maxHistory: 2)
+        center.post(.info("a"))
+        let firstID = try #require(center.events.first?.id)
+        center.dismiss(firstID)
+
+        center.post(.info("b"))
+        center.post(.info("c")) // drops "a"
+        #expect(!center.dismissed.contains(firstID))
+    }
+
+    @Test("dismissed set stays bounded to maxHistory under post/dismiss churn")
+    func dismissedSetStaysBounded() throws {
+        let center = EventCenter(maxHistory: 3)
+        for index in 0..<20 {
+            center.post(.info("event \(index)"))
+            let id = try #require(center.events.first?.id)
+            center.dismiss(id)
+            #expect(center.dismissed.count <= 3)
+        }
+        #expect(center.events.count == 3)
+        #expect(center.dismissed.count == 3)
+    }
+
+    @Test("dismiss for an ID no longer in history does not grow the dismissed set")
+    func dismissDroppedID_doesNotGrowDismissedSet() throws {
+        let center = EventCenter(maxHistory: 1)
+        center.post(.info("a"))
+        let droppedID = try #require(center.events.first?.id)
+        center.post(.info("b")) // drops "a"
+
+        // Simulates a late auto-dismiss continuation firing for the dropped event.
+        center.dismiss(droppedID)
+        #expect(center.dismissed.isEmpty)
+        #expect(center.activeEvents.count == 1)
+    }
+
     // MARK: - Auto-dismiss defaults
 
     @Test("transient errors auto-dismiss at 8s by default")

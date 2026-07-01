@@ -36,7 +36,10 @@ final class EventCenter {
     /// The entries rendered by the toast overlay (not yet dismissed).
     var activeEvents: [AppEvent] { events.filter { !dismissed.contains($0.id) } }
 
-    private var dismissed: Set<UUID> = []
+    /// IDs hidden from the toast overlay. Invariant: always a subset of
+    /// `events`' IDs — pruned when overflow drops events — so it stays
+    /// bounded to `maxHistory`.
+    private(set) var dismissed: Set<UUID> = []
     /// Lock-backed so deinit can cancel tasks without hopping to MainActor.
     private let autoDismissTasksStorage = OSAllocatedUnfairLock<[UUID: Task<Void, Never>]>(initialState: [:])
     private let maxHistory: Int
@@ -78,6 +81,7 @@ final class EventCenter {
             let overflow = events.count - maxHistory
             let dropped = Array(events.suffix(overflow))
             events.removeLast(overflow)
+            dismissed.subtract(dropped.map(\.id))
             autoDismissTasksStorage.withLock { tasks in
                 for e in dropped { tasks.removeValue(forKey: e.id)?.cancel() }
             }
@@ -89,7 +93,11 @@ final class EventCenter {
     }
 
     func dismiss(_ id: UUID) {
-        dismissed.insert(id)
+        // Only track IDs still in history — a late auto-dismiss firing for an
+        // event that overflow already dropped must not re-grow `dismissed`.
+        if events.contains(where: { $0.id == id }) {
+            dismissed.insert(id)
+        }
         autoDismissTasksStorage.withLock { tasks in
             tasks.removeValue(forKey: id)?.cancel()
         }
