@@ -80,7 +80,6 @@ targets:
       path: PullRequestPilotWidget/PullRequestPilotWidget.entitlements
       properties:
         com.apple.security.app-sandbox: true
-        com.apple.security.network.client: true
         com.apple.security.application-groups:
           - $(TeamIdentifierPrefix)com.pullrequestpilot.shared
 
