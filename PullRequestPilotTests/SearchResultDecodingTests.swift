@@ -119,4 +119,84 @@ struct SearchResultDecodingTests {
         let result = try JSONDecoder().decode(SearchResult.self, from: data)
         #expect(result.nodes.isEmpty)
     }
+
+    @Test("skips null nodes and keeps surrounding PRs", .timeLimit(.minutes(1)))
+    func skipsNullNodes() throws {
+        let json = """
+        {
+            "nodes": [
+                \(makePRNodeJSON(id: "PR_1", number: 1)),
+                null,
+                {"id": "ISSUE_1", "title": "Bug report"},
+                null,
+                \(makePRNodeJSON(id: "PR_2", number: 2))
+            ],
+            "pageInfo": {"hasNextPage": false, "endCursor": null}
+        }
+        """
+        let data = try #require(json.data(using: .utf8))
+        let result = try JSONDecoder().decode(SearchResult.self, from: data)
+        #expect(result.nodes.count == 2)
+        #expect(result.nodes.map(\.id) == ["PR_1", "PR_2"])
+        // Nulls are not "skipped nodes with an id" — only the Issue counts.
+        #expect(result.skippedNodeCount == 1)
+    }
+
+    @Test("handles all-null nodes", .timeLimit(.minutes(1)))
+    func allNullNodes() throws {
+        let json = """
+        {
+            "nodes": [null, null],
+            "pageInfo": {"hasNextPage": false, "endCursor": null}
+        }
+        """
+        let data = try #require(json.data(using: .utf8))
+        let result = try JSONDecoder().decode(SearchResult.self, from: data)
+        #expect(result.nodes.isEmpty)
+        #expect(result.skippedNodeCount == 0)
+    }
+
+    @Test("throws on a scalar node instead of looping", .timeLimit(.minutes(1)))
+    func scalarNodeThrows() throws {
+        let json = """
+        {
+            "nodes": [42],
+            "pageInfo": {"hasNextPage": false, "endCursor": null}
+        }
+        """
+        let data = try #require(json.data(using: .utf8))
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(SearchResult.self, from: data)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func makePRNodeJSON(id: String, number: Int) -> String {
+        """
+        {
+            "id": "\(id)",
+            "number": \(number),
+            "title": "PR \(number)",
+            "url": "https://github.com/owner/repo/pull/\(number)",
+            "createdAt": "2024-01-01T00:00:00Z",
+            "updatedAt": "2024-01-02T00:00:00Z",
+            "additions": 10,
+            "deletions": 5,
+            "state": "OPEN",
+            "isDraft": false,
+            "reviewDecision": null,
+            "baseRefName": "main",
+            "headRefName": "branch-\(number)",
+            "headRefOid": "abc\(number)",
+            "repository": {"nameWithOwner": "owner/repo"},
+            "author": {"login": "dev", "avatarUrl": null},
+            "commits": null,
+            "reviewThreads": {"totalCount": 0, "nodes": []},
+            "latestReviews": {"nodes": []},
+            "labels": {"nodes": []},
+            "timelineItems": null
+        }
+        """
+    }
 }

@@ -31,8 +31,9 @@ struct SearchResult: Decodable {
     let skippedNodeCount: Int
 
     /// Custom decoding: the `type: ISSUE` search can return non-PR nodes that
-    /// lack `... on PullRequest` fields. Decode each node individually and
-    /// silently skip any that fail (e.g. plain Issue nodes).
+    /// lack `... on PullRequest` fields, and the schema allows null elements
+    /// in `nodes`. Decode each node individually and silently skip any that
+    /// fail (e.g. plain Issue nodes) or are null.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         pageInfo = try container.decode(PageInfo.self, forKey: .pageInfo)
@@ -41,14 +42,28 @@ struct SearchResult: Decodable {
         var decoded: [PullRequestNode] = []
         var skipped = 0
         while !nodesContainer.isAtEnd {
+            // A null element must be consumed via decodeNil: decoding a
+            // concrete type against null throws without advancing
+            // currentIndex, so the loop would never terminate.
+            if try nodesContainer.decodeNil() { continue }
             if let node = try? nodesContainer.decode(PullRequestNode.self) {
                 decoded.append(node)
             } else {
+                let indexBefore = nodesContainer.currentIndex
                 // Advance past the undecodable node
                 let skippedNode = try? nodesContainer.decode(SkippedNode.self)
                 if skippedNode?.id != nil {
                     skipped += 1
                     searchResultLogger.warning("Skipped node that had an id (possible PR decode failure)")
+                }
+                // Failed decode attempts do not advance currentIndex; if
+                // neither attempt consumed the element, fail the decode
+                // rather than loop forever.
+                if nodesContainer.currentIndex == indexBefore {
+                    throw DecodingError.dataCorrupted(DecodingError.Context(
+                        codingPath: nodesContainer.codingPath,
+                        debugDescription: "Search node at index \(indexBefore) is neither decodable nor skippable"
+                    ))
                 }
             }
         }
