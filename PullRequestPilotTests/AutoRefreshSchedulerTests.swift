@@ -3,11 +3,7 @@ import Foundation
 import os
 @testable import PullRequestPilot
 
-/// Serialized because the scheduler observes
-/// `Constants.Notifications.prRefreshIntervalChanged` on the global
-/// NotificationCenter — running in parallel would let tests race on the
-/// same notification name.
-@Suite("AutoRefreshScheduler", .serialized)
+@Suite("AutoRefreshScheduler")
 struct AutoRefreshSchedulerTests {
 
     // MARK: - Helpers
@@ -32,19 +28,22 @@ struct AutoRefreshSchedulerTests {
         }
     }
 
-    /// Builds a scheduler with an isolated UserDefaults and a short refresh
-    /// interval so the loop ticks quickly.
+    /// Builds a scheduler with an isolated UserDefaults, a private
+    /// NotificationCenter (so posts from parallel suites on the global center
+    /// cannot restart the loop under test), and a short refresh interval so
+    /// the loop ticks quickly.
     @MainActor
     private static func makeScheduler(
         suiteName: String,
         intervalSeconds: Double = 0.05
-    ) -> (AutoRefreshScheduler, UserDefaults, TickRecorder) {
-        let defaults = UserDefaults(suiteName: "AutoRefreshSchedulerTests.\(suiteName)")!
+    ) throws -> (AutoRefreshScheduler, UserDefaults, TickRecorder, NotificationCenter) {
+        let defaults = try #require(UserDefaults(suiteName: "AutoRefreshSchedulerTests.\(suiteName)"))
         defaults.removePersistentDomain(forName: "AutoRefreshSchedulerTests.\(suiteName)")
         defaults.set(intervalSeconds, forKey: Constants.UserDefaultsKeys.prRefreshInterval)
-        let scheduler = AutoRefreshScheduler(defaults: defaults)
+        let center = NotificationCenter()
+        let scheduler = AutoRefreshScheduler(defaults: defaults, notificationCenter: center)
         let recorder = TickRecorder()
-        return (scheduler, defaults, recorder)
+        return (scheduler, defaults, recorder, center)
     }
 
     @MainActor
@@ -69,12 +68,17 @@ struct AutoRefreshSchedulerTests {
         AutoRefreshTickResult(hasData: false, hasError: false, maxRateLimitWait: nil, hasViews: false)
     }
 
+    /// Views configured, refresh completed cleanly, every result set empty.
+    private static func emptyResultsResult() -> AutoRefreshTickResult {
+        AutoRefreshTickResult(hasData: false, hasError: false, maxRateLimitWait: nil, hasViews: true)
+    }
+
     // MARK: - tick fires
 
     @MainActor
     @Test("start() invokes the tick at least once")
     func tickFiresAfterStart() async throws {
-        let (scheduler, _, recorder) = Self.makeScheduler(suiteName: "TickFires")
+        let (scheduler, _, recorder, _) = try Self.makeScheduler(suiteName: "TickFires")
         scheduler.start { @MainActor in
             recorder.record()
             return Self.haveViewsResult()
@@ -89,7 +93,7 @@ struct AutoRefreshSchedulerTests {
     @MainActor
     @Test("a second start() while already running does not spawn a parallel loop")
     func idempotentStart() async throws {
-        let (scheduler, _, recorder) = Self.makeScheduler(suiteName: "Idempotent", intervalSeconds: 0.1)
+        let (scheduler, _, recorder, _) = try Self.makeScheduler(suiteName: "Idempotent", intervalSeconds: 0.1)
         let tick: AutoRefreshScheduler.Tick = { @MainActor in
             recorder.record()
             return Self.haveViewsResult()
@@ -113,7 +117,7 @@ struct AutoRefreshSchedulerTests {
     @MainActor
     @Test("stop() cancels subsequent ticks")
     func stopCancels() async throws {
-        let (scheduler, _, recorder) = Self.makeScheduler(suiteName: "Stop", intervalSeconds: 0.05)
+        let (scheduler, _, recorder, _) = try Self.makeScheduler(suiteName: "Stop", intervalSeconds: 0.05)
         scheduler.start { @MainActor in
             recorder.record()
             return Self.haveViewsResult()
@@ -136,7 +140,7 @@ struct AutoRefreshSchedulerTests {
         // configured interval (50 ms here) so we should see several ticks.
         // We assert the interval is respected (rate ≤ 1 tick per 40 ms), but
         // also that ticks DO eventually accumulate (not stuck at 1).
-        let (scheduler, _, recorder) = Self.makeScheduler(suiteName: "EmptyViews", intervalSeconds: 0.05)
+        let (scheduler, _, recorder, _) = try Self.makeScheduler(suiteName: "EmptyViews", intervalSeconds: 0.05)
         scheduler.start { @MainActor in
             recorder.record()
             return Self.emptyViewsResult()
@@ -147,12 +151,83 @@ struct AutoRefreshSchedulerTests {
         #expect(recorder.count <= 12, "empty-views path is ticking faster than the configured interval")
     }
 
+    // MARK: - empty-results delay policy
+
+    @MainActor
+    @Test("steady-state empty results honour the configured interval, not the 30s fast poll")
+    func emptyResultsHonourConfiguredInterval() async throws {
+        let (_, defaults, _, _) = try Self.makeScheduler(suiteName: "EmptyResults", intervalSeconds: 1800)
+        var consecutiveErrors = 0
+        var consecutiveEmptyResults = 0
+        // First empty tick is the bootstrap grace: fast poll.
+        let first = AutoRefreshScheduler.nextDelay(
+            result: Self.emptyResultsResult(),
+            consecutiveErrors: &consecutiveErrors,
+            consecutiveEmptyResults: &consecutiveEmptyResults,
+            defaults: defaults
+        )
+        #expect(first == 30)
+        // Every consecutive empty tick sleeps the configured interval.
+        for _ in 0..<3 {
+            let delay = AutoRefreshScheduler.nextDelay(
+                result: Self.emptyResultsResult(),
+                consecutiveErrors: &consecutiveErrors,
+                consecutiveEmptyResults: &consecutiveEmptyResults,
+                defaults: defaults
+            )
+            #expect(delay == 1800, "steady-state empty results must sleep the configured interval, not fast-poll")
+        }
+    }
+
+    @MainActor
+    @Test("a data tick re-arms the empty-results bootstrap fast poll")
+    func emptyResultsFastPollReArmsAfterData() async throws {
+        let (_, defaults, _, _) = try Self.makeScheduler(suiteName: "EmptyResultsReArm", intervalSeconds: 1800)
+        var consecutiveErrors = 0
+        var consecutiveEmptyResults = 0
+        _ = AutoRefreshScheduler.nextDelay(
+            result: Self.emptyResultsResult(),
+            consecutiveErrors: &consecutiveErrors,
+            consecutiveEmptyResults: &consecutiveEmptyResults,
+            defaults: defaults
+        )
+        let dataDelay = AutoRefreshScheduler.nextDelay(
+            result: Self.haveViewsResult(),
+            consecutiveErrors: &consecutiveErrors,
+            consecutiveEmptyResults: &consecutiveEmptyResults,
+            defaults: defaults
+        )
+        #expect(dataDelay == 1800)
+        let afterData = AutoRefreshScheduler.nextDelay(
+            result: Self.emptyResultsResult(),
+            consecutiveErrors: &consecutiveErrors,
+            consecutiveEmptyResults: &consecutiveEmptyResults,
+            defaults: defaults
+        )
+        #expect(afterData == 30, "data followed by no data may be a transient, so one fast poll is allowed")
+    }
+
+    @MainActor
+    @Test("empty-results fast poll never sleeps longer than a sub-30s configured interval")
+    func emptyResultsFastPollCappedByInterval() async throws {
+        let (_, defaults, _, _) = try Self.makeScheduler(suiteName: "EmptyResultsCap", intervalSeconds: 10)
+        var consecutiveErrors = 0
+        var consecutiveEmptyResults = 0
+        let first = AutoRefreshScheduler.nextDelay(
+            result: Self.emptyResultsResult(),
+            consecutiveErrors: &consecutiveErrors,
+            consecutiveEmptyResults: &consecutiveEmptyResults,
+            defaults: defaults
+        )
+        #expect(first == 10)
+    }
+
     // MARK: - interval-change notification restarts
 
     @MainActor
     @Test("refresh interval notification restarts the loop")
     func intervalChangeRestarts() async throws {
-        let (scheduler, _, recorder) = Self.makeScheduler(suiteName: "IntervalRestart", intervalSeconds: 1.0)
+        let (scheduler, _, recorder, center) = try Self.makeScheduler(suiteName: "IntervalRestart", intervalSeconds: 1.0)
         scheduler.start { @MainActor in
             recorder.record()
             return Self.haveViewsResult()
@@ -163,10 +238,34 @@ struct AutoRefreshSchedulerTests {
         // Post the notification — the observer should cancel the sleeping
         // loop and spawn a fresh one. Because the new loop runs the tick
         // immediately, we'll see a new tick even though the interval was 1 s.
-        NotificationCenter.default.post(name: Constants.Notifications.prRefreshIntervalChanged, object: nil)
+        center.post(name: Constants.Notifications.prRefreshIntervalChanged, object: nil)
         try await Self.waitUntil { recorder.count > countBeforeRestart }
         scheduler.stop()
         #expect(recorder.count > countBeforeRestart)
+    }
+
+    @MainActor
+    @Test("interval notification only restarts the scheduler observing that center")
+    func intervalChangeScopedToInjectedCenter() async throws {
+        let (schedulerA, _, recorderA, centerA) = try Self.makeScheduler(suiteName: "CenterA", intervalSeconds: 5.0)
+        let (schedulerB, _, recorderB, _) = try Self.makeScheduler(suiteName: "CenterB", intervalSeconds: 5.0)
+        schedulerA.start { @MainActor in
+            recorderA.record()
+            return Self.haveViewsResult()
+        }
+        schedulerB.start { @MainActor in
+            recorderB.record()
+            return Self.haveViewsResult()
+        }
+        try await Self.waitUntil { recorderA.count >= 1 && recorderB.count >= 1 }
+        let countABefore = recorderA.count
+        let countBBefore = recorderB.count
+        centerA.post(name: Constants.Notifications.prRefreshIntervalChanged, object: nil)
+        try await Self.waitUntil { recorderA.count > countABefore }
+        schedulerA.stop()
+        schedulerB.stop()
+        #expect(recorderA.count > countABefore)
+        #expect(recorderB.count == countBBefore, "a post on another scheduler's center must not restart this loop")
     }
 
     // MARK: - deinit cancels in-flight
@@ -174,14 +273,17 @@ struct AutoRefreshSchedulerTests {
     @MainActor
     @Test("dropping the scheduler cancels any in-flight tick loop")
     func deinitCancels() async throws {
-        let defaults = UserDefaults(suiteName: "AutoRefreshSchedulerTests.Deinit")!
+        let defaults = try #require(UserDefaults(suiteName: "AutoRefreshSchedulerTests.Deinit"))
         defaults.removePersistentDomain(forName: "AutoRefreshSchedulerTests.Deinit")
         defaults.set(0.05, forKey: Constants.UserDefaultsKeys.prRefreshInterval)
         let recorder = TickRecorder()
 
         // Construct the scheduler inline without binding it to an extra local
         // variable — `optional = nil` must be the last strong reference.
-        var optional: AutoRefreshScheduler? = AutoRefreshScheduler(defaults: defaults)
+        var optional: AutoRefreshScheduler? = AutoRefreshScheduler(
+            defaults: defaults,
+            notificationCenter: NotificationCenter()
+        )
         optional?.start { @MainActor in
             recorder.record()
             return Self.haveViewsResult()

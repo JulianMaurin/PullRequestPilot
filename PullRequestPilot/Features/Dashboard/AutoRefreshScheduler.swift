@@ -19,6 +19,11 @@ final class AutoRefreshScheduler {
     // MARK: - Properties
 
     private let defaults: UserDefaults
+
+    /// Center the interval-change observer subscribes to. Injected so tests
+    /// can isolate schedulers from posts made by parallel suites.
+    private let notificationCenter: NotificationCenter
+
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "AutoRefresh")
 
     /// Tick closure passed to `start()`. Kept on the scheduler so the
@@ -33,8 +38,9 @@ final class AutoRefreshScheduler {
 
     // MARK: - Init
 
-    init(defaults: UserDefaults) {
+    init(defaults: UserDefaults, notificationCenter: NotificationCenter = .default) {
         self.defaults = defaults
+        self.notificationCenter = notificationCenter
     }
 
     deinit {
@@ -78,11 +84,13 @@ final class AutoRefreshScheduler {
         let defaults = defaults
         let newTask = Task { @MainActor [weak self] in
             var consecutiveErrorFetches = 0
+            var consecutiveEmptyFetches = 0
             while !Task.isCancelled {
                 let result = await tick()
                 let seconds = Self.nextDelay(
                     result: result,
                     consecutiveErrors: &consecutiveErrorFetches,
+                    consecutiveEmptyResults: &consecutiveEmptyFetches,
                     defaults: defaults
                 )
                 do {
@@ -101,8 +109,9 @@ final class AutoRefreshScheduler {
         let alreadyObserving = intervalObserverTask.withLock { $0 != nil }
         guard !alreadyObserving else { return }
 
+        let center = notificationCenter
         let observerTask = Task { @MainActor [weak self] in
-            for await _ in NotificationCenter.default.notifications(named: Constants.Notifications.prRefreshIntervalChanged) {
+            for await _ in center.notifications(named: Constants.Notifications.prRefreshIntervalChanged) {
                 guard let self else { return }
                 if Task.isCancelled { return }
                 self.restartLoop()
@@ -121,13 +130,20 @@ final class AutoRefreshScheduler {
         }
     }
 
-    private static func nextDelay(result: AutoRefreshTickResult, consecutiveErrors: inout Int, defaults: UserDefaults) -> Double {
+    /// Internal (not private) so tests can pin the delay policy directly.
+    static func nextDelay(
+        result: AutoRefreshTickResult,
+        consecutiveErrors: inout Int,
+        consecutiveEmptyResults: inout Int,
+        defaults: UserDefaults
+    ) -> Double {
         if result.hasData {
             consecutiveErrors = 0
-            let interval = defaults.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
-            return interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
+            consecutiveEmptyResults = 0
+            return configuredInterval(defaults: defaults)
         }
         if result.hasError {
+            consecutiveEmptyResults = 0
             if let wait = result.maxRateLimitWait, wait > 0 {
                 return min(max(wait, 10), 3600)
             }
@@ -138,9 +154,22 @@ final class AutoRefreshScheduler {
             // No views to refresh — sleep for the user's configured interval
             // (or the default) instead of spinning every 5s. Fixes the
             // "tight loop when idle" bug.
-            let interval = defaults.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
-            return interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
+            consecutiveEmptyResults = 0
+            return configuredInterval(defaults: defaults)
         }
-        return 30
+        // Views exist but every result set is empty. The first such tick may
+        // be a not-yet-loaded bootstrap (e.g. the fetch was cancelled before
+        // data arrived), so retry fast once; consecutive empty ticks are a
+        // legitimately empty queue and honour the configured interval.
+        consecutiveEmptyResults += 1
+        if consecutiveEmptyResults > 1 {
+            return configuredInterval(defaults: defaults)
+        }
+        return min(30, configuredInterval(defaults: defaults))
+    }
+
+    private static func configuredInterval(defaults: UserDefaults) -> Double {
+        let interval = defaults.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
+        return interval > 0 ? interval : Constants.App.defaultPRRefreshInterval
     }
 }
