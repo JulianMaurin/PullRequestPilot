@@ -20,10 +20,11 @@ struct ReviewQueueView: View {
     @State private var draggedViewID: UUID?
     @FocusState private var isQueryFocused: Bool
     @State private var detailPanelWidth: Double
+    @State private var detailPanelHeight: Double
     /// Tracked width of the area below the divider (list/detail container).
-    /// Drives the narrow-mode swap. Defaults wide so initial render uses the
-    /// `HSplitView` path; the `.onGeometryChange` modifier corrects it on the
-    /// first layout pass.
+    /// Drives the narrow-mode layout switch. Defaults wide so initial render
+    /// uses the `HSplitView` path; the `.onGeometryChange` modifier corrects
+    /// it on the first layout pass.
     @State private var availableWidth: CGFloat = 1000
 
     init(viewModel: DashboardViewModel, prDetailViewModel: PRDetailViewModel, events: EventCenter? = nil, userDefaults: UserDefaults, onOpenSettings: @escaping () -> Void) {
@@ -32,15 +33,18 @@ struct ReviewQueueView: View {
         self.events = events
         self.userDefaults = userDefaults
         self.onOpenSettings = onOpenSettings
-        let stored = userDefaults.double(forKey: Self.detailPanelWidthKey)
-        _detailPanelWidth = State(initialValue: stored > 0 ? stored : 550)
+        let storedWidth = userDefaults.double(forKey: Self.detailPanelWidthKey)
+        _detailPanelWidth = State(initialValue: storedWidth > 0 ? storedWidth : 550)
+        let storedHeight = userDefaults.double(forKey: Self.detailPanelHeightKey)
+        _detailPanelHeight = State(initialValue: storedHeight > 0 ? storedHeight : 300)
     }
 
     private static let detailPanelWidthKey = "detailPanelWidth"
+    private static let detailPanelHeightKey = "detailPanelHeight"
 
     /// Below this content width, list (350) + detail (400) + split divider
-    /// can't both fit. Collapse to a single pane: list when nothing is
-    /// selected, detail when a PR is selected.
+    /// can't both fit side by side. The detail pane moves below the list
+    /// (vertical split) so the list never disappears.
     private static let narrowThreshold: CGFloat = 760
 
     private var isNarrow: Bool { availableWidth < Self.narrowThreshold }
@@ -89,17 +93,6 @@ struct ReviewQueueView: View {
         }
         .frame(minWidth: 500, minHeight: 300)
         .toolbar {
-            if isNarrow, prDetailViewModel.selectedPR != nil {
-                ToolbarItem(placement: .navigation) {
-                    Button {
-                        prDetailViewModel.deselect()
-                    } label: {
-                        Image(systemName: "chevron.left")
-                    }
-                    .help("Back to list")
-                    .accessibilityLabel("Back to pull request list")
-                }
-            }
             ToolbarItem(placement: .automatic) {
                 Button {
                     prDetailViewModel.deselect()
@@ -197,14 +190,20 @@ struct ReviewQueueView: View {
 
     // MARK: - Subviews
 
-    /// Routes between split-mode (`HSplitView`) and narrow-mode (single pane).
-    /// Narrow + selection → detail takes the full pane; the toolbar back
-    /// button navigates back to the list. Otherwise the existing split layout
-    /// is rendered untouched.
+    /// Routes between side-by-side (`HSplitView`) and narrow mode
+    /// (`VSplitView`): when the window is too narrow for both panes, the
+    /// detail moves below the list instead of replacing it, so the list
+    /// stays visible and selection changes remain one click away.
     @ViewBuilder
     private var mainContent: some View {
-        if isNarrow, prDetailViewModel.selectedPR != nil {
-            PRDetailView(viewModel: prDetailViewModel)
+        if isNarrow {
+            VSplitView {
+                contentArea
+                    .frame(minHeight: 100)
+                if prDetailViewModel.selectedPR != nil {
+                    bottomDetailPane
+                }
+            }
         } else {
             HSplitView {
                 contentArea
@@ -228,7 +227,7 @@ struct ReviewQueueView: View {
                 }
             }
             .background {
-                SplitDividerRestorer(detailWidth: detailPanelWidth)
+                SplitDividerRestorer(detailLength: detailPanelWidth, clampedTo: 400...800)
             }
             // Debounce: only persist once the drag settles. The
             // task is cancelled whenever `detailPanelWidth` changes
@@ -241,6 +240,32 @@ struct ReviewQueueView: View {
                     return
                 }
                 userDefaults.set(detailPanelWidth, forKey: Self.detailPanelWidthKey)
+            }
+    }
+
+    /// Narrow-mode counterpart of `splitDetailPane`: same restore/persist
+    /// dance, on the vertical axis.
+    private var bottomDetailPane: some View {
+        PRDetailView(viewModel: prDetailViewModel)
+            .frame(minHeight: 120)
+            .background {
+                GeometryReader { geo in
+                    Color.clear
+                        .onChange(of: geo.size.height) { _, newHeight in
+                            detailPanelHeight = newHeight
+                        }
+                }
+            }
+            .background {
+                SplitDividerRestorer(detailLength: detailPanelHeight, clampedTo: 120...600)
+            }
+            .task(id: detailPanelHeight) {
+                do {
+                    try await Task.sleep(for: .milliseconds(250))
+                } catch {
+                    return
+                }
+                userDefaults.set(detailPanelHeight, forKey: Self.detailPanelHeightKey)
             }
     }
 
@@ -871,19 +896,25 @@ struct ReviewQueueView: View {
 // MARK: - Split Divider Restoration
 
 /// Restores the NSSplitView divider position when the detail panel appears,
-/// using the previously persisted width from @AppStorage.
+/// using the previously persisted pane length. Axis-agnostic: the detail
+/// pane is the trailing/bottom subview, so the divider sits at
+/// (container length − detail length) along whichever axis the enclosing
+/// split view uses.
 private struct SplitDividerRestorer: NSViewRepresentable {
-    let detailWidth: Double
+    let detailLength: Double
+    let clampedTo: ClosedRange<Double>
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
-        let width = detailWidth
+        let length = detailLength
+        let range = clampedTo
         DispatchQueue.main.async {
-            guard let splitView = Self.findSplitView(from: view),
-                  splitView.bounds.width > 0 else { return }
-            let clamped = min(max(width, 400), 800)
-            let position = splitView.bounds.width - clamped
-            splitView.setPosition(max(0, position), ofDividerAt: 0)
+            guard let splitView = Self.findSplitView(from: view) else { return }
+            // NSSplitView.isVertical means side-by-side panes (vertical divider).
+            let containerLength = splitView.isVertical ? splitView.bounds.width : splitView.bounds.height
+            guard containerLength > 0 else { return }
+            let clamped = min(max(length, range.lowerBound), range.upperBound)
+            splitView.setPosition(max(0, containerLength - clamped), ofDividerAt: 0)
         }
         return view
     }
