@@ -32,7 +32,7 @@ final class AppState {
         let gitHubClient = GitHubClient(
             tokenProvider: { await identityHolder.identity?.token() },
             onUnauthorized: { staleToken in
-                Task { await identityHolder.identity?.invalidateIfMatchingToken(staleToken, reason: .unauthorized) }
+                Task { await identityHolder.identity?.handleUnauthorized(staleToken: staleToken) }
             }
         )
         let identity = IdentityActor(keychain: keychain, github: gitHubClient)

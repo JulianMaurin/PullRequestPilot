@@ -23,6 +23,10 @@ actor IdentityActor {
     /// propagates to joiners instead of being swallowed as nil.
     private var pendingViewerLoginTask: Task<String?, Error>?
 
+    /// Coalesces concurrent 401 revalidations — a failing refresh cycle fires
+    /// one 401 per view, and only one confirmation round-trip should run.
+    private var pendingRevalidationTask: Task<Void, Never>?
+
     init(keychain: KeychainService, github: GitHubClientProtocol) {
         self.keychain = keychain
         self.github = github
@@ -167,6 +171,42 @@ actor IdentityActor {
         }
         invalidate(reason: reason)
         return true
+    }
+
+    /// Entry point for the client's 401 callback. A single 401 must not
+    /// destroy the stored token: GitHub and intermediary proxies return
+    /// transient auth failures, and deleting the Keychain on one bad response
+    /// left users signed out across relaunches with a token that still
+    /// worked when re-pasted. The token is re-validated once; only a
+    /// confirmed 401 invalidates. Inconclusive outcomes (network, server,
+    /// rate limit) keep the token — the next 401 re-runs the check.
+    func handleUnauthorized(staleToken: String) async {
+        guard case .authenticated(let current, _) = state, current == staleToken else { return }
+        if let pending = pendingRevalidationTask {
+            await pending.value
+            return
+        }
+        // The revalidation's own 401 fires the client's onUnauthorized again;
+        // that re-entrant call joins this task above and cannot recurse.
+        let task = Task { await self.revalidate(staleToken: staleToken) }
+        pendingRevalidationTask = task
+        await task.value
+        pendingRevalidationTask = nil
+    }
+
+    private func revalidate(staleToken: String) async {
+        do {
+            _ = try await github.validateToken(staleToken)
+            logger.warning("401 received but token re-validated; keeping identity (transient auth failure)")
+        } catch let clientError as GitHubClientError {
+            guard case .unauthorized = clientError else {
+                logger.warning("401 revalidation inconclusive; keeping token: \(clientError, privacy: .public)")
+                return
+            }
+            invalidateIfMatchingToken(staleToken, reason: .unauthorized)
+        } catch {
+            logger.warning("401 revalidation inconclusive; keeping token: \(error, privacy: .public)")
+        }
     }
 
     // MARK: - Private

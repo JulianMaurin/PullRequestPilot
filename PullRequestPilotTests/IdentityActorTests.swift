@@ -210,6 +210,72 @@ struct IdentityActorTests {
         #expect(state == .unauthenticated)
     }
 
+    // MARK: - 401 revalidation
+
+    @Test("a 401 whose revalidation succeeds keeps identity and Keychain")
+    func transient401KeepsToken() async throws {
+        let mock = MockGitHubClient()
+        await mock.setViewerLogin("alice")
+        let (identity, keychain) = makeIdentity(keychainSuite: "reval-transient", github: mock)
+
+        _ = try await identity.swap(to: "ghp_valid")
+        await identity.handleUnauthorized(staleToken: "ghp_valid")
+
+        let state = await identity.state
+        #expect(state.token == "ghp_valid")
+        #expect(keychain.read(key: Constants.Keychain.githubToken) == "ghp_valid")
+        // swap + revalidation
+        #expect(await mock.validateTokenCallCount == 2)
+        try? keychain.delete(key: Constants.Keychain.githubToken)
+    }
+
+    @Test("a 401 whose revalidation confirms unauthorized invalidates and clears Keychain")
+    func confirmed401Invalidates() async throws {
+        let mock = MockGitHubClient()
+        await mock.setViewerLogin("alice")
+        let (identity, keychain) = makeIdentity(keychainSuite: "reval-confirmed", github: mock)
+
+        _ = try await identity.swap(to: "ghp_revoked")
+        await mock.setValidateTokenError(GitHubClientError.unauthorized)
+        await identity.handleUnauthorized(staleToken: "ghp_revoked")
+
+        let state = await identity.state
+        #expect(state == .unauthenticated)
+        #expect(keychain.read(key: Constants.Keychain.githubToken) == nil)
+    }
+
+    @Test("a 401 whose revalidation fails with a network error keeps the token")
+    func inconclusive401KeepsToken() async throws {
+        let mock = MockGitHubClient()
+        await mock.setViewerLogin("alice")
+        let (identity, keychain) = makeIdentity(keychainSuite: "reval-network", github: mock)
+
+        _ = try await identity.swap(to: "ghp_offline")
+        await mock.setValidateTokenError(GitHubClientError.networkError(URLError(.notConnectedToInternet)))
+        await identity.handleUnauthorized(staleToken: "ghp_offline")
+
+        let state = await identity.state
+        #expect(state.token == "ghp_offline")
+        #expect(keychain.read(key: Constants.Keychain.githubToken) == "ghp_offline")
+        try? keychain.delete(key: Constants.Keychain.githubToken)
+    }
+
+    @Test("handleUnauthorized for a superseded token is a no-op")
+    func handleUnauthorizedSupersededTokenNoOp() async throws {
+        let mock = MockGitHubClient()
+        await mock.setViewerLogin("alice")
+        let (identity, keychain) = makeIdentity(keychainSuite: "reval-superseded", github: mock)
+
+        _ = try await identity.swap(to: "ghp_fresh")
+        await identity.handleUnauthorized(staleToken: "ghp_old")
+
+        let state = await identity.state
+        #expect(state.token == "ghp_fresh")
+        // Only the swap validated — no revalidation ran for the stale token.
+        #expect(await mock.validateTokenCallCount == 1)
+        try? keychain.delete(key: Constants.Keychain.githubToken)
+    }
+
     // MARK: - Concurrent swaps
 
     @Test("concurrent swaps serialize; last committed wins")
