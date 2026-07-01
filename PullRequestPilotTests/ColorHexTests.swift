@@ -76,6 +76,33 @@ struct ColorHexTests {
         #expect(abs(c.b - 0xEF / 255.0) < 0.01)
     }
 
+    @Test("returns gray for 6-character non-hex string")
+    func nonHexCharacters() throws {
+        let color = Color(hex: "zzzzzz")
+        let c = try #require(sRGBComponents(color))
+        #expect(abs(c.r - 0.5) < 0.01)
+        #expect(abs(c.g - 0.5) < 0.01)
+        #expect(abs(c.b - 0.5) < 0.01)
+    }
+
+    @Test("returns gray for partially-hex string")
+    func partiallyHexCharacters() throws {
+        let color = Color(hex: "12345Z")
+        let c = try #require(sRGBComponents(color))
+        #expect(abs(c.r - 0.5) < 0.01)
+        #expect(abs(c.g - 0.5) < 0.01)
+        #expect(abs(c.b - 0.5) < 0.01)
+    }
+
+    @Test("parses lowercase hex with hash as red")
+    func lowercaseRedWithHash() throws {
+        let color = Color(hex: "#ff0000")
+        let c = try #require(sRGBComponents(color))
+        #expect(abs(c.r - 1.0) < 0.01)
+        #expect(abs(c.g - 0.0) < 0.01)
+        #expect(abs(c.b - 0.0) < 0.01)
+    }
+
     @Test("strips hash prefix before parsing")
     func hashStripping() throws {
         let withHash = Color(hex: "#FF0000")

@@ -1,10 +1,12 @@
 import Foundation
+import os
 import Security
 
-enum KeychainError: LocalizedError {
+enum KeychainError: LocalizedError, Equatable {
     case unexpectedStatus(OSStatus)
     case itemNotFound
     case encodingError
+    case invalidData
 
     var errorDescription: String? {
         switch self {
@@ -14,15 +16,27 @@ enum KeychainError: LocalizedError {
             "Item not found in Keychain."
         case .encodingError:
             "Failed to encode value for Keychain storage."
+        case .invalidData:
+            "Keychain item data is not a valid UTF-8 string."
         }
     }
 }
 
 final class KeychainService: Sendable {
-    private let service: String
+    /// Signature of `SecItemCopyMatching`; injectable so tests can force error
+    /// statuses (locked keychain, denied ACL) the real API can't produce on demand.
+    typealias SecItemCopy = @Sendable (_ query: CFDictionary, _ result: UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
 
-    init(service: String = Bundle.main.bundleIdentifier ?? "com.pullrequestpilot") {
+    private let service: String
+    private let secItemCopyMatching: SecItemCopy
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Keychain")
+
+    init(
+        service: String = Bundle.main.bundleIdentifier ?? "com.pullrequestpilot",
+        secItemCopyMatching: @escaping SecItemCopy = SecItemCopyMatching
+    ) {
         self.service = service
+        self.secItemCopyMatching = secItemCopyMatching
     }
 
     func save(key: String, value: String) throws {
@@ -62,7 +76,11 @@ final class KeychainService: Sendable {
         throw KeychainError.unexpectedStatus(updateStatus)
     }
 
-    func read(key: String) -> String? {
+    /// Returns the stored value, or nil only when no item exists
+    /// (`errSecItemNotFound`). Any other status throws so callers can
+    /// distinguish a missing token from an unreadable keychain (locked at
+    /// login-item launch, denied ACL).
+    func readItem(key: String) throws -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -72,13 +90,30 @@ final class KeychainService: Sendable {
         ]
 
         var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        let status = secItemCopyMatching(query as CFDictionary, &result)
 
-        guard status == errSecSuccess, let data = result as? Data else {
+        switch status {
+        case errSecSuccess:
+            guard let data = result as? Data, let value = String(data: data, encoding: .utf8) else {
+                throw KeychainError.invalidData
+            }
+            return value
+        case errSecItemNotFound:
+            return nil
+        default:
+            throw KeychainError.unexpectedStatus(status)
+        }
+    }
+
+    /// Non-throwing variant for callers that treat an unreadable keychain as
+    /// absence; failures other than "not found" are logged at `.error`.
+    func read(key: String) -> String? {
+        do {
+            return try readItem(key: key)
+        } catch {
+            logger.error("Keychain read failed for key \(key, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
         }
-
-        return String(data: data, encoding: .utf8)
     }
 
     func delete(key: String) throws {

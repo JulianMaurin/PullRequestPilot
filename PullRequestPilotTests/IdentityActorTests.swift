@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import Security
 @testable import PullRequestPilot
 
 @Suite("IdentityActor")
@@ -32,6 +33,21 @@ struct IdentityActorTests {
         await identity.bootstrap()
         let token = await identity.token()
         #expect(token == "ghp_from_keychain")
+    }
+
+    @Test("bootstrap with unreadable keychain falls back to unauthenticated",
+          .enabled(if: ProcessInfo.processInfo.environment["GITHUB_TOKEN"] == nil))
+    func bootstrapKeychainFailure() async {
+        let keychain = KeychainService(
+            service: "com.pullrequestpilot.identity.tests.locked",
+            secItemCopyMatching: { _, _ in errSecInteractionNotAllowed }
+        )
+        let identity = IdentityActor(keychain: keychain, github: MockGitHubClient())
+
+        await identity.bootstrap()
+
+        let state = await identity.state
+        #expect(state == .unauthenticated)
     }
 
     // MARK: - Swap happy path

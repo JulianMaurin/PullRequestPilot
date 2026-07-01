@@ -86,7 +86,9 @@ actor IdentityActor {
     // MARK: - Write
 
     /// Loads any existing token from Keychain (or the DEBUG env var override) and
-    /// transitions state accordingly. Called once at app launch.
+    /// transitions state accordingly. Called once at app launch. An unreadable
+    /// keychain logs at `.error` and falls back to unauthenticated — the stored
+    /// token is left in place for the next launch.
     func bootstrap() {
         if let token = initialStoredToken() {
             state = .authenticated(token: token, viewerLogin: nil)
@@ -175,6 +177,11 @@ actor IdentityActor {
             return envToken
         }
         #endif
-        return keychain.read(key: Constants.Keychain.githubToken)
+        do {
+            return try keychain.readItem(key: Constants.Keychain.githubToken)
+        } catch {
+            logger.error("Keychain read failed during bootstrap; starting unauthenticated: \(error, privacy: .public)")
+            return nil
+        }
     }
 }

@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import Security
 @testable import PullRequestPilot
 
 @Suite("KeychainService")
@@ -42,6 +43,52 @@ struct KeychainServiceTests {
         try keychain.delete(key: "never-existed-\(UUID().uuidString)")
     }
 
+    @Test("readItem round-trips a saved value")
+    func readItemRoundTrip() throws {
+        try keychain.save(key: "strict-key", value: "strict-value")
+        #expect(try keychain.readItem(key: "strict-key") == "strict-value")
+        try keychain.delete(key: "strict-key")
+    }
+
+    @Test("readItem returns nil only for a missing item")
+    func readItemMissing() throws {
+        #expect(try keychain.readItem(key: "nonexistent-key-\(UUID().uuidString)") == nil)
+    }
+
+    @Test("readItem throws unexpectedStatus for non-notFound failures")
+    func readItemThrowsOnKeychainFailure() {
+        let locked = KeychainService(
+            service: "com.pullrequestpilot.tests.locked",
+            secItemCopyMatching: { _, _ in errSecInteractionNotAllowed }
+        )
+        #expect(throws: KeychainError.unexpectedStatus(errSecInteractionNotAllowed)) {
+            try locked.readItem(key: "any-key")
+        }
+    }
+
+    @Test("readItem throws invalidData for a non-UTF-8 payload")
+    func readItemThrowsOnCorruptData() {
+        let corrupt = KeychainService(
+            service: "com.pullrequestpilot.tests.corrupt",
+            secItemCopyMatching: { _, result in
+                result?.pointee = Data([0xFF, 0xFE]) as CFData
+                return errSecSuccess
+            }
+        )
+        #expect(throws: KeychainError.invalidData) {
+            try corrupt.readItem(key: "any-key")
+        }
+    }
+
+    @Test("read maps keychain failure to nil (logged fallback)")
+    func readFallsBackToNilOnKeychainFailure() {
+        let failing = KeychainService(
+            service: "com.pullrequestpilot.tests.authfail",
+            secItemCopyMatching: { _, _ in errSecAuthFailed }
+        )
+        #expect(failing.read(key: "any-key") == nil)
+    }
+
     @Test("KeychainError descriptions are user-facing")
     func errorDescriptions() {
         let encodingError = KeychainError.encodingError
@@ -52,5 +99,8 @@ struct KeychainServiceTests {
 
         let statusError = KeychainError.unexpectedStatus(-25300)
         #expect(statusError.errorDescription?.contains("Keychain") == true)
+
+        let invalidData = KeychainError.invalidData
+        #expect(invalidData.errorDescription?.contains("UTF-8") == true)
     }
 }
