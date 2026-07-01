@@ -98,30 +98,34 @@ struct PullRequestPilotApp: App {
 
 // MARK: - URL Handling
 
+/// Parsed `pullrequestpilot://` deep link.
+///
+/// Routing is allowlist-only: the scheme is registered system-wide, so any
+/// host not matched here must be ignored — a passthrough that forwards a
+/// caller-supplied URL to NSWorkspace would let external apps open arbitrary
+/// files and URL handlers through this app (confused deputy).
+enum DeepLinkRoute: Equatable {
+    /// pullrequestpilot://view/<viewID>
+    case selectView(UUID)
+
+    static func route(for url: URL) -> DeepLinkRoute? {
+        guard url.scheme == "pullrequestpilot",
+              url.host == "view",
+              let viewID = url.pathComponents.dropFirst().first,
+              let uuid = UUID(uuidString: viewID)
+        else { return nil }
+        return .selectView(uuid)
+    }
+}
+
 extension PullRequestPilotApp {
     private func handleIncomingURL(_ url: URL) {
-        guard url.scheme == "pullrequestpilot" else { return }
-
-        switch url.host {
-        case "pr":
-            // pullrequestpilot://pr?url=<encoded-github-url>
-            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-               let prURLString = components.queryItems?.first(where: { $0.name == "url" })?.value,
-               let prURL = URL(string: prURLString)
-            {
-                NSWorkspace.shared.open(prURL)
-            }
-        case "view":
-            // pullrequestpilot://view/<viewID>
-            if let viewID = url.pathComponents.dropFirst().first,
-               let uuid = UUID(uuidString: viewID)
-            {
-                appState?.dashboardViewModel.selectedViewID = uuid
-                appDelegate.showWindow()
-            }
-        default:
-            break
-        }
+        guard case .selectView(let uuid)? = DeepLinkRoute.route(for: url) else { return }
+        // Dismiss Settings first — RootContentView renders SettingsView over
+        // the dashboard while showingSettings is set, hiding the view switch.
+        appState?.dashboardViewModel.showingSettings = false
+        appState?.dashboardViewModel.selectedViewID = uuid
+        appDelegate.showWindow()
     }
 }
 

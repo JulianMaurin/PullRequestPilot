@@ -28,6 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             } else {
                 button.image = NSImage(systemSymbolName: "list.bullet.rectangle", accessibilityDescription: "Pull Request Pilot")
             }
+            // Label the button itself so both icon branches expose a VoiceOver name.
+            button.setAccessibilityTitle("Pull Request Pilot")
+            button.toolTip = "Pull Request Pilot"
             button.imagePosition = .imageLeading
             button.action = #selector(statusBarButtonClicked)
             button.target = self
@@ -118,6 +121,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     @objc private func viewMenuItemClicked(_ sender: NSMenuItem) {
         guard let viewID = sender.representedObject as? UUID else { return }
+        selectView(viewID)
+    }
+
+    /// Switches the dashboard to the given view and brings the window forward.
+    /// Settings must be dismissed first — RootContentView renders SettingsView
+    /// over the dashboard while showingSettings is set.
+    func selectView(_ viewID: UUID) {
+        dashboardViewModel?.showingSettings = false
         dashboardViewModel?.selectedViewID = viewID
         showWindow()
     }
