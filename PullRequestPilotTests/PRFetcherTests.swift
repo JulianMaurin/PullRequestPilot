@@ -15,6 +15,14 @@ struct PRFetcherTests {
     /// exercise filter behaviour.
     private static let identityFilter: PRFetcher.PRFilter = { prs, _ in prs }
 
+    private static func page(ids: [String], cursor: String?) -> PullRequestPage {
+        PullRequestPage(
+            pullRequests: ids.map { TestPullRequestFactory.make(id: $0) },
+            nextCursor: cursor,
+            skippedNodeCount: 0
+        )
+    }
+
     @MainActor
     private static func makeFetcher(
         client: MockGitHubClient,
@@ -32,6 +40,19 @@ struct PRFetcherTests {
         while !predicate() {
             if ContinuousClock.now >= deadline { return }
             try await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    /// Drains the gated client if a test misses an interleaving: parked
+    /// continuations would otherwise never resume, the body's trailing awaits
+    /// would never resolve, and the run would hang past its time limit
+    /// instead of reporting the failed `releaseFetch` expectations. Cancelled
+    /// on the success path before it fires (the sleep throws and the drain is
+    /// skipped — the unobserved error is the point).
+    private static func gateWatchdog(for client: GatedGitHubClient) -> Task<Void, any Error> {
+        Task {
+            try await Task.sleep(for: .seconds(20))
+            await client.failAllPending()
         }
     }
 
@@ -257,6 +278,125 @@ struct PRFetcherTests {
         #expect(state.pullRequests.map(\.id) == ["PR_dup"])
     }
 
+    // MARK: - TaskMap
+
+    @Test("removeIfIdentical removes only the exact task instance")
+    func taskMapRemoveIfIdentical() {
+        let map = TaskMap()
+        let key = UUID()
+        let first: Task<Void, Never> = Task {}
+        let second: Task<Void, Never> = Task {}
+        map.insert(first, for: key)
+        map.removeIfIdentical(second, for: key)
+        #expect(map.task(for: key) == first)
+        map.removeIfIdentical(first, for: key)
+        #expect(map.task(for: key) == nil)
+    }
+
+    // MARK: - query-edit supersession
+
+    @MainActor
+    @Test("resetState cancels the in-flight refresh so a new-query refresh fetches fresh", .timeLimit(.minutes(1)))
+    func resetStateSupersedesInFlightRefresh() async throws {
+        let client = GatedGitHubClient()
+        let watchdog = Self.gateWatchdog(for: client)
+        defer { watchdog.cancel() }
+        let fetcher = PRFetcher(gitHubClient: client, filter: Self.identityFilter)
+        let viewID = UUID()
+        let oldView = DashboardView(id: viewID, title: "Test", query: "is:pr label:old")
+        let newView = DashboardView(id: viewID, title: "Test", query: "is:pr label:new")
+
+        async let oldRefresh: Void = fetcher.refresh(for: oldView)
+        try await client.waitForFetch(query: oldView.query, cursor: nil)
+
+        // Mirrors commitQueryEdit: reset, then refresh with the updated view.
+        fetcher.resetState(for: viewID)
+        async let newRefresh: Void = fetcher.refresh(for: newView)
+        try await client.waitForFetch(query: newView.query, cursor: nil)
+
+        // Release the new page and wait for its commit before releasing the
+        // stale one: the old-query result then resolves strictly after the
+        // new commit and must be dropped, not written over it.
+        #expect(await client.releaseFetch(query: newView.query, cursor: nil, returning: Self.page(ids: ["PR_new"], cursor: "cursor-new")))
+        try await Self.waitUntil { fetcher.states[viewID]?.pullRequests.map(\.id) == ["PR_new"] }
+        #expect(await client.releaseFetch(query: oldView.query, cursor: nil, returning: Self.page(ids: ["PR_old"], cursor: "cursor-old")))
+        _ = await newRefresh
+        _ = await oldRefresh
+
+        let state = try #require(fetcher.states[viewID])
+        #expect(state.pullRequests.map(\.id) == ["PR_new"])
+        #expect(state.nextCursor == "cursor-new")
+        #expect(await client.fetchPullRequestsCallCount == 2)
+    }
+
+    // MARK: - refresh / loadMore interleave
+
+    @MainActor
+    @Test("a refresh started mid-loadMore supersedes the stale page", .timeLimit(.minutes(1)))
+    func refreshSupersedesInFlightLoadMore() async throws {
+        let client = GatedGitHubClient()
+        let watchdog = Self.gateWatchdog(for: client)
+        defer { watchdog.cancel() }
+        let fetcher = PRFetcher(gitHubClient: client, filter: Self.identityFilter)
+        let view = Self.makeView()
+
+        async let initialRefresh: Void = fetcher.refresh(for: view)
+        try await client.waitForFetch(query: view.query, cursor: nil)
+        #expect(await client.releaseFetch(query: view.query, cursor: nil, returning: Self.page(ids: ["PR_1"], cursor: "cursor-1")))
+        _ = await initialRefresh
+
+        async let staleLoadMore: Void = fetcher.loadMore(for: view)
+        try await client.waitForFetch(query: view.query, cursor: "cursor-1")
+
+        async let secondRefresh: Void = fetcher.refresh(for: view)
+        try await client.waitForFetch(query: view.query, cursor: nil)
+        #expect(await client.releaseFetch(query: view.query, cursor: nil, returning: Self.page(ids: ["PR_2"], cursor: "cursor-2")))
+        _ = await secondRefresh
+
+        #expect(await client.releaseFetch(query: view.query, cursor: "cursor-1", returning: Self.page(ids: ["PR_stale"], cursor: "cursor-stale")))
+        _ = await staleLoadMore
+
+        let state = try #require(fetcher.states[view.id])
+        #expect(state.pullRequests.map(\.id) == ["PR_2"])
+        #expect(state.nextCursor == "cursor-2")
+        #expect(state.isLoadingMore == false)
+    }
+
+    @MainActor
+    @Test("a loadMore that raced an in-flight refresh drops its stale-cursor page", .timeLimit(.minutes(1)))
+    func loadMoreDuringRefreshDropsStalePage() async throws {
+        let client = GatedGitHubClient()
+        let watchdog = Self.gateWatchdog(for: client)
+        defer { watchdog.cancel() }
+        let fetcher = PRFetcher(gitHubClient: client, filter: Self.identityFilter)
+        let view = Self.makeView()
+
+        async let initialRefresh: Void = fetcher.refresh(for: view)
+        try await client.waitForFetch(query: view.query, cursor: nil)
+        #expect(await client.releaseFetch(query: view.query, cursor: nil, returning: Self.page(ids: ["PR_1"], cursor: "cursor-1")))
+        _ = await initialRefresh
+
+        // Refresh first — its start-of-fetch loadMore cancellation misses a
+        // loadMore that begins afterwards, so only the commit-time cursor
+        // check can reject the stale page.
+        async let secondRefresh: Void = fetcher.refresh(for: view)
+        try await client.waitForFetch(query: view.query, cursor: nil)
+        async let staleLoadMore: Void = fetcher.loadMore(for: view)
+        try await client.waitForFetch(query: view.query, cursor: "cursor-1")
+
+        #expect(await client.releaseFetch(query: view.query, cursor: nil, returning: Self.page(ids: ["PR_2"], cursor: "cursor-2")))
+        _ = await secondRefresh
+
+        #expect(await client.releaseFetch(query: view.query, cursor: "cursor-1", returning: Self.page(ids: ["PR_stale"], cursor: "cursor-stale")))
+        _ = await staleLoadMore
+
+        let state = try #require(fetcher.states[view.id])
+        #expect(state.pullRequests.map(\.id) == ["PR_2"])
+        #expect(state.nextCursor == "cursor-2")
+        #expect(state.seenIDs.contains("PR_stale") == false)
+        #expect(state.isLoadingMore == false)
+    }
+
     // MARK: - removeState / resetState / clearAll
 
     @MainActor
@@ -296,5 +436,84 @@ struct PRFetcherTests {
         await fetcher.refresh(for: viewB)
         fetcher.clearAll()
         #expect(fetcher.states.isEmpty)
+    }
+}
+
+// MARK: - GatedGitHubClient
+
+/// Gates every `fetchPullRequests` call on a continuation so tests control the
+/// exact interleaving of concurrent fetches. Actor-backed for the same reason
+/// as `MockGitHubClient`: parallel tasks read and release fetches concurrently.
+private actor GatedGitHubClient: GitHubClientProtocol {
+
+    private struct PendingFetch {
+        let query: String
+        let cursor: String?
+        let continuation: CheckedContinuation<PullRequestPage, any Error>
+    }
+
+    private var pendingFetches: [PendingFetch] = []
+    private var isDraining = false
+    private(set) var fetchPullRequestsCallCount = 0
+
+    func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage {
+        fetchPullRequestsCallCount += 1
+        if isDraining { throw CancellationError() }
+        return try await withCheckedThrowingContinuation { continuation in
+            pendingFetches.append(PendingFetch(query: query, cursor: cursor, continuation: continuation))
+        }
+    }
+
+    /// Resumes every parked fetch — and, via the latch, every future one —
+    /// with `CancellationError`. Watchdog escape hatch: a missed interleaving
+    /// otherwise parks a fetch forever, the test body's trailing awaits never
+    /// resolve, and the whole run hangs instead of reporting the failed
+    /// `releaseFetch` expectation. PRFetcher treats the error as a dropped
+    /// fetch, so draining only unblocks — it cannot fake a success.
+    func failAllPending() {
+        isDraining = true
+        for pending in pendingFetches {
+            pending.continuation.resume(throwing: CancellationError())
+        }
+        pendingFetches.removeAll()
+    }
+
+    /// Polls until a fetch matching `query`/`cursor` is suspended awaiting
+    /// release. Returns at the deadline without failing — the caller's
+    /// `releaseFetch` expectation then reports the missing fetch, and the
+    /// test's watchdog drains the gates so the trailing awaits resolve.
+    func waitForFetch(query: String, cursor: String?) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while !pendingFetches.contains(where: { $0.query == query && $0.cursor == cursor }) {
+            if ContinuousClock.now >= deadline { return }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    /// Resumes the pending fetch matching `query`/`cursor` with `page`.
+    /// Returns `false` when no such fetch is suspended, so tests can
+    /// `#expect` the release found its target.
+    func releaseFetch(query: String, cursor: String?, returning page: PullRequestPage) -> Bool {
+        guard let index = pendingFetches.firstIndex(where: { $0.query == query && $0.cursor == cursor }) else {
+            return false
+        }
+        pendingFetches.remove(at: index).continuation.resume(returning: page)
+        return true
+    }
+
+    func fetchTimeline(nodeID: String, cursor: String?, eventPageOffset: Int, checksPageOffset: Int) async throws -> TimelinePage {
+        TimelinePage(events: [], checkRuns: [], reviewers: [], nextCursor: nil, checksNextCursor: nil)
+    }
+
+    func fetchChecks(nodeID: String, cursor: String, checksPageOffset: Int) async throws -> ChecksPage {
+        ChecksPage(checkRuns: [], nextCursor: nil)
+    }
+
+    func fetchViewer() async throws -> (login: String, avatarURL: URL?) {
+        (login: "testuser", avatarURL: nil)
+    }
+
+    func validateToken(_ token: String) async throws -> (login: String, avatarURL: URL?) {
+        (login: "testuser", avatarURL: nil)
     }
 }
