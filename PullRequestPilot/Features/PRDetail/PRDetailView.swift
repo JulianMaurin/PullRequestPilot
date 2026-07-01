@@ -306,20 +306,22 @@ struct PRDetailView: View {
 
     // MARK: - Timeline Section
 
+    /// No wrapping VStack: the header and rows must stay direct children of
+    /// the enclosing LazyVStack, or every timeline row (up to 20 pages x 100
+    /// events) is built eagerly the moment the section enters layout.
+    @ViewBuilder
     private var timelineSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Activity")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+        Text("Activity")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
 
-            ForEach(viewModel.timelineEvents) { event in
-                timelineRow(event)
-                if event.id != viewModel.timelineEvents.last?.id {
-                    Divider()
-                        .padding(.leading, 36)
-                }
+        ForEach(viewModel.timelineEvents) { event in
+            timelineRow(event)
+            if event.id != viewModel.timelineEvents.last?.id {
+                Divider()
+                    .padding(.leading, 36)
             }
         }
     }
