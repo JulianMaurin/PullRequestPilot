@@ -20,6 +20,11 @@ struct ReviewQueueView: View {
     @State private var draggedViewID: UUID?
     @FocusState private var isQueryFocused: Bool
     @State private var detailPanelWidth: Double
+    /// Tracked width of the area below the divider (list/detail container).
+    /// Drives the narrow-mode swap. Defaults wide so initial render uses the
+    /// `HSplitView` path; the `.onGeometryChange` modifier corrects it on the
+    /// first layout pass.
+    @State private var availableWidth: CGFloat = 1000
 
     init(viewModel: DashboardViewModel, prDetailViewModel: PRDetailViewModel, events: EventCenter? = nil, userDefaults: UserDefaults, onOpenSettings: @escaping () -> Void) {
         self.viewModel = viewModel
@@ -32,6 +37,13 @@ struct ReviewQueueView: View {
     }
 
     private static let detailPanelWidthKey = "detailPanelWidth"
+
+    /// Below this content width, list (350) + detail (400) + split divider
+    /// can't both fit. Collapse to a single pane: list when nothing is
+    /// selected, detail when a PR is selected.
+    private static let narrowThreshold: CGFloat = 760
+
+    private var isNarrow: Bool { availableWidth < Self.narrowThreshold }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -56,37 +68,12 @@ struct ReviewQueueView: View {
                 .padding(.top, 6)
             }
             Divider()
-            HSplitView {
-                contentArea
-                    .frame(minWidth: 350)
-                if prDetailViewModel.selectedPR != nil {
-                    PRDetailView(viewModel: prDetailViewModel)
-                        .frame(minWidth: 400, maxWidth: 800)
-                        .background {
-                            GeometryReader { geo in
-                                Color.clear
-                                    .onChange(of: geo.size.width) { _, newWidth in
-                                        detailPanelWidth = newWidth
-                                    }
-                            }
-                        }
-                        .background {
-                            SplitDividerRestorer(detailWidth: detailPanelWidth)
-                        }
-                        // Debounce: only persist once the drag settles. The
-                        // task is cancelled whenever `detailPanelWidth` changes
-                        // again before 250ms elapse, so a live drag produces a
-                        // single write at drop time.
-                        .task(id: detailPanelWidth) {
-                            do {
-                                try await Task.sleep(for: .milliseconds(250))
-                            } catch {
-                                return
-                            }
-                            userDefaults.set(detailPanelWidth, forKey: Self.detailPanelWidthKey)
-                        }
+            mainContent
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.width
+                } action: { newWidth in
+                    availableWidth = newWidth
                 }
-            }
         }
         .onChange(of: viewModel.selectedViewState.pullRequests) {
             if let selected = prDetailViewModel.selectedPR {
@@ -102,6 +89,17 @@ struct ReviewQueueView: View {
         }
         .frame(minWidth: 500, minHeight: 300)
         .toolbar {
+            if isNarrow, prDetailViewModel.selectedPR != nil {
+                ToolbarItem(placement: .navigation) {
+                    Button {
+                        prDetailViewModel.deselect()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    .help("Back to list")
+                    .accessibilityLabel("Back to pull request list")
+                }
+            }
             ToolbarItem(placement: .automatic) {
                 Button {
                     prDetailViewModel.deselect()
@@ -198,6 +196,53 @@ struct ReviewQueueView: View {
     }
 
     // MARK: - Subviews
+
+    /// Routes between split-mode (`HSplitView`) and narrow-mode (single pane).
+    /// Narrow + selection → detail takes the full pane; the toolbar back
+    /// button navigates back to the list. Otherwise the existing split layout
+    /// is rendered untouched.
+    @ViewBuilder
+    private var mainContent: some View {
+        if isNarrow, prDetailViewModel.selectedPR != nil {
+            PRDetailView(viewModel: prDetailViewModel)
+        } else {
+            HSplitView {
+                contentArea
+                    .frame(minWidth: 350)
+                if prDetailViewModel.selectedPR != nil {
+                    splitDetailPane
+                }
+            }
+        }
+    }
+
+    private var splitDetailPane: some View {
+        PRDetailView(viewModel: prDetailViewModel)
+            .frame(minWidth: 400, maxWidth: 800)
+            .background {
+                GeometryReader { geo in
+                    Color.clear
+                        .onChange(of: geo.size.width) { _, newWidth in
+                            detailPanelWidth = newWidth
+                        }
+                }
+            }
+            .background {
+                SplitDividerRestorer(detailWidth: detailPanelWidth)
+            }
+            // Debounce: only persist once the drag settles. The
+            // task is cancelled whenever `detailPanelWidth` changes
+            // again before 250ms elapse, so a live drag produces a
+            // single write at drop time.
+            .task(id: detailPanelWidth) {
+                do {
+                    try await Task.sleep(for: .milliseconds(250))
+                } catch {
+                    return
+                }
+                userDefaults.set(detailPanelWidth, forKey: Self.detailPanelWidthKey)
+            }
+    }
 
     private var viewTabs: some View {
         // The bar-level drop delegate is the fallback that clears the drag
