@@ -36,6 +36,11 @@ struct PullRequest: Identifiable, Hashable, Sendable {
     var age: String { age(relativeTo: .now) }
 
     func age(relativeTo now: Date) -> String {
+        // Future createdAt (server drift, timezone bugs) would format as
+        // "in 2 min." — mirror the guard in Date.relativeTimestampText(relativeTo:).
+        if createdAt > now {
+            return "just now"
+        }
         Self.ageFormatterLock.lock()
         defer { Self.ageFormatterLock.unlock() }
         return Self.ageFormatter.localizedString(for: createdAt, relativeTo: now)

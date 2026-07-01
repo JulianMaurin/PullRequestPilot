@@ -102,7 +102,10 @@ enum AppError: LocalizedError, Sendable, Hashable {
         case .unauthorized:
             return "Your GitHub token is invalid or expired. Update it in Settings."
         case .rateLimited(let resetAt):
-            if let resetAt {
+            // Recomputed at render time: a resetAt at or before now (clock
+            // skew, toast re-rendered after the window elapsed) would format
+            // as "N seconds ago" — use the generic phrasing instead.
+            if let resetAt, resetAt.timeIntervalSinceNow >= 1 {
                 let formatter = RelativeDateTimeFormatter()
                 formatter.unitsStyle = .full
                 let phrase = formatter.localizedString(for: resetAt, relativeTo: .now)

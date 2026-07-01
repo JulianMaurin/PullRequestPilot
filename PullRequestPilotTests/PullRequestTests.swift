@@ -165,6 +165,13 @@ struct PullRequestTests {
         #expect(age != pr.age(relativeTo: createdAt))
     }
 
+    @Test("age(relativeTo:) renders future createdAt as 'just now'")
+    func ageRelativeToFutureCreatedAt() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let pr = TestPullRequestFactory.make(createdAt: now.addingTimeInterval(90))
+        #expect(pr.age(relativeTo: now) == "just now")
+    }
+
     @Test("age(relativeTo:) changes as the reference date advances")
     func ageRelativeToAdvances() {
         let createdAt = Date(timeIntervalSince1970: 1_000_000)
