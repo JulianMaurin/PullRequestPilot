@@ -591,12 +591,12 @@ struct ReviewQueueView: View {
 
     private var listView: some View {
         // Memoized on the view model — repeated body evaluations within a
-        // render cycle return the cached grouping in O(1). See FINDING-005.
+        // render cycle return the cached grouping in O(1).
         let grouped = viewModel.groupedSelected
         // Per-row relative timestamps tick via `RelativeTimestampText`, so the
         // outer list is NOT wrapped in a `TimelineView(.periodic)`. Wrapping
         // the whole list cascaded SwiftUI diff + layout across ~100 rows every
-        // 30 s. See FINDING-019.
+        // 30 s.
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if let notice = viewModel.selectedViewState.hiddenResultsNotice {

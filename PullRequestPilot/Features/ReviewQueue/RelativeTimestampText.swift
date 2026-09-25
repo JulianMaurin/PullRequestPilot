@@ -5,7 +5,7 @@ import SwiftUI
 ///
 /// Wrapping only the leaf `Text` in `TimelineView(.periodic)` — rather than the
 /// entire list — avoids cascading SwiftUI diff + layout work across every row
-/// on every tick. See FINDING-019.
+/// on every tick.
 ///
 /// Usage:
 /// ```swift

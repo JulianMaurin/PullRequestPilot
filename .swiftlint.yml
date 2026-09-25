@@ -31,7 +31,6 @@ disabled_rules:
   - cyclomatic_complexity
   - large_tuple
   - nesting
-  - todo
   - unused_closure_parameter
   - opening_brace
   - comma
@@ -112,7 +111,10 @@ custom_rules:
       - "PullRequestPilotWidget/.*\\.swift"
       - "Shared/.*\\.swift"
     name: "Bare catch {} swallows errors"
-    regex: 'catch\s*\{\s*\}'
+    # Also `catch { return nil }` and friends: the same swallow with a default.
+    # A plain `catch { return }` stays legal: it's how a Task.sleep loop exits
+    # on cancellation.
+    regex: 'catch\s*\{\s*(return\s+(nil|false|\[\]|\[:\])\s*)?\}'
     message: "Bare catch swallows CancellationError and decode failures. Log via os.Logger or rethrow."
     severity: error
 
@@ -122,11 +124,15 @@ custom_rules:
 
   user_defaults_standard_outside_appstate:
     included:
-      - "PullRequestPilot/(Features|Infrastructure|Domain)/.*\\.swift"
+      - "PullRequestPilot/.*\\.swift"
       - "PullRequestPilotWidget/.*\\.swift"
       - "Shared/.*\\.swift"
+      - "PullRequestPilotTests/.*\\.swift"
+    excluded:
+      - "PullRequestPilot/App/AppState\\.swift"
     name: "UserDefaults.standard banned outside AppState"
-    regex: 'UserDefaults\.standard'
+    # Also the `defaults: UserDefaults = .standard` default-argument form.
+    regex: 'UserDefaults\s*\.\s*standard|UserDefaults\s*=\s*\.standard'
     message: "Use the injected UserDefaults — .standard bypasses DI and the app-group suite."
     severity: error
 
@@ -140,8 +146,15 @@ custom_rules:
       - "PullRequestPilotWidget/.*\\.swift"
       - "Shared/.*\\.swift"
     name: "Do not hard-code is:pr"
-    regex: '"is:\s*pr"'
+    # A standalone literal, or one appended to a query (`" is:pr"`, `\(query) is:pr`).
+    regex: '"\s*is:\s*pr\s*"|"\s+is:\s*pr\b|\)\s+is:\s*pr\b'
     message: "Never hard-code is:pr — the app intentionally supports issue queries too."
+    severity: error
+
+  audit_finding_reference:
+    name: "Audit finding IDs in source"
+    regex: 'FINDING-[0-9]+'
+    message: "Finding IDs restart every audit. State the reason in the comment; put the ID in the commit message."
     severity: error
 
   # -------------------------------------------------------------------------
