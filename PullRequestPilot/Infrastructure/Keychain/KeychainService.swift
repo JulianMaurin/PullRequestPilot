@@ -21,6 +21,11 @@ enum KeychainError: LocalizedError, Equatable {
     }
 }
 
+/// Stores secrets in the file-based login keychain, on purpose. The data
+/// protection keychain would need the `keychain-access-groups` entitlement,
+/// so a provisioning profile for every build, tests included. The cost of
+/// staying: an access prompt when one Mac switches between development and
+/// App Store builds. App Store updates keep access without a prompt.
 final class KeychainService: Sendable {
     /// Signature of `SecItemCopyMatching`; injectable so tests can force error
     /// statuses (locked keychain, denied ACL) the real API can't produce on demand.
