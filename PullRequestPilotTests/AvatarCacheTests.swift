@@ -12,7 +12,7 @@ import Testing
 struct AvatarCacheTests {
 
     private func makeCache(http: MockHTTPSession) -> AvatarCache {
-        AvatarCache(session: http.urlSession)
+        AvatarCache(session: http.urlSession, cache: NonEvictingCache())
     }
 
     private func sampleImageData() -> Data {
@@ -176,5 +176,19 @@ struct AvatarCacheTests {
         #expect(results.1 != nil)
         #expect(results.2 != nil)
         #expect(fetchCount.withLock { $0 } == 1)
+    }
+}
+
+/// An `NSCache` that never evicts, so a cache hit in these tests doesn't
+/// depend on `NSCache`'s eviction policy.
+private final class NonEvictingCache: NSCache<NSURL, NSImage> {
+    private let storage = OSAllocatedUnfairLock<[NSURL: NSImage]>(initialState: [:])
+
+    override func object(forKey key: NSURL) -> NSImage? {
+        storage.withLockUnchecked { $0[key] }
+    }
+
+    override func setObject(_ obj: NSImage, forKey key: NSURL, cost: Int) {
+        storage.withLockUnchecked { $0[key] = obj }
     }
 }

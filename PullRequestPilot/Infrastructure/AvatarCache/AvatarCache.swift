@@ -15,12 +15,15 @@ final class AvatarCache {
     /// Covers the largest avatar (32 pt) on a Retina display.
     nonisolated static let pixelSize = 64
 
-    private let cache = NSCache<NSURL, NSImage>()
+    private let cache: NSCache<NSURL, NSImage>
     private let coalescer = RequestCoalescer<URL, CGImage>()
     private let session: URLSession
     private let logger = Logger(category: "AvatarCache")
 
-    init(session: URLSession? = nil) {
+    /// `cache` is injectable because `NSCache` may evict an entry at any
+    /// moment; tests pass one that keeps what it is given.
+    init(session: URLSession? = nil, cache: NSCache<NSURL, NSImage> = NSCache()) {
+        self.cache = cache
         // A decoded 64 px avatar is 16 KB: 4 MB holds about 250 of them.
         cache.totalCostLimit = 4 * 1024 * 1024
         if let session {
