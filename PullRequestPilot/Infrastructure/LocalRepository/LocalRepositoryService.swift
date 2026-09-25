@@ -158,6 +158,9 @@ final class LocalRepositoryService {
 
     nonisolated private static func buildIndex(directories: [URL], logger: Logger) -> [RepoEntry] {
         var entries: [RepoEntry] = []
+        // A repository and each of its checked-out worktrees share one list
+        // of worktrees; read it once per scan, not once per checkout.
+        var worktreesByMainGitDir: [String: [WorktreeEntry]] = [:]
 
         for gitDir in directories {
             let repoDirs = discoverAllRepoDirs(in: gitDir, logger: logger)
@@ -167,7 +170,16 @@ final class LocalRepositoryService {
 
                 let branch = currentBranch(at: repoDir)
                 let shas = recentCommitShas(at: repoDir)
-                let worktrees = listWorktrees(repoDir: repoDir)
+                var worktrees: [WorktreeEntry] = []
+                if let mainGitDir = resolveGitDir(for: repoDir).map(resolveMainGitDir) {
+                    let key = mainGitDir.standardizedFileURL.path
+                    if let listed = worktreesByMainGitDir[key] {
+                        worktrees = listed
+                    } else {
+                        worktrees = listWorktrees(mainGitDir: mainGitDir)
+                        worktreesByMainGitDir[key] = worktrees
+                    }
+                }
 
                 entries.append(RepoEntry(
                     path: repoDir,
@@ -373,10 +385,9 @@ final class LocalRepositoryService {
         return shas
     }
 
-    /// Lists worktrees by reading `worktrees/<name>/gitdir` and `HEAD` inside the git directory.
-    nonisolated private static func listWorktrees(repoDir: URL) -> [WorktreeEntry] {
-        guard let gitDir = resolveGitDir(for: repoDir) else { return [] }
-        let mainGitDir = resolveMainGitDir(from: gitDir)
+    /// Lists worktrees by reading `worktrees/<name>/gitdir` and `HEAD` inside
+    /// the main repository's git directory.
+    nonisolated private static func listWorktrees(mainGitDir: URL) -> [WorktreeEntry] {
         let worktreesDir = mainGitDir.appendingPathComponent("worktrees")
         let fm = FileManager.default
 

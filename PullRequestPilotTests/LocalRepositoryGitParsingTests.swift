@@ -282,6 +282,24 @@ struct LocalRepositoryGitParsingTests {
         #expect(entry?.worktrees.first?.branch == "feature-branch")
     }
 
+    @Test("a repository and its checked-out worktrees each list every worktree")
+    func worktreeCheckoutsShareTheList() async throws {
+        let tempDir = try makeTempDir()
+        defer { try? fm.removeItem(at: tempDir) }
+        let mainRepo = tempDir.appendingPathComponent("main-repo")
+        try createFakeRepo(at: mainRepo, remoteURL: "git@github.com:owner/repo.git")
+        try createFakeWorktree(mainRepoDir: mainRepo, worktreeName: "one", worktreePath: tempDir.appendingPathComponent("wt-one"), branch: "one")
+        try createFakeWorktree(mainRepoDir: mainRepo, worktreeName: "two", worktreePath: tempDir.appendingPathComponent("wt-two"), branch: "two")
+
+        let service = LocalRepositoryService()
+        await service.scan(directories: [tempDir])
+
+        #expect(service.repoIndex.count == 3)
+        for entry in service.repoIndex {
+            #expect(Set(entry.worktrees.compactMap(\.branch)) == ["one", "two"], "\(entry.path.lastPathComponent)")
+        }
+    }
+
     @Test("scan discovers worktrees with detached HEAD")
     func scanWorktreeDetachedHead() async throws {
         let tempDir = try makeTempDir()
