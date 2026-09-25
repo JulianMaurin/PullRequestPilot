@@ -105,6 +105,53 @@ struct AvatarCacheTests {
         #expect(result == nil)
     }
 
+    // MARK: - Size
+
+    private func imageData(pixels: Int) throws -> Data {
+        let bitmap = try #require(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ))
+        return try #require(bitmap.representation(using: .png, properties: [:]))
+    }
+
+    @Test("GitHub avatars are requested at display size; other hosts are left alone")
+    func sizedURL() throws {
+        let github = try #require(URL(string: "https://avatars.githubusercontent.com/u/42?v=4"))
+        let resized = try #require(URL(string: "https://avatars.githubusercontent.com/u/42?v=4&s=460"))
+        let other = try #require(URL(string: "https://example.com/u/42?v=4"))
+
+        #expect(AvatarCache.sizedURL(github).absoluteString == "https://avatars.githubusercontent.com/u/42?v=4&s=64")
+        #expect(AvatarCache.sizedURL(resized).absoluteString == "https://avatars.githubusercontent.com/u/42?v=4&s=64")
+        #expect(AvatarCache.sizedURL(other) == other)
+    }
+
+    @Test("a large avatar is decoded at the display size")
+    func downsamplesLargeAvatar() throws {
+        let image = try #require(AvatarCache.downsample(try imageData(pixels: 460), maxPixelSize: AvatarCache.pixelSize))
+        #expect(image.width == AvatarCache.pixelSize)
+        #expect(image.height == AvatarCache.pixelSize)
+    }
+
+    @Test("the fetch asks GitHub for the display size")
+    func fetchRequestsDisplaySize() async throws {
+        let http = MockHTTPSession()
+        let cache = makeCache(http: http)
+        let url = try #require(URL(string: "https://avatars.githubusercontent.com/u/7?v=4"))
+        let imageData = try imageData(pixels: 64)
+        var requestedURLs: [URL] = []
+        http.handler = { request in
+            if let url = request.url { requestedURLs.append(url) }
+            return try TestHTTP.response(for: request, body: imageData)
+        }
+
+        let image = await cache.image(for: url)
+
+        #expect(image != nil)
+        #expect(requestedURLs.map(\.absoluteString) == ["https://avatars.githubusercontent.com/u/7?v=4&s=64"])
+    }
+
     // MARK: - Coalescing
 
     @Test func concurrentRequestsForSameURLFetchOnce() async throws {
