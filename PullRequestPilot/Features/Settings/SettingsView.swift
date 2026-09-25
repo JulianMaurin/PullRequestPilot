@@ -56,11 +56,10 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
                 } else {
                     SecureField("Personal Access Token", text: $viewModel.token)
                         .textFieldStyle(.roundedBorder)
-                        .onSubmit {
-                            if canSaveToken { saveTokenAndStart() }
-                        }
 
                     HStack {
+                        // Return in the token field presses this button; an
+                        // onSubmit as well would validate twice.
                         Button("Save & Validate") {
                             saveTokenAndStart()
                         }
