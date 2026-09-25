@@ -1,24 +1,15 @@
 import SwiftUI
 
-// MARK: - CI Status Icon (matches app's checkStatusBadge)
+// MARK: - CI Status Icon
 
 struct WidgetCheckStatusIcon: View {
-    let status: String?
+    let status: CheckStatus?
 
     var body: some View {
-        if let icon = checkIcon {
-            Image(systemName: icon.name)
+        if let status {
+            Image(systemName: status.symbolName)
                 .font(.system(size: 7, weight: .bold))
-                .foregroundStyle(icon.color)
-        }
-    }
-
-    private var checkIcon: (name: String, color: Color)? {
-        switch status {
-        case "SUCCESS": return ("checkmark", .blue)
-        case "PENDING", "EXPECTED": return ("circle.fill", .yellow)
-        case "FAILURE", "ERROR": return ("xmark", .red)
-        default: return nil
+                .foregroundStyle(status.tint)
         }
     }
 }

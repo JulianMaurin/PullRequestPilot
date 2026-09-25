@@ -19,7 +19,7 @@ struct WidgetDataTests {
             reviewDecision: nil,
             checkStatus: nil,
             isDraft: false,
-            state: "OPEN"
+            state: .open
         )
     }
 
@@ -92,7 +92,7 @@ struct WidgetDataTests {
             url: try #require(URL(string: "https://github.com/owner/my-repo/pull/1")),
             repositoryName: "owner/my-repo",
             authorLogin: "author", createdAt: Date(),
-            reviewDecision: nil, checkStatus: nil, isDraft: false, state: "OPEN"
+            reviewDecision: nil, checkStatus: nil, isDraft: false, state: .open
         )
         #expect(pr.repoShortName == "my-repo")
     }
@@ -104,14 +104,14 @@ struct WidgetDataTests {
             url: try #require(URL(string: "https://github.com/repo/pull/1")),
             repositoryName: "standalone-repo",
             authorLogin: "author", createdAt: Date(),
-            reviewDecision: nil, checkStatus: nil, isDraft: false, state: "OPEN"
+            reviewDecision: nil, checkStatus: nil, isDraft: false, state: .open
         )
         #expect(pr.repoShortName == "standalone-repo")
     }
 
     // MARK: - WidgetViewData review counts
 
-    private func makeViewData(reviewDecisions: [String?]) throws -> WidgetViewData {
+    private func makeViewData(reviewDecisions: [ReviewDecision?]) throws -> WidgetViewData {
         let prs = try reviewDecisions.enumerated().map { index, decision in
             WidgetPullRequest(
                 id: "PR_\(index)",
@@ -124,29 +124,29 @@ struct WidgetDataTests {
                 reviewDecision: decision,
                 checkStatus: nil,
                 isDraft: false,
-                state: "OPEN"
+                state: .open
             )
         }
-        let approved = prs.filter { $0.reviewDecision == "APPROVED" }.count
-        let changesRequested = prs.filter { $0.reviewDecision == "CHANGES_REQUESTED" }.count
+        let approved = prs.filter { $0.reviewDecision == .approved }.count
+        let changesRequested = prs.filter { $0.reviewDecision == .changesRequested }.count
         return WidgetViewData(id: "view1", title: "Test", count: prs.count, approvedCount: approved, changesRequestedCount: changesRequested, pullRequests: prs)
     }
 
     @Test("approvedCount filters correctly")
     func approvedCount() throws {
-        let data = try makeViewData(reviewDecisions: ["APPROVED", "CHANGES_REQUESTED", "APPROVED", nil])
+        let data = try makeViewData(reviewDecisions: [.approved, .changesRequested, .approved, nil])
         #expect(data.approvedCount == 2)
     }
 
     @Test("changesRequestedCount filters correctly")
     func changesRequestedCount() throws {
-        let data = try makeViewData(reviewDecisions: ["APPROVED", "CHANGES_REQUESTED", nil, "CHANGES_REQUESTED"])
+        let data = try makeViewData(reviewDecisions: [.approved, .changesRequested, nil, .changesRequested])
         #expect(data.changesRequestedCount == 2)
     }
 
     @Test("pendingReviewCount is count minus approved and changesRequested")
     func pendingReviewCount() throws {
-        let data = try makeViewData(reviewDecisions: ["APPROVED", "CHANGES_REQUESTED", nil, nil, "REVIEW_REQUIRED"])
+        let data = try makeViewData(reviewDecisions: [.approved, .changesRequested, nil, nil, .reviewRequired])
         #expect(data.pendingReviewCount == 3)
     }
 
@@ -158,7 +158,35 @@ struct WidgetDataTests {
         #expect(data.pendingReviewCount == 0)
     }
 
+    @Test("the widget knows how many of the view's pull requests it leaves out")
+    func omittedPullRequestCount() throws {
+        let data = try makeViewData(reviewDecisions: [nil, nil])
+        let truncated = WidgetViewData(id: "view1", title: "Test", count: 25, approvedCount: 0, changesRequestedCount: 0, pullRequests: data.pullRequests)
+        #expect(data.omittedPullRequestCount == 0)
+        #expect(truncated.omittedPullRequestCount == 23)
+    }
+
+    @Test("a view's widget link routes back to that view in the app")
+    func deepLinkRoutesToView() throws {
+        let viewID = UUID()
+        let viewData = WidgetViewData(id: viewID.uuidString, title: "Test", count: 0, approvedCount: 0, changesRequestedCount: 0, pullRequests: [])
+        let url = try #require(viewData.deepLinkURL)
+        #expect(DeepLinkRoute.route(for: url) == .selectView(viewID))
+    }
+
     // MARK: - WidgetData Codable
+
+    @Test("a file written with the statuses as plain strings still reads")
+    func decodesStatusStrings() throws {
+        let json = #"{"lastUpdated":1700000100,"views":[{"id":"v1","title":"View","count":1,"approvedCount":1,"changesRequestedCount":0,"pullRequests":[{"id":"PR_1","number":1,"title":"T","url":"https://github.com/o/r/pull/1","repositoryName":"o/r","authorLogin":"a","createdAt":1700000000,"reviewDecision":"APPROVED","checkStatus":"FAILURE","isDraft":false,"state":"MERGED"}]}]}"#
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        let decoded = try decoder.decode(WidgetData.self, from: Data(json.utf8))
+        let pr = try #require(decoded.views.first?.pullRequests.first)
+        #expect(pr.reviewDecision == .approved)
+        #expect(pr.checkStatus == .failure)
+        #expect(pr.state == .merged)
+    }
 
     @Test("WidgetData encodes and decodes with secondsSince1970 dates")
     func codableRoundTrip() throws {

@@ -78,7 +78,7 @@ struct WidgetDataMappingTests {
         #expect(widgetPR?.repositoryName == "org/repo")
         #expect(widgetPR?.authorLogin == "dev")
         #expect(widgetPR?.isDraft == true)
-        #expect(widgetPR?.reviewDecision == "APPROVED")
+        #expect(widgetPR?.reviewDecision == .approved)
     }
 
     @Test("clearAllData writes empty widget data")

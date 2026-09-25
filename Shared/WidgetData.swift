@@ -11,23 +11,13 @@ struct WidgetPullRequest: Codable, Sendable, Hashable, Identifiable {
     let repositoryName: String
     let authorLogin: String
     let createdAt: Date
-    let reviewDecision: String?
-    let checkStatus: String?
+    let reviewDecision: ReviewDecision?
+    let checkStatus: CheckStatus?
     let isDraft: Bool
-    let state: String?
+    let state: PullRequestState?
 
     var compactAge: String {
-        // Clamp to zero — clock skew can produce future-dated createdAt,
-        // which would otherwise render a negative age badge.
-        let interval = max(0, Date.now.timeIntervalSince(createdAt))
-        let minutes = Int(interval / 60)
-        if minutes < 60 { return "\(minutes)m" }
-        let hours = minutes / 60
-        if hours < 24 { return "\(hours)h" }
-        let days = hours / 24
-        if days < 30 { return "\(days)d" }
-        let months = days / 30
-        return "\(months)mo"
+        PullRequestAge.compact(since: createdAt, relativeTo: .now)
     }
 
     var repoShortName: String {
@@ -47,6 +37,15 @@ struct WidgetViewData: Codable, Sendable, Hashable, Identifiable {
 
     var pendingReviewCount: Int {
         max(0, count - approvedCount - changesRequestedCount)
+    }
+
+    /// Pull requests the view has but the widget data leaves out.
+    var omittedPullRequestCount: Int {
+        max(0, count - pullRequests.count)
+    }
+
+    var deepLinkURL: URL? {
+        DeepLink.viewURL(viewID: id)
     }
 }
 
@@ -94,8 +93,9 @@ struct WidgetData: Codable, Sendable {
             decoder.dateDecodingStrategy = .secondsSince1970
             return try decoder.decode(WidgetData.self, from: data)
         } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
-            // Expected before the main app's first save — not a failure.
-            logger.debug("Widget data file not found: \(error, privacy: .public)")
+            // Expected before the app's first save, but also what a widget
+            // sees if the app can never write: keep it in the exported logs.
+            logger.notice("Widget data file not found; the app hasn't written it yet: \(error, privacy: .public)")
             return nil
         } catch {
             logger.error("Failed to load widget data: \(error, privacy: .public)")

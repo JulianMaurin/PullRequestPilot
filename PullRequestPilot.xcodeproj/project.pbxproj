@@ -24,6 +24,7 @@
 		2D1D0D401A5E1F158583DD70 /* PresetViewsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1D8C65F7234BDC76D6D57C /* PresetViewsTests.swift */; };
 		2F2ED58EA693FD4F5DF0AA9F /* UserNotificationCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADB6D0B0122783CBA845E90C /* UserNotificationCenter.swift */; };
 		2FA559C93493745F8151E166 /* PullRequestPilotWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AE7DBBCDED1A5D00DF910CA4 /* PullRequestPilotWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		30130EB03739FA6BC099CD9B /* DeepLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB6B7C7B2A707520126CB0F1 /* DeepLink.swift */; };
 		30154169320576700C2B1D64 /* SystemAvailabilityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80150404E1FFB51F8F357365 /* SystemAvailabilityMonitor.swift */; };
 		358D1ADD83ADD8E90DEE16BB /* DashboardActionsProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16182081612095E7403E9764 /* DashboardActionsProtocol.swift */; };
 		35E25E9B46C3FE92866FAD29 /* ReviewQueueViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 870B4DF97601E8787294E36B /* ReviewQueueViewModelTests.swift */; };
@@ -34,6 +35,7 @@
 		3B4C6E879497F329DF8D5D6D /* EventCenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ADBF8E48EAB81E80E314812 /* EventCenterTests.swift */; };
 		3CBE5A8CBBF5CBB5C25DC51A /* ViewRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F3EE689253C5A1E57D22FB6 /* ViewRegistry.swift */; };
 		409CBA2DBF0F6F4F9DB94F77 /* PullRequestPilotApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDDC85340ABAEFB5AFFCA2D7 /* PullRequestPilotApp.swift */; };
+		422BD2F0BBD6EC19141FC68F /* CheckStatusSymbol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 625C5F44CEF78BA58161861D /* CheckStatusSymbol.swift */; };
 		435918A905F6D46F867F9348 /* DashboardViewEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D10578F537D4DBC84E5E685 /* DashboardViewEntity.swift */; };
 		439551A075FDE6BD39E80B43 /* MockLogExportDependencies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0539E1E1791241E971A9DFF2 /* MockLogExportDependencies.swift */; };
 		469BFE4DF00494D8A5D661B8 /* WidgetDestination+Test.swift in Sources */ = {isa = PBXBuildFile; fileRef = A153FB6F0950731D209C472E /* WidgetDestination+Test.swift */; };
@@ -67,6 +69,7 @@
 		7311E24679EF4F3FA32D1E53 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C83023DF097641FF1879968 /* Constants.swift */; };
 		7485EF4CAF939DB4C5EBC0C5 /* SettingsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FBA9DC202E1C820FD45E57B /* SettingsViewModelTests.swift */; };
 		74A32B915BC0843DA83D89C8 /* AutoRefreshScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A64ABB96B995A9910DE6D17 /* AutoRefreshScheduler.swift */; };
+		766E202B1811492872C8A32A /* DeepLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB6B7C7B2A707520126CB0F1 /* DeepLink.swift */; };
 		77C16D0F8E345235B722E6FB /* TimelineEventTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 611FE229324726ACB5D01619 /* TimelineEventTests.swift */; };
 		7AE9D1D59D755D749A07689D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E5FD8EDDD1395CE2E48479A /* SettingsView.swift */; };
 		7C25FAB8A19E27CDA9881A76 /* AutoRefreshSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9FFD99811395196093D44EE /* AutoRefreshSchedulerTests.swift */; };
@@ -77,6 +80,7 @@
 		848529839BC996E694275193 /* CachedAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECE5674A997445B451B66A6E /* CachedAvatarView.swift */; };
 		850A3ABA22A0EDCB05798B9D /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C15EBD57347F4C981EB507D8 /* DashboardView.swift */; };
 		858FD3665934CA68CCA09656 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = CE1C0DB4D7264002D57A5043 /* PrivacyInfo.xcprivacy */; };
+		8620F905917BCD0752CC11C8 /* CheckStatusSymbol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 625C5F44CEF78BA58161861D /* CheckStatusSymbol.swift */; };
 		87C7E813416BBE39A49486DB /* PullRequestPilotWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 782A06435EEB66B6BEC6D3AB /* PullRequestPilotWidget.swift */; };
 		89D3CBDB6E2B784D8202E0E3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9D6EDC17C7FDDD59B016359F /* PrivacyInfo.xcprivacy */; };
 		8C57202DD8D6D03A71B53676 /* TimelineResponseMappingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4FAD5E316A5839F8E3322E9 /* TimelineResponseMappingTests.swift */; };
@@ -219,6 +223,7 @@
 		5E26BF5F3E5CB6029CD35D8F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		611E8E14A47375F0890F0C8B /* AppEventTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEventTests.swift; sourceTree = "<group>"; };
 		611FE229324726ACB5D01619 /* TimelineEventTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventTests.swift; sourceTree = "<group>"; };
+		625C5F44CEF78BA58161861D /* CheckStatusSymbol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckStatusSymbol.swift; sourceTree = "<group>"; };
 		64AE4B0166A35A1A021C312C /* WidgetSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSync.swift; sourceTree = "<group>"; };
 		662E1209D8490AF5E8B24887 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		664ED928BE49D4A1245F312A /* KeychainServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainServiceTests.swift; sourceTree = "<group>"; };
@@ -287,6 +292,7 @@
 		E4FAD5E316A5839F8E3322E9 /* TimelineResponseMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineResponseMappingTests.swift; sourceTree = "<group>"; };
 		E95397D0E5E86B354D58214A /* ReviewerMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewerMappingTests.swift; sourceTree = "<group>"; };
 		EA99630A67726BEAA7144942 /* PRDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PRDetailView.swift; sourceTree = "<group>"; };
+		EB6B7C7B2A707520126CB0F1 /* DeepLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLink.swift; sourceTree = "<group>"; };
 		ECE5674A997445B451B66A6E /* CachedAvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAvatarView.swift; sourceTree = "<group>"; };
 		ECF50E10022F26E7C0A9B89F /* GitHubResponsesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubResponsesTests.swift; sourceTree = "<group>"; };
 		EDB7522333C8C799AE8BA8E7 /* BuildStacksTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildStacksTests.swift; sourceTree = "<group>"; };
@@ -529,6 +535,8 @@
 		930CDBB6B0FA14E41770532F /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				625C5F44CEF78BA58161861D /* CheckStatusSymbol.swift */,
+				EB6B7C7B2A707520126CB0F1 /* DeepLink.swift */,
 				7956A945631A11303A53BA81 /* Logger+Category.swift */,
 				E0EA68EAC804694C06E18530 /* PullRequestAge.swift */,
 				01178C4F696F9453B2DB743E /* PullRequestStatus.swift */,
@@ -802,7 +810,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				422BD2F0BBD6EC19141FC68F /* CheckStatusSymbol.swift in Sources */,
 				435918A905F6D46F867F9348 /* DashboardViewEntity.swift in Sources */,
+				30130EB03739FA6BC099CD9B /* DeepLink.swift in Sources */,
 				59E8786349A7F96E1D408F68 /* Logger+Category.swift in Sources */,
 				4734B2488451C1D48761A8A6 /* PullRequestAge.swift in Sources */,
 				87C7E813416BBE39A49486DB /* PullRequestPilotWidget.swift in Sources */,
@@ -827,11 +837,13 @@
 				272F7022C5B6AF134DD38A28 /* BadgeTracker.swift in Sources */,
 				848529839BC996E694275193 /* CachedAvatarView.swift in Sources */,
 				7E49881AE6BD836AA1137F39 /* CheckRun.swift in Sources */,
+				8620F905917BCD0752CC11C8 /* CheckStatusSymbol.swift in Sources */,
 				2415DBE7BFC8D98B6FA254CB /* ColorHex.swift in Sources */,
 				7311E24679EF4F3FA32D1E53 /* Constants.swift in Sources */,
 				358D1ADD83ADD8E90DEE16BB /* DashboardActionsProtocol.swift in Sources */,
 				850A3ABA22A0EDCB05798B9D /* DashboardView.swift in Sources */,
 				927A5FB9F3851EB18357ED5E /* DashboardViewModel.swift in Sources */,
+				766E202B1811492872C8A32A /* DeepLink.swift in Sources */,
 				25F730D31E325DB0487910E4 /* EventBannerView.swift in Sources */,
 				C665E6205B4E828CE48ADC15 /* EventCenter.swift in Sources */,
 				70A21886C0B4BAEFCE847837 /* EventReporter.swift in Sources */,

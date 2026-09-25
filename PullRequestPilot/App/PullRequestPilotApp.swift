@@ -129,8 +129,8 @@ enum DeepLinkRoute: Equatable {
     case selectView(UUID)
 
     static func route(for url: URL) -> DeepLinkRoute? {
-        guard url.scheme == "pullrequestpilot",
-              url.host == "view",
+        guard url.scheme == DeepLink.scheme,
+              url.host == DeepLink.viewHost,
               let viewID = url.pathComponents.dropFirst().first,
               let uuid = UUID(uuidString: viewID)
         else { return nil }

@@ -568,10 +568,10 @@ final class DashboardViewModel {
                     repositoryName: pr.repository.nameWithOwner,
                     authorLogin: pr.author.login,
                     createdAt: pr.createdAt,
-                    reviewDecision: pr.reviewDecision?.rawValue,
-                    checkStatus: pr.checkStatus?.rawValue,
+                    reviewDecision: pr.reviewDecision,
+                    checkStatus: pr.checkStatus,
                     isDraft: pr.isDraft,
-                    state: pr.state.rawValue
+                    state: pr.state
                 )
             }
             let decisionCounts = prs.reduce(into: (approved: 0, changesRequested: 0)) { acc, pr in

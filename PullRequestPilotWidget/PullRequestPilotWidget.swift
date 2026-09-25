@@ -31,7 +31,8 @@ struct SummaryProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (SummaryEntry) -> Void) {
-        if let data = WidgetData.load() {
+        // The widget gallery shows a sample until the app has views to show.
+        if let data = WidgetData.load(), !(context.isPreview && data.views.isEmpty) {
             completion(SummaryEntry(date: data.lastUpdated, views: data.views))
         } else {
             completion(placeholder(in: context))
@@ -89,6 +90,16 @@ struct SummarySmallView: View {
     let entry: SummaryEntry
 
     var body: some View {
+        if entry.views.isEmpty {
+            // Before sign-in or after sign-out: nothing to count yet.
+            WidgetEmptyState(message: "Open Pull Request Pilot\nto set up views")
+                .containerBackground(.fill.tertiary, for: .widget)
+        } else {
+            summary
+        }
+    }
+
+    private var summary: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -107,22 +118,20 @@ struct SummarySmallView: View {
 
             Spacer(minLength: 4)
 
-            if !entry.views.isEmpty {
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(entry.views.prefix(3)) { view in
-                        HStack(spacing: 6) {
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(.secondary.opacity(0.5))
-                                .frame(width: 3, height: 12)
-                            Text(view.title)
-                                .font(.system(size: 10))
-                                .foregroundStyle(.white.opacity(0.9))
-                                .lineLimit(1)
-                            Spacer()
-                            Text("\(view.count)")
-                                .font(.system(size: 10, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
-                        }
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(entry.views.prefix(3)) { view in
+                    HStack(spacing: 6) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(.secondary.opacity(0.5))
+                            .frame(width: 3, height: 12)
+                        Text(view.title)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .lineLimit(1)
+                        Spacer()
+                        Text("\(view.count)")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
                     }
                 }
             }
@@ -174,7 +183,9 @@ struct SummaryMediumView: View {
                     ]
                     LazyVGrid(columns: columns, spacing: 4) {
                         ForEach(entry.views.prefix(4)) { viewData in
-                            ViewCardCompact(viewData: viewData)
+                            ViewDeepLink(viewData: viewData) {
+                                ViewCardCompact(viewData: viewData)
+                            }
                         }
                     }
 
@@ -235,6 +246,22 @@ struct SummaryLargeView: View {
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
         }
         .containerBackground(.fill.tertiary, for: .widget)
+    }
+}
+
+// MARK: - View Deep Link
+
+/// Opens the app on the view when clicked.
+private struct ViewDeepLink<Content: View>: View {
+    let viewData: WidgetViewData
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if let url = viewData.deepLinkURL {
+            Link(destination: url, label: content)
+        } else {
+            content()
+        }
     }
 }
 
@@ -315,20 +342,22 @@ private struct ViewSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // Section header
-            HStack(spacing: 6) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(.secondary.opacity(0.5))
-                    .frame(width: 3, height: 14)
+            ViewDeepLink(viewData: viewData) {
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(.secondary.opacity(0.5))
+                        .frame(width: 3, height: 14)
 
-                Text(viewData.title)
-                    .font(.system(size: 11, weight: .semibold))
+                    Text(viewData.title)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.primary)
 
-                Spacer()
+                    Spacer()
 
-                Text("\(viewData.count)")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    Text("\(viewData.count)")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
             }
 
             // Top PRs

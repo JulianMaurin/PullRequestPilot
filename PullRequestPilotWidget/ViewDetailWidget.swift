@@ -29,7 +29,7 @@ struct ViewDetailProvider: AppIntentTimelineProvider {
                     url: Self.placeholderURL,
                     repositoryName: "org/repo", authorLogin: "dev",
                     createdAt: .now.addingTimeInterval(-7200),
-                    reviewDecision: "APPROVED", checkStatus: "SUCCESS", isDraft: false, state: "OPEN"
+                    reviewDecision: .approved, checkStatus: .success, isDraft: false, state: .open
                 ),
             ]
         ))
@@ -38,6 +38,10 @@ struct ViewDetailProvider: AppIntentTimelineProvider {
     func snapshot(for configuration: SelectViewIntent, in context: Context) async -> ViewDetailEntry {
         let data = WidgetData.load()
         let view = resolveView(from: data, configuration: configuration)
+        // The widget gallery shows a sample until the app has written data.
+        if context.isPreview, view == nil {
+            return placeholder(in: context)
+        }
         return ViewDetailEntry(date: data?.lastUpdated ?? .now, viewData: view)
     }
 
@@ -81,14 +85,18 @@ struct ViewDetailEntryView: View {
 
     var body: some View {
         if let viewData = entry.viewData {
-            switch family {
-            case .systemSmall:
-                DetailSmallView(viewData: viewData, lastUpdated: entry.date)
-            case .systemLarge:
-                DetailLargeView(viewData: viewData, lastUpdated: entry.date)
-            default:
-                DetailMediumView(viewData: viewData, lastUpdated: entry.date)
+            // Clicks outside a pull request row open the app on this view.
+            Group {
+                switch family {
+                case .systemSmall:
+                    DetailSmallView(viewData: viewData, lastUpdated: entry.date)
+                case .systemLarge:
+                    DetailLargeView(viewData: viewData, lastUpdated: entry.date)
+                default:
+                    DetailMediumView(viewData: viewData, lastUpdated: entry.date)
+                }
             }
+            .widgetURL(viewData.deepLinkURL)
         } else {
             noDataView
         }
@@ -208,7 +216,7 @@ struct DetailMediumView: View {
                             .font(.system(size: 8))
                             .foregroundStyle(.tertiary)
                     }
-                    WidgetActionButtons(viewID: viewData.id)
+                    WidgetActionButtons(viewData: viewData)
                 }
             }
         }
@@ -273,7 +281,7 @@ struct DetailLargeView: View {
                             .font(.system(size: 8))
                             .foregroundStyle(.tertiary)
                     }
-                    WidgetActionButtons(viewID: viewData.id)
+                    WidgetActionButtons(viewData: viewData)
                 }
             }
         }
@@ -284,18 +292,23 @@ struct DetailLargeView: View {
 // MARK: - Action Buttons
 
 private struct WidgetActionButtons: View {
-    let viewID: String
+    let viewData: WidgetViewData
 
     var body: some View {
+        let openedCount = min(viewData.pullRequests.count, OpenAllPRsIntent.maximumOpened)
         HStack(spacing: 6) {
-            Button(intent: CopyPRListIntent(viewID: viewID)) {
+            Button(intent: CopyPRListIntent(viewID: viewData.id)) {
                 Image(systemName: "doc.on.doc")
                     .font(.system(size: 8))
             }
-            Button(intent: OpenAllPRsIntent(viewID: viewID)) {
+            .accessibilityLabel("Copy the list of pull requests")
+            Button(intent: OpenAllPRsIntent(viewID: viewData.id)) {
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 8))
             }
+            .accessibilityLabel(openedCount == viewData.count
+                ? "Open the pull requests in the browser"
+                : "Open the first \(openedCount) pull requests in the browser")
         }
         .buttonStyle(.plain)
         .foregroundStyle(.tertiary)
@@ -343,35 +356,35 @@ private let samplePRs: [WidgetPullRequest] = [
         url: sampleURL,
         repositoryName: "org/api-service", authorLogin: "alice",
         createdAt: .now.addingTimeInterval(-3600),
-        reviewDecision: "APPROVED", checkStatus: "SUCCESS", isDraft: false, state: "OPEN"
+        reviewDecision: .approved, checkStatus: .success, isDraft: false, state: .open
     ),
     WidgetPullRequest(
         id: "2", number: 87, title: "Fix race condition in queue processor",
         url: sampleURL,
         repositoryName: "org/worker", authorLogin: "bob",
         createdAt: .now.addingTimeInterval(-86400),
-        reviewDecision: "CHANGES_REQUESTED", checkStatus: "FAILURE", isDraft: false, state: "OPEN"
+        reviewDecision: .changesRequested, checkStatus: .failure, isDraft: false, state: .open
     ),
     WidgetPullRequest(
         id: "3", number: 231, title: "Update dependencies to latest versions",
         url: sampleURL,
         repositoryName: "org/frontend", authorLogin: "carol",
         createdAt: .now.addingTimeInterval(-172800),
-        reviewDecision: nil, checkStatus: "PENDING", isDraft: false, state: "OPEN"
+        reviewDecision: nil, checkStatus: .pending, isDraft: false, state: .open
     ),
     WidgetPullRequest(
         id: "4", number: 55, title: "Refactor database migration scripts",
         url: sampleURL,
         repositoryName: "org/infra", authorLogin: "dave",
         createdAt: .now.addingTimeInterval(-259200),
-        reviewDecision: "REVIEW_REQUIRED", checkStatus: "SUCCESS", isDraft: true, state: "OPEN"
+        reviewDecision: .reviewRequired, checkStatus: .success, isDraft: true, state: .open
     ),
     WidgetPullRequest(
         id: "5", number: 99, title: "Add comprehensive logging for API calls",
         url: sampleURL,
         repositoryName: "org/api-service", authorLogin: "eve",
         createdAt: .now.addingTimeInterval(-7200),
-        reviewDecision: "APPROVED", checkStatus: "SUCCESS", isDraft: false, state: "MERGED"
+        reviewDecision: .approved, checkStatus: .success, isDraft: false, state: .merged
     ),
 ]
 

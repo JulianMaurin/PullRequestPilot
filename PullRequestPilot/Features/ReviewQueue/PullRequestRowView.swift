@@ -186,11 +186,10 @@ struct PullRequestRowView<RowMenu: View>: View {
 
     @ViewBuilder
     private var checkStatusBadge: some View {
-        if let icon = checkStatusIcon {
-            let isPending = icon.name == "circle.fill"
-            Image(systemName: icon.name)
-                .font(isPending ? .system(size: 6) : .caption2.weight(.bold))
-                .foregroundStyle(icon.color)
+        if let checkStatus = pullRequest.checkStatus {
+            Image(systemName: checkStatus.symbolName)
+                .font(checkStatus.isInProgress ? .system(size: 6) : .caption2.weight(.bold))
+                .foregroundStyle(checkStatus.tint)
                 .help(checkStatusLabel)
         }
     }
@@ -283,15 +282,6 @@ struct PullRequestRowView<RowMenu: View>: View {
     }
 
     // MARK: - Helpers
-
-    private var checkStatusIcon: (name: String, color: Color)? {
-        switch pullRequest.checkStatus {
-        case .success: return ("checkmark", .blue)
-        case .pending, .expected: return ("circle.fill", .yellow)
-        case .failure, .error: return ("xmark", .red)
-        case nil: return nil
-        }
-    }
 
     private var stateLabel: String {
         switch pullRequest.state {
