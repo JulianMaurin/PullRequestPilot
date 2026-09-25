@@ -21,7 +21,9 @@
 #      limit). Same <unset>/empty contract; no forbidden-terms check
 #      because product names are allowed in context.
 #   6. CFBundleDisplayName (project.yml) — no forbidden brand terms
-#   7. Privacy manifests exist for main app + widget
+#   7. Privacy manifests (main app + widget) parse, declare no tracking and
+#      no collected data, and declare a reason for every required-reason
+#      API category their target's sources call
 #
 # Env overrides (for tests):
 #   SUBTITLE_OVERRIDE  — override subtitle (bypass metadata/appstore.yml)
@@ -215,15 +217,66 @@ if [[ -n "$DISPLAY_NAME" ]]; then
 fi
 
 # --- Privacy manifests
-for manifest in \
-  PullRequestPilot/Resources/PrivacyInfo.xcprivacy \
-  PullRequestPilotWidget/PrivacyInfo.xcprivacy; do
-  if [[ -f "$manifest" ]]; then
-    ok "privacy manifest present: $manifest"
-  else
+# Required-reason API categories and the calls that need them, as
+# "category|extended regex". Apple rejects uploads whose binary calls one of
+# these without a declared reason.
+REQUIRED_REASON_APIS=(
+  "NSPrivacyAccessedAPICategoryUserDefaults|UserDefaults|@AppStorage"
+  "NSPrivacyAccessedAPICategoryFileTimestamp|creationDate|modificationDate|ModificationDate|attributesOfItem|getattrlist|[^A-Za-z_]f?stat\\("
+  "NSPrivacyAccessedAPICategorySystemBootTime|systemUptime|mach_absolute_time"
+  "NSPrivacyAccessedAPICategoryDiskSpace|volumeAvailableCapacity|volumeTotalCapacity|systemFreeSize|statfs"
+  "NSPrivacyAccessedAPICategoryActiveKeyboards|activeInputModes"
+)
+
+# Categories the manifest declares with at least one reason, one per line.
+declared_reason_categories() {
+  local manifest="$1" index=0 category reasons
+  while category=$(plutil -extract "NSPrivacyAccessedAPITypes.$index.NSPrivacyAccessedAPIType" raw -o - "$manifest" 2>/dev/null); do
+    reasons=$(plutil -extract "NSPrivacyAccessedAPITypes.$index.NSPrivacyAccessedAPITypeReasons" raw -o - "$manifest" 2>/dev/null || echo 0)
+    if (( reasons > 0 )); then
+      echo "$category"
+    fi
+    index=$((index+1))
+  done
+}
+
+# $1 = manifest; remaining arguments = the source directories of its target.
+check_privacy_manifest() {
+  local manifest="$1"
+  shift
+  if [[ ! -f "$manifest" ]]; then
     fail "missing privacy manifest: $manifest"
+    return
   fi
-done
+  if ! plutil -lint -s "$manifest"; then
+    fail "privacy manifest is not a valid property list: $manifest"
+    return
+  fi
+  if [[ "$(plutil -extract NSPrivacyTracking raw -o - "$manifest" 2>/dev/null)" != "false" ]]; then
+    fail "$manifest: NSPrivacyTracking must be false (the app doesn't track)"
+  fi
+  # The app collects no data; declaring some means the App Store privacy
+  # answers must change too.
+  if [[ "$(plutil -extract NSPrivacyCollectedDataTypes raw -o - "$manifest" 2>/dev/null)" != "0" ]]; then
+    fail "$manifest: declares collected data types; update the App Store privacy answers and this check together"
+  fi
+  local declared entry category pattern missing=0
+  declared=$(declared_reason_categories "$manifest")
+  for entry in "${REQUIRED_REASON_APIS[@]}"; do
+    category="${entry%%|*}"
+    pattern="${entry#*|}"
+    if grep -rqE --include='*.swift' "$pattern" "$@" && ! grep -qx "$category" <<< "$declared"; then
+      fail "$manifest: the sources in $* call a $category API without declaring a reason"
+      missing=1
+    fi
+  done
+  if (( missing == 0 )); then
+    ok "privacy manifest covers its required-reason APIs: $manifest"
+  fi
+}
+
+check_privacy_manifest PullRequestPilot/Resources/PrivacyInfo.xcprivacy PullRequestPilot Shared
+check_privacy_manifest PullRequestPilotWidget/PrivacyInfo.xcprivacy PullRequestPilotWidget Shared
 
 echo
 if (( FAIL > 0 )); then
