@@ -7,8 +7,8 @@ struct PRFetcherTests {
 
     // MARK: - Fixtures
 
-    private static func makeView() -> DashboardView {
-        DashboardView(id: UUID(), title: "Test", query: "is:pr")
+    private static func makeView() -> ViewDefinition {
+        ViewDefinition(id: UUID(), title: "Test", query: "is:pr")
     }
 
     /// Identity filter — returns input unchanged. Used when the test doesn't
@@ -458,8 +458,8 @@ struct PRFetcherTests {
         defer { watchdog.cancel() }
         let fetcher = PRFetcher(gitHubClient: client, filter: Self.identityFilter)
         let viewID = UUID()
-        let oldView = DashboardView(id: viewID, title: "Test", query: "is:pr label:old")
-        let newView = DashboardView(id: viewID, title: "Test", query: "is:pr label:new")
+        let oldView = ViewDefinition(id: viewID, title: "Test", query: "is:pr label:old")
+        let newView = ViewDefinition(id: viewID, title: "Test", query: "is:pr label:new")
 
         async let oldRefresh: Void = fetcher.refresh(for: oldView)
         try await client.waitForFetch(query: oldView.query, cursor: nil)
@@ -494,8 +494,8 @@ struct PRFetcherTests {
         defer { watchdog.cancel() }
         let fetcher = PRFetcher(gitHubClient: client, filter: Self.identityFilter)
         let viewID = UUID()
-        let oldView = DashboardView(id: viewID, title: "Test", query: "is:pr label:old")
-        let newView = DashboardView(id: viewID, title: "Test", query: "is:pr label:new")
+        let oldView = ViewDefinition(id: viewID, title: "Test", query: "is:pr label:old")
+        let newView = ViewDefinition(id: viewID, title: "Test", query: "is:pr label:new")
 
         async let oldRefresh: Void = fetcher.refresh(for: oldView)
         try await client.waitForFetch(query: oldView.query, cursor: nil)
@@ -529,8 +529,8 @@ struct PRFetcherTests {
         let recorder = EventRecorder()
         let fetcher = PRFetcher(gitHubClient: client, filter: Self.identityFilter, reporter: recorder.reporter())
         let viewID = UUID()
-        let oldView = DashboardView(id: viewID, title: "Test", query: "is:pr label:old")
-        let newView = DashboardView(id: viewID, title: "Test", query: "is:pr label:new")
+        let oldView = ViewDefinition(id: viewID, title: "Test", query: "is:pr label:old")
+        let newView = ViewDefinition(id: viewID, title: "Test", query: "is:pr label:new")
 
         async let oldRefresh: Void = fetcher.refresh(for: oldView)
         try await client.waitForFetch(query: oldView.query, cursor: nil)

@@ -6,7 +6,7 @@ final class ViewRegistry {
 
     // MARK: - Properties
 
-    private(set) var views: [DashboardView]
+    private(set) var views: [ViewDefinition]
     var selectedViewID: UUID? {
         didSet { persistSelectedViewID() }
     }
@@ -26,7 +26,7 @@ final class ViewRegistry {
 
     // MARK: - Mutations
 
-    func addView(_ view: DashboardView) {
+    func addView(_ view: ViewDefinition) {
         views.append(view)
         viewsStore.save(views)
         if selectedViewID == nil {
@@ -34,7 +34,7 @@ final class ViewRegistry {
         }
     }
 
-    func updateView(_ view: DashboardView) {
+    func updateView(_ view: ViewDefinition) {
         guard let index = views.firstIndex(where: { $0.id == view.id }) else { return }
         views[index] = view
         viewsStore.save(views)
@@ -61,7 +61,7 @@ final class ViewRegistry {
         viewsStore.save(views)
     }
 
-    func replaceAll(with newViews: [DashboardView]) {
+    func replaceAll(with newViews: [ViewDefinition]) {
         views = newViews
         viewsStore.save(newViews)
         if let selected = selectedViewID, !newViews.contains(where: { $0.id == selected }) {
@@ -105,7 +105,7 @@ final class ViewRegistry {
         defaults.set(selectedViewID?.uuidString, forKey: Constants.UserDefaultsKeys.selectedViewID)
     }
 
-    private static func restoreSelectedViewID(from defaults: UserDefaults, views: [DashboardView]) -> UUID? {
+    private static func restoreSelectedViewID(from defaults: UserDefaults, views: [ViewDefinition]) -> UUID? {
         guard let stored = defaults.string(forKey: Constants.UserDefaultsKeys.selectedViewID),
               let uuid = UUID(uuidString: stored),
               views.contains(where: { $0.id == uuid }) else {

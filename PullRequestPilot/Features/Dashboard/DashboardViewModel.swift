@@ -56,7 +56,7 @@ final class DashboardViewModel {
 
     // MARK: - Delegated view-registry state
 
-    var views: [DashboardView] { viewRegistry.views }
+    var views: [ViewDefinition] { viewRegistry.views }
 
     var selectedViewID: UUID? {
         get { viewRegistry.selectedViewID }
@@ -355,17 +355,17 @@ final class DashboardViewModel {
 
     // MARK: - CRUD
 
-    func addView(_ view: DashboardView) {
+    func addView(_ view: ViewDefinition) {
         viewRegistry.addView(view)
         fetcher.ensureState(for: view.id)
     }
 
-    func addViewAndRefresh(_ view: DashboardView) {
+    func addViewAndRefresh(_ view: ViewDefinition) {
         addView(view)
         scheduleRefresh(for: view)
     }
 
-    func updateView(_ view: DashboardView) {
+    func updateView(_ view: ViewDefinition) {
         let previous = views.first { $0.id == view.id }
         viewRegistry.updateView(view)
         if previous?.query != view.query || previous?.hideReviewed != view.hideReviewed {
@@ -418,8 +418,8 @@ final class DashboardViewModel {
     // MARK: - Presets
 
     /// Adds a copy of `preset` as a new view and loads it.
-    func addPresetView(_ preset: DashboardView) {
-        addViewAndRefresh(DashboardView(
+    func addPresetView(_ preset: ViewDefinition) {
+        addViewAndRefresh(ViewDefinition(
             id: UUID(),
             title: preset.title,
             query: preset.query,
@@ -429,9 +429,9 @@ final class DashboardViewModel {
 
     /// Restores the query and filter of the view named after `preset`. The
     /// view keeps its ID, so its bell and badge settings stay.
-    func resetPresetView(_ preset: DashboardView) {
+    func resetPresetView(_ preset: ViewDefinition) {
         guard let existing = views.first(where: { $0.title == preset.title }) else { return }
-        let restored = DashboardView(
+        let restored = ViewDefinition(
             id: existing.id,
             title: preset.title,
             query: preset.query,
@@ -500,21 +500,21 @@ final class DashboardViewModel {
     // MARK: - Query Editing
 
     func commitQueryEdit(viewID: UUID, newQuery: String) {
-        guard let dashView = views.first(where: { $0.id == viewID }) else { return }
+        guard let viewDefinition = views.first(where: { $0.id == viewID }) else { return }
         let trimmed = newQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != dashView.query else { return }
-        let updated = DashboardView(id: dashView.id, title: dashView.title, query: trimmed, hideReviewed: dashView.hideReviewed)
+        guard !trimmed.isEmpty, trimmed != viewDefinition.query else { return }
+        let updated = ViewDefinition(id: viewDefinition.id, title: viewDefinition.title, query: trimmed, hideReviewed: viewDefinition.hideReviewed)
         viewRegistry.updateView(updated)
         resetResults(for: viewID)
         scheduleRefresh(for: updated)
     }
 
     func appendFilter(viewID: UUID, qualifier: SearchQualifier) {
-        guard let dashView = views.first(where: { $0.id == viewID }) else { return }
-        let query = SearchQuery(dashView.query)
+        guard let viewDefinition = views.first(where: { $0.id == viewID }) else { return }
+        let query = SearchQuery(viewDefinition.query)
         guard !query.contains(qualifier) else { return }
         let newQuery = query.appending(qualifier).text
-        let updated = DashboardView(id: dashView.id, title: dashView.title, query: newQuery, hideReviewed: dashView.hideReviewed)
+        let updated = ViewDefinition(id: viewDefinition.id, title: viewDefinition.title, query: newQuery, hideReviewed: viewDefinition.hideReviewed)
         viewRegistry.updateView(updated)
         resetResults(for: viewID)
         scheduleRefresh(for: updated)
@@ -522,7 +522,7 @@ final class DashboardViewModel {
 
     // MARK: - Private
 
-    private func scheduleRefresh(for view: DashboardView) {
+    private func scheduleRefresh(for view: ViewDefinition) {
         pendingScheduledRefreshes.cancelAndRemove(view.id)
         let fetcher = self.fetcher
         let task = Task {

@@ -48,8 +48,8 @@ struct ReviewQueueViewModelTests {
         return Harness(queue: queue, dashboard: dashboard, detail: detail, defaults: defaults)
     }
 
-    private func addViews(_ harness: Harness, _ titles: [String]) -> [DashboardView] {
-        let views = titles.map { DashboardView(id: UUID(), title: $0, query: "is:pr \($0.lowercased())") }
+    private func addViews(_ harness: Harness, _ titles: [String]) -> [ViewDefinition] {
+        let views = titles.map { ViewDefinition(id: UUID(), title: $0, query: "is:pr \($0.lowercased())") }
         views.forEach(harness.dashboard.addView)
         return views
     }
@@ -255,7 +255,7 @@ struct ReviewQueueViewModelTests {
     @Test("Show Reviewed turns the view's hide-reviewed filter off")
     func showReviewed() throws {
         let harness = try makeHarness(suiteName: "ShowReviewed")
-        let view = DashboardView(id: UUID(), title: "Mine", query: "is:pr", hideReviewed: true)
+        let view = ViewDefinition(id: UUID(), title: "Mine", query: "is:pr", hideReviewed: true)
         harness.dashboard.addView(view)
 
         harness.queue.showReviewedPullRequests()

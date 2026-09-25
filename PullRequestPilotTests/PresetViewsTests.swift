@@ -17,7 +17,7 @@ struct PresetViewsTests {
 
     @Test("presets don't pin a base branch, so repos on master or develop still match")
     func presetsHaveNoBaseQualifier() {
-        for preset in DashboardView.presetViews {
+        for preset in ViewDefinition.presetViews {
             #expect(!preset.query.contains("base:"), "\(preset.title) pins a base branch")
         }
     }
@@ -27,7 +27,7 @@ struct PresetViewsTests {
     @Test("adding a preset copies it under a new ID, selects it and loads it")
     func addPresetViewLoads() async throws {
         let viewModel = try makeViewModel(suiteName: "AddPreset")
-        let preset = DashboardView.presetViews[1]
+        let preset = ViewDefinition.presetViews[1]
         await mockClient.setPullRequestsToReturn([try TestPullRequestFactory.make(id: "PR_preset")])
 
         viewModel.addPresetView(preset)
@@ -45,9 +45,9 @@ struct PresetViewsTests {
     @Test("resetting a preset restores its query and filter, keeps the view's ID and reloads it")
     func resetPresetView() async throws {
         let viewModel = try makeViewModel(suiteName: "ResetPreset")
-        let preset = DashboardView.presetViews[1]
+        let preset = ViewDefinition.presetViews[1]
         let viewID = UUID()
-        viewModel.addView(DashboardView(id: viewID, title: preset.title, query: "is:pr author:someone", hideReviewed: !preset.hideReviewed))
+        viewModel.addView(ViewDefinition(id: viewID, title: preset.title, query: "is:pr author:someone", hideReviewed: !preset.hideReviewed))
         await mockClient.setPullRequestsToReturn([try TestPullRequestFactory.make(id: "PR_old")])
         await viewModel.refresh(viewID: viewID)
         await mockClient.setPullRequestsToReturn([try TestPullRequestFactory.make(id: "PR_reset")])
@@ -65,7 +65,7 @@ struct PresetViewsTests {
     @Test("resetting a preset without a view of that name changes nothing")
     func resetMissingPreset() throws {
         let viewModel = try makeViewModel(suiteName: "ResetMissingPreset")
-        viewModel.resetPresetView(DashboardView.presetViews[0])
+        viewModel.resetPresetView(ViewDefinition.presetViews[0])
         #expect(viewModel.views.isEmpty)
     }
 }

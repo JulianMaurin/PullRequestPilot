@@ -7,7 +7,7 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
     var isInitialSetup: Bool = false
     var onDismiss: (() -> Void)?
     @State private var showResetConfirmation = false
-    @State private var presetToReset: DashboardView?
+    @State private var presetToReset: ViewDefinition?
     @State private var showSignOutConfirmation = false
     @State private var directoryToRemove: URL?
     @State private var unavailableDirectoryToRemove: String?
@@ -157,7 +157,7 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
             }
 
             Section {
-                ForEach(DashboardView.presetViews) { preset in
+                ForEach(ViewDefinition.presetViews) { preset in
                     presetRow(preset)
                 }
             } header: {
@@ -399,7 +399,7 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
         }
     }
 
-    private func presetRow(_ preset: DashboardView) -> some View {
+    private func presetRow(_ preset: ViewDefinition) -> some View {
         let existing = dashboard.views.first(where: { $0.title == preset.title })
         let isAdded = existing != nil
         let isModified = isAdded && existing?.query != preset.query

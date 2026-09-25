@@ -62,7 +62,7 @@ final class PRFetcher {
 
     // MARK: - Types
 
-    typealias PRFilter = @MainActor ([PullRequest], DashboardView) async -> [PullRequest]
+    typealias PRFilter = @MainActor ([PullRequest], ViewDefinition) async -> [PullRequest]
 
     struct FetchOutcome {
         let viewID: UUID
@@ -142,7 +142,7 @@ final class PRFetcher {
 
     // MARK: - Public API
 
-    func refresh(for view: DashboardView) async {
+    func refresh(for view: ViewDefinition) async {
         if let pending = pendingRefreshes.task(for: view.id, label: view.query) {
             _ = await pending.value
             return
@@ -161,7 +161,7 @@ final class PRFetcher {
         pendingRefreshes.removeIfIdentical(task, for: view.id)
     }
 
-    func loadMore(for view: DashboardView) async {
+    func loadMore(for view: ViewDefinition) async {
         if let pending = pendingLoadMores.task(for: view.id, label: view.query) {
             _ = await pending.value
             return
@@ -200,7 +200,7 @@ final class PRFetcher {
 
     // MARK: - Private
 
-    private func performRefresh(for view: DashboardView) async {
+    private func performRefresh(for view: ViewDefinition) async {
         ensureState(for: view.id)
         // A full refresh replaces the list and cursor, so any in-flight
         // pagination would append a stale-cursor page onto the new list.
@@ -270,7 +270,7 @@ final class PRFetcher {
         states[view.id]?.isLoading = false
     }
 
-    private func performLoadMore(for view: DashboardView) async {
+    private func performLoadMore(for view: ViewDefinition) async {
         guard let state = states[view.id], state.canLoadMore else { return }
         // A deep refresh can leave fewer than a full page before the cap.
         let pageSize = min(Constants.App.searchPageSize, Constants.App.maxPullRequests - state.rawFetchedCount)

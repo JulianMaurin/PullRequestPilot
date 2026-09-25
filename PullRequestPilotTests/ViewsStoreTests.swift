@@ -22,8 +22,8 @@ struct ViewsStoreTests {
     func saveAndLoadRoundTrip() throws {
         let store = try makeStore(suiteName: "ViewsStoreRoundTrip")
         let views = [
-            DashboardView(id: UUID(), title: "My PRs", query: "is:pr author:@me"),
-            DashboardView(id: UUID(), title: "Team", query: "is:pr org:team", hideReviewed: true),
+            ViewDefinition(id: UUID(), title: "My PRs", query: "is:pr author:@me"),
+            ViewDefinition(id: UUID(), title: "Team", query: "is:pr org:team", hideReviewed: true),
         ]
         store.save(views)
 
@@ -46,8 +46,8 @@ struct ViewsStoreTests {
     @Test("save overwrites previous data")
     func saveOverwrites() throws {
         let store = try makeStore(suiteName: "ViewsStoreOverwrite")
-        store.save([DashboardView(id: UUID(), title: "First", query: "q1")])
-        store.save([DashboardView(id: UUID(), title: "Second", query: "q2")])
+        store.save([ViewDefinition(id: UUID(), title: "First", query: "q1")])
+        store.save([ViewDefinition(id: UUID(), title: "Second", query: "q2")])
 
         let loaded = store.load()
         #expect(loaded.count == 1)
@@ -126,7 +126,7 @@ struct ViewsStoreTests {
         let firstEventCount = center.events.count
         #expect(firstEventCount == 1)
 
-        store.save([DashboardView(id: UUID(), title: "Valid", query: "q")])
+        store.save([ViewDefinition(id: UUID(), title: "Valid", query: "q")])
         let views = store.load()
         #expect(views.count == 1)
 

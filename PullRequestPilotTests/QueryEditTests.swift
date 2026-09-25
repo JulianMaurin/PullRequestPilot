@@ -13,7 +13,7 @@ struct QueryEditTests {
         defaults.removePersistentDomain(forName: suiteName)
         let store = ViewsStore(defaults: defaults)
         let vm = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
-        let view = DashboardView(id: UUID(), title: "Test", query: "is:pr is:open")
+        let view = ViewDefinition(id: UUID(), title: "Test", query: "is:pr is:open")
         vm.addView(view)
         return (vm, view.id)
     }

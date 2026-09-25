@@ -33,8 +33,8 @@ struct DashboardGroupingCacheTests {
         title: String,
         prs: [PullRequest],
         mock: MockGitHubClient
-    ) async -> DashboardView {
-        let view = DashboardView(id: UUID(), title: title, query: "is:pr")
+    ) async -> ViewDefinition {
+        let view = ViewDefinition(id: UUID(), title: title, query: "is:pr")
         viewModel.addView(view)
         await mock.setPullRequestsToReturn(prs)
         await viewModel.refresh(viewID: view.id)

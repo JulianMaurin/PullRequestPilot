@@ -13,10 +13,10 @@ struct ViewRegistryTests {
     /// injected UserDefaults, which is what we want to verify.
     @MainActor
     final class InMemoryViewsStore: ViewsStoreProtocol {
-        var storedViews: [DashboardView]
-        init(initial: [DashboardView] = []) { self.storedViews = initial }
-        func load() -> [DashboardView] { storedViews }
-        func save(_ views: [DashboardView]) { storedViews = views }
+        var storedViews: [ViewDefinition]
+        init(initial: [ViewDefinition] = []) { self.storedViews = initial }
+        func load() -> [ViewDefinition] { storedViews }
+        func save(_ views: [ViewDefinition]) { storedViews = views }
     }
 
     private static func isolatedDefaults(_ suiteName: String = #function) throws -> UserDefaults {
@@ -27,14 +27,14 @@ struct ViewRegistryTests {
     }
 
     @MainActor
-    private static func makeRegistry(initial: [DashboardView] = [], defaults: UserDefaults) -> (ViewRegistry, InMemoryViewsStore) {
+    private static func makeRegistry(initial: [ViewDefinition] = [], defaults: UserDefaults) -> (ViewRegistry, InMemoryViewsStore) {
         let store = InMemoryViewsStore(initial: initial)
         let registry = ViewRegistry(viewsStore: store, defaults: defaults)
         return (registry, store)
     }
 
-    private static func makeView(_ title: String) -> DashboardView {
-        DashboardView(id: UUID(), title: title, query: "is:pr author:@me")
+    private static func makeView(_ title: String) -> ViewDefinition {
+        ViewDefinition(id: UUID(), title: title, query: "is:pr author:@me")
     }
 
     // MARK: - Init + load
@@ -100,7 +100,7 @@ struct ViewRegistryTests {
         let defaults = try Self.isolatedDefaults()
         let v = Self.makeView("Original")
         let (registry, store) = Self.makeRegistry(initial: [v], defaults: defaults)
-        let updated = DashboardView(id: v.id, title: "Updated", query: "is:open")
+        let updated = ViewDefinition(id: v.id, title: "Updated", query: "is:open")
         registry.updateView(updated)
         let first = try #require(registry.views.first)
         #expect(first.title == "Updated")
@@ -115,7 +115,7 @@ struct ViewRegistryTests {
         let defaults = try Self.isolatedDefaults()
         let existing = Self.makeView("A")
         let (registry, _) = Self.makeRegistry(initial: [existing], defaults: defaults)
-        let ghost = DashboardView(id: UUID(), title: "Ghost", query: "x")
+        let ghost = ViewDefinition(id: UUID(), title: "Ghost", query: "x")
         registry.updateView(ghost)
         #expect(registry.views.count == 1)
         #expect(registry.views[0].title == "A")

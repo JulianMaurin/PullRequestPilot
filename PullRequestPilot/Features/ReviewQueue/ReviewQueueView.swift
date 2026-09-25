@@ -223,18 +223,18 @@ struct ReviewQueueView: View {
         // Without it the dragged tab stays at 40% opacity indefinitely.
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
-                ForEach(dashboard.views) { dashView in
+                ForEach(dashboard.views) { viewDefinition in
                     TabButton(
-                        dashView: dashView,
-                        isSelected: dashView.id == dashboard.selectedViewID,
-                        isDragged: draggedViewID == dashView.id,
+                        viewDefinition: viewDefinition,
+                        isSelected: viewDefinition.id == dashboard.selectedViewID,
+                        isDragged: draggedViewID == viewDefinition.id,
                         draggedID: $draggedViewID,
                         viewModel: dashboard,
                         onSelect: {
-                            viewModel.selectView(dashView.id)
+                            viewModel.selectView(viewDefinition.id)
                         },
                         onRequestDelete: {
-                            viewModel.requestDeletion(of: dashView)
+                            viewModel.requestDeletion(of: viewDefinition)
                         }
                     )
                 }
@@ -284,8 +284,8 @@ struct ReviewQueueView: View {
 
     @ViewBuilder
     private var viewConfigIcons: some View {
-        if let dashView = viewModel.selectedView {
-            let viewID = dashView.id
+        if let viewDefinition = viewModel.selectedView {
+            let viewID = viewDefinition.id
             HStack(spacing: 2) {
                 if dashboard.isNotificationBlocked(for: viewID) {
                     viewToggleButton(
@@ -320,8 +320,8 @@ struct ReviewQueueView: View {
                 }
 
                 viewToggleButton(
-                    icon: dashView.hideReviewed ? "eye.slash" : "eye",
-                    isOn: dashView.hideReviewed,
+                    icon: viewDefinition.hideReviewed ? "eye.slash" : "eye",
+                    isOn: viewDefinition.hideReviewed,
                     helpOn: "Show reviewed PRs",
                     helpOff: "Hide reviewed PRs"
                 ) {
@@ -893,7 +893,7 @@ private struct SplitDividerRestorer: NSViewRepresentable {
 /// `viewModel.selectedViewID` inside the outer body, which invalidated
 /// every tab on any selection change.
 private struct TabButton: View {
-    let dashView: DashboardView
+    let viewDefinition: ViewDefinition
     let isSelected: Bool
     let isDragged: Bool
     @Binding var draggedID: UUID?
@@ -903,7 +903,7 @@ private struct TabButton: View {
 
     var body: some View {
         Button(action: onSelect) {
-            Text(dashView.title)
+            Text(viewDefinition.title)
                 .font(.subheadline)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
@@ -915,11 +915,11 @@ private struct TabButton: View {
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
         .opacity(isDragged ? 0.4 : 1.0)
         .onDrag {
-            draggedID = dashView.id
-            return NSItemProvider(object: dashView.id.uuidString as NSString)
+            draggedID = viewDefinition.id
+            return NSItemProvider(object: viewDefinition.id.uuidString as NSString)
         }
         .onDrop(of: [.text], delegate: TabDropDelegate(
-            targetID: dashView.id,
+            targetID: viewDefinition.id,
             draggedID: $draggedID,
             viewModel: viewModel
         ))

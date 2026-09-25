@@ -20,7 +20,7 @@ final class ReviewQueueViewModel {
     var newViewQuery = ""
 
     /// The view waiting for the user to confirm its deletion.
-    var viewPendingDeletion: DashboardView?
+    var viewPendingDeletion: ViewDefinition?
 
     private(set) var expandedStackIDs: Set<String> = []
 
@@ -47,7 +47,7 @@ final class ReviewQueueViewModel {
         syncEditingQuery()
     }
 
-    var selectedView: DashboardView? {
+    var selectedView: ViewDefinition? {
         dashboard.views.first { $0.id == dashboard.selectedViewID }
     }
 
@@ -106,7 +106,7 @@ final class ReviewQueueViewModel {
 
     func addView() {
         guard canAddView else { return }
-        let view = DashboardView(
+        let view = ViewDefinition(
             id: UUID(),
             title: newViewTitle.trimmingCharacters(in: .whitespacesAndNewlines),
             query: newViewQuery.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -116,7 +116,7 @@ final class ReviewQueueViewModel {
         selectView(view.id)
     }
 
-    func requestDeletion(of view: DashboardView) {
+    func requestDeletion(of view: ViewDefinition) {
         viewPendingDeletion = view
     }
 

@@ -6,10 +6,10 @@ import Observation
 /// conformance.
 @MainActor
 protocol DashboardActionsProtocol: Observable, AnyObject {
-    var views: [DashboardView] { get }
+    var views: [ViewDefinition] { get }
     var systemNotificationsAuthorized: Bool { get }
     func refreshNotificationAuthorization() async
     func requestNotificationPermissionAndOpenSettings() async
-    func addPresetView(_ preset: DashboardView)
-    func resetPresetView(_ preset: DashboardView)
+    func addPresetView(_ preset: ViewDefinition)
+    func resetPresetView(_ preset: ViewDefinition)
 }

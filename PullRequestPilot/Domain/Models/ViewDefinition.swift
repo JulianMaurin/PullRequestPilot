@@ -1,8 +1,8 @@
 import Foundation
 
-// MARK: - Model
-
-struct DashboardView: Identifiable, Codable, Hashable, Sendable {
+/// A saved view: a titled GitHub search and its hide-reviewed filter. Data,
+/// not a SwiftUI view; the review queue shows one per tab.
+struct ViewDefinition: Identifiable, Codable, Hashable, Sendable {
     var id: UUID
     var title: String
     var query: String
@@ -27,28 +27,28 @@ struct DashboardView: Identifiable, Codable, Hashable, Sendable {
 
     // MARK: - Presets
 
-    static let defaultViews: [DashboardView] = []
+    static let defaultViews: [ViewDefinition] = []
 
-    static let presetViews: [DashboardView] = [
-        DashboardView(
+    static let presetViews: [ViewDefinition] = [
+        ViewDefinition(
             id: UUID(),
             title: "Needs my review",
             query: "is:open is:pr review-requested:@me draft:false",
             hideReviewed: true
         ),
-        DashboardView(
+        ViewDefinition(
             id: UUID(),
             title: "My PRs",
             query: "is:open is:pr author:@me draft:false",
             hideReviewed: false
         ),
-        DashboardView(
+        ViewDefinition(
             id: UUID(),
             title: "My drafts",
             query: "is:open is:pr author:@me draft:true",
             hideReviewed: false
         ),
-        DashboardView(
+        ViewDefinition(
             id: UUID(),
             title: "Recently merged",
             query: "is:merged is:pr author:@me",

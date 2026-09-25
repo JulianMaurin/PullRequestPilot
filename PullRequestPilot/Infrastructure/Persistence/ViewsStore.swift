@@ -5,8 +5,8 @@ import os
 
 @MainActor
 protocol ViewsStoreProtocol {
-    func load() -> [DashboardView]
-    func save(_ views: [DashboardView])
+    func load() -> [ViewDefinition]
+    func save(_ views: [ViewDefinition])
 }
 
 // MARK: - Implementation
@@ -28,22 +28,22 @@ final class ViewsStore: ViewsStoreProtocol {
         self.backupDirectory = backupDirectory
     }
 
-    func load() -> [DashboardView] {
+    func load() -> [ViewDefinition] {
         guard let data = defaults.data(forKey: Self.key) else {
-            return DashboardView.defaultViews
+            return ViewDefinition.defaultViews
         }
         do {
-            let views = try JSONDecoder().decode([DashboardView].self, from: data)
-            return views.isEmpty ? DashboardView.defaultViews : views
+            let views = try JSONDecoder().decode([ViewDefinition].self, from: data)
+            return views.isEmpty ? ViewDefinition.defaultViews : views
         } catch {
             let backupPath = backupCorruptedData(data)
             logger.error("Failed to decode saved views: \(error, privacy: .public). Backup: \(backupPath ?? "n/a", privacy: .public)")
             reporter.postError(.decodeCorruption(subsystem: "dashboard views", backupPath: backupPath))
-            return DashboardView.defaultViews
+            return ViewDefinition.defaultViews
         }
     }
 
-    func save(_ views: [DashboardView]) {
+    func save(_ views: [ViewDefinition]) {
         do {
             let data = try JSONEncoder().encode(views)
             defaults.set(data, forKey: Self.key)

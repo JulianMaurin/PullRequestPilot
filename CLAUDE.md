@@ -60,6 +60,8 @@ Shared/               — Cross-cutting constants (app target only)
 
 These live under `PullRequestPilot/`. The top-level `Shared/` directory is different: it's compiled into both the app and the widget (see Widget Extension Rules).
 
+`Features/Dashboard` has no view: it is the data behind the review queue (fetching, auto-refresh, badges, notifications, widget sync), driven by `DashboardViewModel`. A saved view is a `ViewDefinition` (title, query, hide-reviewed), not a SwiftUI view.
+
 **Dependency flow:** Features → Infrastructure → Domain (arrows point at dependencies). Features never reference each other; Infrastructure never references Features or App, and holds no views; Domain imports only Foundation. Everything is one module, so SwiftLint's layering rules enforce this (`domain_imports_foundation_only`, `infrastructure_knows_no_ui`, `*_feature_isolated`). `EventReporter` lives in Domain so every layer can post events. The one composite screen is `ReviewQueue`: `ReviewQueueViewModel` drives `DashboardViewModel` and `PRDetailViewModel`. When a feature needs another's capability, it declares a protocol and `AppState` supplies the conformance (`DashboardActionsProtocol`).
 
 **Dependency injection:** All wiring happens in `AppState.swift` — the single composition root, created by `AppDelegate` so the status item and menus work before any window opens. ViewModels receive their dependencies via constructor injection.

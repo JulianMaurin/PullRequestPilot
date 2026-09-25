@@ -16,7 +16,7 @@ struct WidgetDataMappingTests {
         defaults.removePersistentDomain(forName: suiteName)
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: destination)
-        viewModel.addView(DashboardView(id: UUID(), title: "Widget Test", query: "is:pr"))
+        viewModel.addView(ViewDefinition(id: UUID(), title: "Widget Test", query: "is:pr"))
         return (viewModel, widgetFileURL)
     }
 
