@@ -1,5 +1,4 @@
 SHELL        := /bin/bash
-.SHELLFLAGS  := -o pipefail -c
 
 SCHEME       := PullRequestPilot
 PROJECT      := PullRequestPilot.xcodeproj
@@ -15,6 +14,9 @@ XCODEBUILD_BASE := xcodebuild -scheme $(SCHEME) -project $(PROJECT) \
 	-destination 'generic/platform=macOS'
 XCODEBUILD := $(XCODEBUILD_BASE) -configuration $(CONFIG)
 
+# Recipes that pipe xcodebuild through the filter start with `set -o pipefail;`
+# so its failure fails make. /usr/bin/make is GNU Make 3.81, which ignores
+# .SHELLFLAGS.
 XCB_FILTER := scripts/xcb-filter.sh
 
 SWIFT_SOURCES := $(sort $(shell find PullRequestPilot Shared PullRequestPilotTests PullRequestPilotWidget -type f -name '*.swift' 2>/dev/null))
@@ -53,7 +55,7 @@ lint-errors-only:
 
 # Build release
 build: $(PROJECT)/project.pbxproj lint
-	$(XCODEBUILD) build SYMROOT=$(BUILD_DIR) 2>&1 | $(XCB_FILTER)
+	set -o pipefail; $(XCODEBUILD) build SYMROOT=$(BUILD_DIR) 2>&1 | $(XCB_FILTER)
 
 # Install to /Applications
 install: build
@@ -70,7 +72,7 @@ uninstall:
 
 # Build debug and run (reads GITHUB_TOKEN from .env)
 debug: $(PROJECT)/project.pbxproj
-	$(XCODEBUILD_BASE) -configuration Debug build SYMROOT=$(BUILD_DIR) 2>&1 | $(XCB_FILTER)
+	set -o pipefail; $(XCODEBUILD_BASE) -configuration Debug build SYMROOT=$(BUILD_DIR) 2>&1 | $(XCB_FILTER)
 	@if [ -f .env ]; then \
 		set -a && . ./.env && set +a && \
 		"$(BUILD_DIR)/Debug/$(BUNDLE_NAME)/Contents/MacOS/PullRequestPilot"; \
@@ -86,7 +88,7 @@ run: build
 # arch disambiguates when multiple macOS destinations match (Catalyst, Designed for iPad).
 HOST_ARCH := $(shell uname -m)
 test: $(PROJECT)/project.pbxproj lint
-	xcodebuild -scheme $(SCHEME) -project $(PROJECT) \
+	set -o pipefail; xcodebuild -scheme $(SCHEME) -project $(PROJECT) \
 		-destination 'platform=macOS,arch=$(HOST_ARCH)' -configuration Debug test 2>&1 | $(XCB_FILTER)
 
 # Clean build artifacts
