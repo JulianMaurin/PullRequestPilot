@@ -5,22 +5,22 @@ import Foundation
 @Suite("ViewsStore")
 @MainActor
 struct ViewsStoreTests {
-    private func makeStore(suiteName: String) -> ViewsStore {
-        let defaults = UserDefaults(suiteName: suiteName)!
+    private func makeStore(suiteName: String) throws -> ViewsStore {
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         return ViewsStore(defaults: defaults)
     }
 
     @Test("load returns empty array when no data exists")
-    func loadReturnsDefaults() {
-        let store = makeStore(suiteName: "ViewsStoreEmpty")
+    func loadReturnsDefaults() throws {
+        let store = try makeStore(suiteName: "ViewsStoreEmpty")
         let views = store.load()
         #expect(views.isEmpty)
     }
 
     @Test("save and load round-trips views")
-    func saveAndLoadRoundTrip() {
-        let store = makeStore(suiteName: "ViewsStoreRoundTrip")
+    func saveAndLoadRoundTrip() throws {
+        let store = try makeStore(suiteName: "ViewsStoreRoundTrip")
         let views = [
             DashboardView(id: UUID(), title: "My PRs", query: "is:pr author:@me"),
             DashboardView(id: UUID(), title: "Team", query: "is:pr org:team", hideReviewed: true),
@@ -35,8 +35,8 @@ struct ViewsStoreTests {
     }
 
     @Test("load returns empty array when saved array is empty")
-    func loadReturnsDefaultsForEmptyArray() {
-        let store = makeStore(suiteName: "ViewsStoreEmptyArray")
+    func loadReturnsDefaultsForEmptyArray() throws {
+        let store = try makeStore(suiteName: "ViewsStoreEmptyArray")
         store.save([])
 
         let loaded = store.load()
@@ -44,8 +44,8 @@ struct ViewsStoreTests {
     }
 
     @Test("save overwrites previous data")
-    func saveOverwrites() {
-        let store = makeStore(suiteName: "ViewsStoreOverwrite")
+    func saveOverwrites() throws {
+        let store = try makeStore(suiteName: "ViewsStoreOverwrite")
         store.save([DashboardView(id: UUID(), title: "First", query: "q1")])
         store.save([DashboardView(id: UUID(), title: "Second", query: "q2")])
 
@@ -83,7 +83,7 @@ struct ViewsStoreTests {
     @Test("corrupted load writes a backup file and posts a decodeCorruption event")
     func corruptedLoadBacksUpAndPosts() async throws {
         let suiteName = "ViewsStoreCorruptionBackup"
-        let defaults = UserDefaults(suiteName: suiteName)!
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         let center = EventCenter()
         let store = ViewsStore(defaults: defaults, reporter: center.reporter())

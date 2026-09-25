@@ -31,22 +31,22 @@ struct PullRequestTests {
     // MARK: - linesChanged
 
     @Test("linesChanged sums additions and deletions")
-    func linesChanged() {
-        let pr = TestPullRequestFactory.make(additions: 42, deletions: 13)
+    func linesChanged() throws {
+        let pr = try TestPullRequestFactory.make(additions: 42, deletions: 13)
         #expect(pr.linesChanged == 55)
     }
 
     @Test("linesChanged is zero when no changes")
-    func linesChangedZero() {
-        let pr = TestPullRequestFactory.make(additions: 0, deletions: 0)
+    func linesChangedZero() throws {
+        let pr = try TestPullRequestFactory.make(additions: 0, deletions: 0)
         #expect(pr.linesChanged == 0)
     }
 
     // MARK: - age
 
     @Test("age returns a relative time string")
-    func ageReturnsRelativeString() {
-        let pr = TestPullRequestFactory.make(createdAt: Date().addingTimeInterval(-7200))
+    func ageReturnsRelativeString() throws {
+        let pr = try TestPullRequestFactory.make(createdAt: Date().addingTimeInterval(-7200))
         let age = pr.age
         #expect(!age.isEmpty)
     }
@@ -137,15 +137,15 @@ struct PullRequestTests {
     }
 
     @Test("LastActivity.timestampText shows 'yesterday' for yesterday's date")
-    func timestampTextYesterday() {
-        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+    func timestampTextYesterday() throws {
+        let yesterday = try #require(Calendar.current.date(byAdding: .day, value: -1, to: Date()))
         let activity = LastActivity(kind: .comment, actor: nil, timestamp: yesterday)
         #expect(activity.timestampText.hasPrefix("yesterday at"))
     }
 
     @Test("LastActivity.timestampText shows date for older dates")
-    func timestampTextOlderDate() {
-        let oldDate = Calendar.current.date(byAdding: .day, value: -10, to: Date())!
+    func timestampTextOlderDate() throws {
+        let oldDate = try #require(Calendar.current.date(byAdding: .day, value: -10, to: Date()))
         let activity = LastActivity(kind: .comment, actor: nil, timestamp: oldDate)
         #expect(!activity.timestampText.hasPrefix("today"))
         #expect(!activity.timestampText.hasPrefix("yesterday"))
@@ -155,9 +155,9 @@ struct PullRequestTests {
     // MARK: - age(relativeTo:)
 
     @Test("age(relativeTo:) computes relative time from the given date")
-    func ageRelativeTo() {
+    func ageRelativeTo() throws {
         let createdAt = Date(timeIntervalSince1970: 1_000_000)
-        let pr = TestPullRequestFactory.make(createdAt: createdAt)
+        let pr = try TestPullRequestFactory.make(createdAt: createdAt)
         let oneHourLater = createdAt.addingTimeInterval(3600)
         let age = pr.age(relativeTo: oneHourLater)
         #expect(!age.isEmpty)
@@ -166,16 +166,16 @@ struct PullRequestTests {
     }
 
     @Test("age(relativeTo:) renders future createdAt as 'just now'")
-    func ageRelativeToFutureCreatedAt() {
+    func ageRelativeToFutureCreatedAt() throws {
         let now = Date(timeIntervalSince1970: 1_000_000)
-        let pr = TestPullRequestFactory.make(createdAt: now.addingTimeInterval(90))
+        let pr = try TestPullRequestFactory.make(createdAt: now.addingTimeInterval(90))
         #expect(pr.age(relativeTo: now) == "just now")
     }
 
     @Test("age(relativeTo:) changes as the reference date advances")
-    func ageRelativeToAdvances() {
+    func ageRelativeToAdvances() throws {
         let createdAt = Date(timeIntervalSince1970: 1_000_000)
-        let pr = TestPullRequestFactory.make(createdAt: createdAt)
+        let pr = try TestPullRequestFactory.make(createdAt: createdAt)
         let age1 = pr.age(relativeTo: createdAt.addingTimeInterval(60))
         let age2 = pr.age(relativeTo: createdAt.addingTimeInterval(86400))
         #expect(age1 != age2)
@@ -192,10 +192,10 @@ struct PullRequestTests {
     // MARK: - Hashable / Identifiable
 
     @Test("PullRequest identity is based on id")
-    func pullRequestIdentity() {
-        let pr1 = TestPullRequestFactory.make(id: "PR_1", title: "First")
-        let pr2 = TestPullRequestFactory.make(id: "PR_1", title: "Second")
-        let pr3 = TestPullRequestFactory.make(id: "PR_2", title: "First")
+    func pullRequestIdentity() throws {
+        let pr1 = try TestPullRequestFactory.make(id: "PR_1", title: "First")
+        let pr2 = try TestPullRequestFactory.make(id: "PR_1", title: "Second")
+        let pr3 = try TestPullRequestFactory.make(id: "PR_2", title: "First")
         #expect(pr1.id == pr2.id)
         #expect(pr1.id != pr3.id)
     }

@@ -37,7 +37,7 @@ struct SearchResultDecodingTests {
             "pageInfo": {"hasNextPage": false, "endCursor": null}
         }
         """
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let result = try JSONDecoder().decode(SearchResult.self, from: data)
         #expect(result.nodes.count == 1)
         #expect(result.nodes[0].id == "PR_1")
@@ -77,7 +77,7 @@ struct SearchResultDecodingTests {
             "pageInfo": {"hasNextPage": true, "endCursor": "cursor_abc"}
         }
         """
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let result = try JSONDecoder().decode(SearchResult.self, from: data)
         // Should only contain the valid PR node, skipping the Issue
         #expect(result.nodes.count == 1)
@@ -96,7 +96,7 @@ struct SearchResultDecodingTests {
             "pageInfo": {"hasNextPage": false, "endCursor": null}
         }
         """
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let result = try JSONDecoder().decode(SearchResult.self, from: data)
         #expect(result.nodes.isEmpty)
     }
@@ -113,7 +113,7 @@ struct SearchResultDecodingTests {
             "pageInfo": {"hasNextPage": false, "endCursor": null}
         }
         """
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let result = try JSONDecoder().decode(SearchResult.self, from: data)
         #expect(result.nodes.isEmpty)
         #expect(result.nonPullRequestCount == 3)
@@ -133,7 +133,7 @@ struct SearchResultDecodingTests {
             "pageInfo": {"hasNextPage": false, "endCursor": null}
         }
         """
-        let data = try #require(json.data(using: .utf8))
+        let data = Data(json.utf8)
         let result = try JSONDecoder().decode(SearchResult.self, from: data)
         #expect(result.nodes.count == 2)
         #expect(result.nodes.map(\.id) == ["PR_1", "PR_2"])
@@ -150,7 +150,7 @@ struct SearchResultDecodingTests {
             "pageInfo": {"hasNextPage": false, "endCursor": null}
         }
         """
-        let data = try #require(json.data(using: .utf8))
+        let data = Data(json.utf8)
         let result = try JSONDecoder().decode(SearchResult.self, from: data)
         #expect(result.nodes.isEmpty)
         #expect(result.withheldResultCount == 2)
@@ -182,7 +182,7 @@ struct SearchResultDecodingTests {
             "pageInfo": {"hasNextPage": false, "endCursor": null}
         }
         """
-        let data = try #require(json.data(using: .utf8))
+        let data = Data(json.utf8)
         #expect(throws: DecodingError.self) {
             try JSONDecoder().decode(SearchResult.self, from: data)
         }

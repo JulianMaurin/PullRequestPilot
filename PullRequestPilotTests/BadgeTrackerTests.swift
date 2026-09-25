@@ -5,21 +5,21 @@ import Foundation
 @MainActor
 @Suite("BadgeTracker")
 struct BadgeTrackerTests {
-    private func makeTracker(suiteName: String) -> BadgeTracker {
-        let defaults = UserDefaults(suiteName: suiteName)!
+    private func makeTracker(suiteName: String) throws -> BadgeTracker {
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         return BadgeTracker(defaults: defaults)
     }
 
     @Test("isEnabled returns false by default")
-    func isEnabledDefault() {
-        let tracker = makeTracker(suiteName: "BadgeDefault")
+    func isEnabledDefault() throws {
+        let tracker = try makeTracker(suiteName: "BadgeDefault")
         #expect(!tracker.isEnabled(for: UUID()))
     }
 
     @Test("setEnabled enables and disables badge tracking")
-    func setEnabledToggle() {
-        let tracker = makeTracker(suiteName: "BadgeToggle")
+    func setEnabledToggle() throws {
+        let tracker = try makeTracker(suiteName: "BadgeToggle")
         let viewID = UUID()
 
         tracker.setEnabled(for: viewID, enabled: true)
@@ -30,21 +30,21 @@ struct BadgeTrackerTests {
     }
 
     @Test("detectNewPRs returns empty on first load")
-    func detectNewPRsFirstLoad() {
-        let tracker = makeTracker(suiteName: "BadgeFirstLoad")
+    func detectNewPRsFirstLoad() throws {
+        let tracker = try makeTracker(suiteName: "BadgeFirstLoad")
         let viewID = UUID()
-        let pr = TestPullRequestFactory.make(id: "PR_1")
+        let pr = try TestPullRequestFactory.make(id: "PR_1")
 
         let added = tracker.detectNewPRs(viewID: viewID, currentPRs: [pr])
         #expect(added.isEmpty)
     }
 
     @Test("detectNewPRs detects new PRs on subsequent loads")
-    func detectNewPRsSubsequent() {
-        let tracker = makeTracker(suiteName: "BadgeSubsequent")
+    func detectNewPRsSubsequent() throws {
+        let tracker = try makeTracker(suiteName: "BadgeSubsequent")
         let viewID = UUID()
-        let pr1 = TestPullRequestFactory.make(id: "PR_1")
-        let pr2 = TestPullRequestFactory.make(id: "PR_2", number: 2)
+        let pr1 = try TestPullRequestFactory.make(id: "PR_1")
+        let pr2 = try TestPullRequestFactory.make(id: "PR_2", number: 2)
 
         _ = tracker.detectNewPRs(viewID: viewID, currentPRs: [pr1])
         let added = tracker.detectNewPRs(viewID: viewID, currentPRs: [pr1, pr2])
@@ -53,8 +53,8 @@ struct BadgeTrackerTests {
     }
 
     @Test("trackUnseen adds IDs and updates count")
-    func trackUnseen() {
-        let tracker = makeTracker(suiteName: "BadgeTrackUnseen")
+    func trackUnseen() throws {
+        let tracker = try makeTracker(suiteName: "BadgeTrackUnseen")
         #expect(tracker.count == 0)
 
         tracker.trackUnseen(Set(["PR_1", "PR_2"]))
@@ -62,8 +62,8 @@ struct BadgeTrackerTests {
     }
 
     @Test("markAsSeen clears unseen count")
-    func markAsSeen() {
-        let tracker = makeTracker(suiteName: "BadgeMarkSeen")
+    func markAsSeen() throws {
+        let tracker = try makeTracker(suiteName: "BadgeMarkSeen")
         tracker.trackUnseen(Set(["PR_1"]))
         #expect(tracker.count == 1)
 
@@ -72,13 +72,13 @@ struct BadgeTrackerTests {
     }
 
     @Test("pruneUnseen removes IDs no longer in any view")
-    func pruneUnseen() {
-        let tracker = makeTracker(suiteName: "BadgePrune")
+    func pruneUnseen() throws {
+        let tracker = try makeTracker(suiteName: "BadgePrune")
         let viewID = UUID()
         tracker.setEnabled(for: viewID, enabled: true)
         tracker.trackUnseen(Set(["PR_1", "PR_2"]))
 
-        let pr1 = TestPullRequestFactory.make(id: "PR_1")
+        let pr1 = try TestPullRequestFactory.make(id: "PR_1")
         let viewStates: [UUID: ViewState] = [viewID: ViewState(pullRequests: [pr1])]
         tracker.pruneUnseen(viewStates: viewStates)
 
@@ -88,8 +88,8 @@ struct BadgeTrackerTests {
     }
 
     @Test("removeView cleans up tracking state")
-    func removeView() {
-        let tracker = makeTracker(suiteName: "BadgeRemoveView")
+    func removeView() throws {
+        let tracker = try makeTracker(suiteName: "BadgeRemoveView")
         let viewID = UUID()
         tracker.setEnabled(for: viewID, enabled: true)
         #expect(tracker.isEnabled(for: viewID))
@@ -99,8 +99,8 @@ struct BadgeTrackerTests {
     }
 
     @Test("reset clears all state")
-    func resetClearsAll() {
-        let tracker = makeTracker(suiteName: "BadgeReset")
+    func resetClearsAll() throws {
+        let tracker = try makeTracker(suiteName: "BadgeReset")
         let viewID = UUID()
         tracker.setEnabled(for: viewID, enabled: true)
         tracker.trackUnseen(Set(["PR_1"]))
@@ -113,8 +113,8 @@ struct BadgeTrackerTests {
     }
 
     @Test("onCountChanged callback fires when count changes")
-    func onCountChangedFires() {
-        let tracker = makeTracker(suiteName: "BadgeCallback")
+    func onCountChangedFires() throws {
+        let tracker = try makeTracker(suiteName: "BadgeCallback")
         var callbackValues: [Int] = []
         tracker.onCountChanged = { callbackValues.append($0) }
 
@@ -125,8 +125,8 @@ struct BadgeTrackerTests {
     }
 
     @Test("markAsSeen(prIDs:) only clears specified IDs")
-    func markAsSeenPartial() {
-        let tracker = makeTracker(suiteName: "BadgeMarkSeenPartial")
+    func markAsSeenPartial() throws {
+        let tracker = try makeTracker(suiteName: "BadgeMarkSeenPartial")
         tracker.trackUnseen(Set(["PR_1", "PR_2", "PR_3"]))
         #expect(tracker.count == 3)
 
@@ -136,8 +136,8 @@ struct BadgeTrackerTests {
     }
 
     @Test("markAsSeen(prIDs:) is a no-op when none match")
-    func markAsSeenNoMatch() {
-        let tracker = makeTracker(suiteName: "BadgeMarkSeenNoMatch")
+    func markAsSeenNoMatch() throws {
+        let tracker = try makeTracker(suiteName: "BadgeMarkSeenNoMatch")
         var callbackCount = 0
         tracker.trackUnseen(Set(["PR_1"]))
         tracker.onCountChanged = { _ in callbackCount += 1 }
@@ -148,9 +148,9 @@ struct BadgeTrackerTests {
     }
 
     @Test("enabledViewIDs persists across instances")
-    func persistence() {
+    func persistence() throws {
         let suiteName = "BadgePersist"
-        let defaults = UserDefaults(suiteName: suiteName)!
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         let viewID = UUID()
 

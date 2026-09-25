@@ -129,15 +129,15 @@ struct TimelineEventTests {
     }
 
     @Test("timestampText shows 'yesterday' for yesterday's date")
-    func timestampYesterday() {
-        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+    func timestampYesterday() throws {
+        let yesterday = try #require(Calendar.current.date(byAdding: .day, value: -1, to: Date()))
         let event = makeEvent(timestamp: yesterday)
         #expect(event.timestampText.hasPrefix("yesterday at"))
     }
 
     @Test("timestampText shows date for older dates")
-    func timestampOlderDate() {
-        let oldDate = Calendar.current.date(byAdding: .day, value: -10, to: Date())!
+    func timestampOlderDate() throws {
+        let oldDate = try #require(Calendar.current.date(byAdding: .day, value: -10, to: Date()))
         let event = makeEvent(timestamp: oldDate)
         #expect(!event.timestampText.hasPrefix("today"))
         #expect(!event.timestampText.hasPrefix("yesterday"))

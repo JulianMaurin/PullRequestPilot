@@ -25,10 +25,10 @@ struct AvatarCacheTests {
 
     // MARK: - Success Paths
 
-    @Test func fetchesAndCachesImage() async {
+    @Test func fetchesAndCachesImage() async throws {
         let http = MockHTTPSession()
         let cache = makeCache(http: http)
-        let url = URL(string: "https://avatars.example.com/user1.png")!
+        let url = try #require(URL(string: "https://avatars.example.com/user1.png"))
         let imageData = sampleImageData()
 
         var fetchCount = 0
@@ -47,11 +47,11 @@ struct AvatarCacheTests {
         #expect(fetchCount == 1)
     }
 
-    @Test func returnsDifferentImagesForDifferentURLs() async {
+    @Test func returnsDifferentImagesForDifferentURLs() async throws {
         let http = MockHTTPSession()
         let cache = makeCache(http: http)
-        let url1 = URL(string: "https://avatars.example.com/user1.png")!
-        let url2 = URL(string: "https://avatars.example.com/user2.png")!
+        let url1 = try #require(URL(string: "https://avatars.example.com/user1.png"))
+        let url2 = try #require(URL(string: "https://avatars.example.com/user2.png"))
         let imageData = sampleImageData()
 
         http.handler = { request in
@@ -66,10 +66,10 @@ struct AvatarCacheTests {
 
     // MARK: - Error Paths
 
-    @Test func returnsNilOnNetworkError() async {
+    @Test func returnsNilOnNetworkError() async throws {
         let http = MockHTTPSession()
         let cache = makeCache(http: http)
-        let url = URL(string: "https://avatars.example.com/fail.png")!
+        let url = try #require(URL(string: "https://avatars.example.com/fail.png"))
 
         http.handler = { _ in
             throw URLError(.notConnectedToInternet)
@@ -79,10 +79,10 @@ struct AvatarCacheTests {
         #expect(result == nil)
     }
 
-    @Test func returnsNilForInvalidImageData() async {
+    @Test func returnsNilForInvalidImageData() async throws {
         let http = MockHTTPSession()
         let cache = makeCache(http: http)
-        let url = URL(string: "https://avatars.example.com/bad.png")!
+        let url = try #require(URL(string: "https://avatars.example.com/bad.png"))
 
         http.handler = { _ in
             try TestHTTP.response(url: url, body: Data("not an image".utf8))
@@ -92,10 +92,10 @@ struct AvatarCacheTests {
         #expect(result == nil)
     }
 
-    @Test func returnsNilOnCancellation() async {
+    @Test func returnsNilOnCancellation() async throws {
         let http = MockHTTPSession()
         let cache = makeCache(http: http)
-        let url = URL(string: "https://avatars.example.com/cancel.png")!
+        let url = try #require(URL(string: "https://avatars.example.com/cancel.png"))
 
         http.handler = { _ in
             throw CancellationError()
@@ -107,10 +107,10 @@ struct AvatarCacheTests {
 
     // MARK: - Coalescing
 
-    @Test func concurrentRequestsForSameURLFetchOnce() async {
+    @Test func concurrentRequestsForSameURLFetchOnce() async throws {
         let http = MockHTTPSession()
         let cache = makeCache(http: http)
-        let url = URL(string: "https://avatars.example.com/shared.png")!
+        let url = try #require(URL(string: "https://avatars.example.com/shared.png"))
         let imageData = sampleImageData()
 
         let fetchCount = OSAllocatedUnfairLock<Int>(initialState: 0)

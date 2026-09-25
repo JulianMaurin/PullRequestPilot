@@ -10,7 +10,7 @@ struct GitHubResponsesTests {
     @Test("PullRequestNode decodes from valid JSON")
     func decodesValidJSON() throws {
         let json = makeFullPRNodeJSON()
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
 
         #expect(node.id == "PR_kwDOTest")
@@ -32,7 +32,7 @@ struct GitHubResponsesTests {
     @Test("toDomain maps all fields correctly")
     func toDomainMapsAllFields() throws {
         let json = makeFullPRNodeJSON()
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
 
         let pr = try #require(node.toDomain())
@@ -55,7 +55,7 @@ struct GitHubResponsesTests {
     func toDomainInvalidInput() throws {
         // Foundation's URL(string:) is very permissive, so we test invalid dates instead
         let json = makeFullPRNodeJSON(createdAt: "garbage", updatedAt: "garbage")
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         #expect(node.toDomain() == nil)
     }
@@ -66,7 +66,7 @@ struct GitHubResponsesTests {
             createdAt: "2024-01-15T10:30:00Z",
             updatedAt: "2024-01-16T14:00:00Z"
         )
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         _ = try #require(node.toDomain())
     }
@@ -74,7 +74,7 @@ struct GitHubResponsesTests {
     @Test("toDomain uses 'ghost' when author is null")
     func toDomainNullAuthor() throws {
         let json = makeFullPRNodeJSON(authorJSON: "null")
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         let pr = try #require(node.toDomain())
         #expect(pr.author.login == "ghost")
@@ -90,7 +90,7 @@ struct GitHubResponsesTests {
         ]}
         """
         let json = makeFullPRNodeJSON(reviewThreadsJSON: threadsJSON)
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         let pr = try #require(node.toDomain())
 
@@ -107,7 +107,7 @@ struct GitHubResponsesTests {
         ]}
         """
         let json = makeFullPRNodeJSON(labelsJSON: labelsJSON)
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         let pr = try #require(node.toDomain())
 
@@ -126,7 +126,7 @@ struct GitHubResponsesTests {
         ]}
         """
         let json = makeFullPRNodeJSON(latestReviewsJSON: reviewsJSON)
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         let pr = try #require(node.toDomain())
 
@@ -140,7 +140,7 @@ struct GitHubResponsesTests {
     @Test("toDomain defaults to .open for unknown state")
     func toDomainUnknownState() throws {
         let json = makeFullPRNodeJSON(state: "UNKNOWN_STATE")
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         let pr = node.toDomain()
         #expect(pr?.state == .open)
@@ -149,7 +149,7 @@ struct GitHubResponsesTests {
     @Test("toDomain maps nil reviewDecision")
     func toDomainNilReviewDecision() throws {
         let json = makeFullPRNodeJSON(reviewDecision: "null")
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         let pr = node.toDomain()
         #expect(pr?.reviewDecision == nil)
@@ -161,7 +161,7 @@ struct GitHubResponsesTests {
     func activityIssueComment() throws {
         let timelineJSON = makeTimelineJSON(typename: "IssueComment", authorField: "author")
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         let pr = try #require(node.toDomain())
 
@@ -174,7 +174,7 @@ struct GitHubResponsesTests {
     func activityReviewApproved() throws {
         let timelineJSON = makeTimelineJSON(typename: "PullRequestReview", authorField: "author", state: "APPROVED")
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         let pr = try #require(node.toDomain())
         let activity = try #require(pr.lastActivity)
@@ -185,7 +185,7 @@ struct GitHubResponsesTests {
     func activityReviewChangesRequested() throws {
         let timelineJSON = makeTimelineJSON(typename: "PullRequestReview", authorField: "author", state: "CHANGES_REQUESTED")
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         let pr = try #require(node.toDomain())
         let activity = try #require(pr.lastActivity)
@@ -196,7 +196,7 @@ struct GitHubResponsesTests {
     func activityReviewCommented() throws {
         let timelineJSON = makeTimelineJSON(typename: "PullRequestReview", authorField: "author", state: "COMMENTED")
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         let pr = try #require(node.toDomain())
         let activity = try #require(pr.lastActivity)
@@ -207,7 +207,7 @@ struct GitHubResponsesTests {
     func activityMergedEvent() throws {
         let timelineJSON = makeTimelineJSON(typename: "MergedEvent", authorField: "actor")
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         let pr = try #require(node.toDomain())
         let activity = try #require(pr.lastActivity)
@@ -219,7 +219,7 @@ struct GitHubResponsesTests {
     func activityClosedEvent() throws {
         let timelineJSON = makeTimelineJSON(typename: "ClosedEvent", authorField: "actor")
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         let pr = try #require(node.toDomain())
         let activity = try #require(pr.lastActivity)
@@ -230,7 +230,7 @@ struct GitHubResponsesTests {
     func activityForcePushed() throws {
         let timelineJSON = makeTimelineJSON(typename: "HeadRefForcePushedEvent", authorField: "actor")
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         let pr = try #require(node.toDomain())
         let activity = try #require(pr.lastActivity)
@@ -255,7 +255,7 @@ struct GitHubResponsesTests {
         }]}
         """
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         let pr = try #require(node.toDomain())
         let activity = try #require(pr.lastActivity)
@@ -276,7 +276,7 @@ struct GitHubResponsesTests {
         }]}
         """
         let json = makeFullPRNodeJSON(timelineJSON: timelineJSON)
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         let pr = try #require(node.toDomain())
 
@@ -286,7 +286,7 @@ struct GitHubResponsesTests {
     @Test("toDomain returns nil lastActivity when timeline is empty")
     func activityEmptyTimeline() throws {
         let json = makeFullPRNodeJSON(timelineJSON: #"{"nodes": []}"#)
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let node = try JSONDecoder().decode(PullRequestNode.self, from: data)
         let pr = try #require(node.toDomain())
 
@@ -298,7 +298,7 @@ struct GitHubResponsesTests {
     @Test("ViewerData decodes correctly")
     func viewerDataDecoding() throws {
         let json = #"{"viewer": {"login": "octocat"}}"#
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let viewerData = try JSONDecoder().decode(ViewerData.self, from: data)
         #expect(viewerData.viewer.login == "octocat")
     }
@@ -308,7 +308,7 @@ struct GitHubResponsesTests {
     @Test("GraphQLResponse decodes data and errors")
     func graphQLResponseDecoding() throws {
         let json = #"{"data": {"viewer": {"login": "test"}}, "errors": [{"message": "warning"}]}"#
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let response = try JSONDecoder().decode(GraphQLResponse<ViewerData>.self, from: data)
         #expect(response.data?.viewer.login == "test")
         #expect(response.errors?.count == 1)
@@ -318,7 +318,7 @@ struct GitHubResponsesTests {
     @Test("GraphQLResponse decodes with nil data")
     func graphQLResponseNilData() throws {
         let json = #"{"data": null, "errors": [{"message": "bad"}]}"#
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let response = try JSONDecoder().decode(GraphQLResponse<ViewerData>.self, from: data)
         #expect(response.data == nil)
         #expect(response.errors?.first?.message == "bad")
@@ -329,7 +329,7 @@ struct GitHubResponsesTests {
     @Test("PageInfo decodes correctly")
     func pageInfoDecoding() throws {
         let json = #"{"hasNextPage": true, "endCursor": "Y3Vyc29y"}"#
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let pageInfo = try JSONDecoder().decode(PageInfo.self, from: data)
         #expect(pageInfo.hasNextPage == true)
         #expect(pageInfo.endCursor == "Y3Vyc29y")

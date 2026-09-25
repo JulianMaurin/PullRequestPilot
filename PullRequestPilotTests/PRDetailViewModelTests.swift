@@ -11,8 +11,8 @@ struct PRDetailViewModelTests {
         return (vm, client)
     }
 
-    private func makePR(id: String = "PR_1") -> PullRequest {
-        TestPullRequestFactory.make(id: id)
+    private func makePR(id: String = "PR_1") throws -> PullRequest {
+        try TestPullRequestFactory.make(id: id)
     }
 
     private func makeTimelineEvent(id: String = "1", kind: TimelineEventKind = .comment) -> TimelineEvent {
@@ -43,7 +43,7 @@ struct PRDetailViewModelTests {
     @Test("selectPR sets selectedPR")
     func selectSetsSelectedPR() async throws {
         let (vm, _) = makeViewModel()
-        let pr = makePR()
+        let pr = try makePR()
         vm.selectPR(pr)
         #expect(vm.selectedPR?.id == pr.id)
     }
@@ -51,7 +51,7 @@ struct PRDetailViewModelTests {
     @Test("selectPR same PR twice deselects")
     func selectSamePRDeselects() async throws {
         let (vm, _) = makeViewModel()
-        let pr = makePR()
+        let pr = try makePR()
         vm.selectPR(pr)
         vm.selectPR(pr)
         #expect(vm.selectedPR == nil)
@@ -63,7 +63,7 @@ struct PRDetailViewModelTests {
         await client.setTimelineEventsToReturn([makeTimelineEvent()])
         let (vm, _) = makeViewModel(client: client)
 
-        let pr = makePR()
+        let pr = try makePR()
         vm.selectPR(pr)
         try await waitForLoad(vm)
 
@@ -86,7 +86,7 @@ struct PRDetailViewModelTests {
         await client.setTimelineEventsToReturn(events)
         let (vm, _) = makeViewModel(client: client)
 
-        vm.selectPR(makePR())
+        vm.selectPR(try makePR())
         try await waitForLoad(vm)
 
         #expect(vm.timelineEvents.count == 2)
@@ -99,7 +99,7 @@ struct PRDetailViewModelTests {
         await client.setErrorToThrow(GitHubClientError.networkError(URLError(.notConnectedToInternet)))
         let (vm, _) = makeViewModel(client: client)
 
-        vm.selectPR(makePR())
+        vm.selectPR(try makePR())
         try await waitForLoad(vm)
 
         #expect(vm.error != nil)
@@ -113,7 +113,7 @@ struct PRDetailViewModelTests {
         await client.setTimelineEventsToReturn([])
         let (vm, _) = makeViewModel(client: client)
 
-        vm.selectPR(makePR())
+        vm.selectPR(try makePR())
         try await waitForLoad(vm)
 
         #expect(vm.timelineEvents.isEmpty)
@@ -127,8 +127,8 @@ struct PRDetailViewModelTests {
         await client.setTimelineEventsToReturn([makeTimelineEvent()])
         let (vm, _) = makeViewModel(client: client)
 
-        vm.selectPR(makePR(id: "PR_1"))
-        vm.selectPR(makePR(id: "PR_2"))
+        vm.selectPR(try makePR(id: "PR_1"))
+        vm.selectPR(try makePR(id: "PR_2"))
         try await waitForLoad(vm)
 
         #expect(vm.selectedPR?.id == "PR_2")
@@ -142,7 +142,7 @@ struct PRDetailViewModelTests {
         await client.setErrorToThrow(GitHubClientError.networkError(URLError(.notConnectedToInternet)))
         let (vm, _) = makeViewModel(client: client)
 
-        vm.selectPR(makePR())
+        vm.selectPR(try makePR())
         try await waitForLoad(vm)
 
         #expect(vm.isNetworkError)
@@ -155,7 +155,7 @@ struct PRDetailViewModelTests {
         await client.setErrorToThrow(GitHubClientError.unauthorized)
         let (vm, _) = makeViewModel(client: client)
 
-        vm.selectPR(makePR())
+        vm.selectPR(try makePR())
         try await waitForLoad(vm)
 
         #expect(!vm.isNetworkError)
@@ -168,7 +168,7 @@ struct PRDetailViewModelTests {
         await client.setErrorToThrow(GitHubClientError.networkError(URLError(.timedOut)))
         let (vm, _) = makeViewModel(client: client)
 
-        vm.selectPR(makePR())
+        vm.selectPR(try makePR())
         try await waitForLoad(vm)
         #expect(vm.isNetworkError)
 
@@ -188,7 +188,7 @@ struct PRDetailViewModelTests {
         await client.setReviewersToReturn(reviewers)
         let (vm, _) = makeViewModel(client: client)
 
-        vm.selectPR(makePR())
+        vm.selectPR(try makePR())
         try await waitForLoad(vm)
 
         #expect(vm.reviewers.count == 2)
@@ -216,7 +216,7 @@ struct PRDetailViewModelTests {
         await client.setChecksPageToReturn(ChecksPage(checkRuns: paginatedChecks, nextCursor: nil))
         let (vm, _) = makeViewModel(client: client)
 
-        vm.selectPR(makePR())
+        vm.selectPR(try makePR())
         try await waitForLoad(vm)
 
         #expect(vm.checkRuns.count == 3)
@@ -246,7 +246,7 @@ struct PRDetailViewModelTests {
         let client = PaginatingMockGitHubClient(gatedCall: .firstTimelineCall)
         let vm = PRDetailViewModel(gitHubClient: client)
 
-        vm.selectPR(makePR(id: "PR_1"))
+        vm.selectPR(try makePR(id: "PR_1"))
         try await waitForGateSuspension(client)
 
         vm.deselect()
@@ -254,7 +254,7 @@ struct PRDetailViewModelTests {
 
         // The second fetch's normal completion is the barrier proving the
         // cancelled task had every opportunity to keep paginating.
-        vm.selectPR(makePR(id: "PR_2"))
+        vm.selectPR(try makePR(id: "PR_2"))
         try await waitForLoad(vm)
 
         #expect(await client.timelineCallCount(nodeID: "PR_1") <= 2)
@@ -265,13 +265,13 @@ struct PRDetailViewModelTests {
         let client = PaginatingMockGitHubClient(gatedCall: .firstChecksCall)
         let vm = PRDetailViewModel(gitHubClient: client)
 
-        vm.selectPR(makePR(id: "PR_1"))
+        vm.selectPR(try makePR(id: "PR_1"))
         try await waitForGateSuspension(client)
 
         vm.deselect()
         try #require(await client.resumeGate())
 
-        vm.selectPR(makePR(id: "PR_2"))
+        vm.selectPR(try makePR(id: "PR_2"))
         try await waitForLoad(vm)
 
         #expect(await client.checksCallCount(nodeID: "PR_1") <= 2)
@@ -282,11 +282,11 @@ struct PRDetailViewModelTests {
     @Test("updateSelectedPR updates when ID matches")
     func updateSelectedPRMatching() async throws {
         let (vm, _) = makeViewModel()
-        let pr = makePR(id: "PR_1")
+        let pr = try makePR(id: "PR_1")
         vm.selectPR(pr)
         try await waitForLoad(vm)
 
-        let updatedPR = TestPullRequestFactory.make(id: "PR_1", title: "Updated Title")
+        let updatedPR = try TestPullRequestFactory.make(id: "PR_1", title: "Updated Title")
         vm.updateSelectedPR(updatedPR)
 
         #expect(vm.selectedPR?.title == "Updated Title")
@@ -295,11 +295,11 @@ struct PRDetailViewModelTests {
     @Test("updateSelectedPR is no-op when ID does not match")
     func updateSelectedPRNonMatching() async throws {
         let (vm, _) = makeViewModel()
-        let pr = makePR(id: "PR_1")
+        let pr = try makePR(id: "PR_1")
         vm.selectPR(pr)
         try await waitForLoad(vm)
 
-        let otherPR = TestPullRequestFactory.make(id: "PR_OTHER", title: "Other")
+        let otherPR = try TestPullRequestFactory.make(id: "PR_OTHER", title: "Other")
         vm.updateSelectedPR(otherPR)
 
         #expect(vm.selectedPR?.id == "PR_1")
@@ -307,9 +307,9 @@ struct PRDetailViewModelTests {
     }
 
     @Test("updateSelectedPR is no-op when nothing selected")
-    func updateSelectedPRNoSelection() {
+    func updateSelectedPRNoSelection() throws {
         let (vm, _) = makeViewModel()
-        let pr = TestPullRequestFactory.make(id: "PR_1")
+        let pr = try TestPullRequestFactory.make(id: "PR_1")
         vm.updateSelectedPR(pr)
         #expect(vm.selectedPR == nil)
     }

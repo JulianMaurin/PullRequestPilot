@@ -10,7 +10,7 @@ enum IdentityActorTestFactory {
     /// IdentityActor plus its backing test keychain. `swap` persists the fake
     /// token into the real login keychain, and UUID-fresh service names are
     /// never revisited — so tests that swap manually must call
-    /// `deleteStoredToken()` after each successful swap. The actor serves the
+    /// `try deleteStoredToken()` after each successful swap. The actor serves the
     /// token from in-memory state after swap (only `bootstrap()` reads the
     /// keychain), so deleting immediately is behavior-neutral.
     struct Harness {

@@ -19,8 +19,8 @@ struct DashboardViewModelTests {
     private func makeViewModel(
         suiteName: String = "DashboardViewModelTests",
         reporter: EventReporter = .noop
-    ) -> (viewModel: DashboardViewModel, viewID: UUID) {
-        let defaults = UserDefaults(suiteName: suiteName)!
+    ) throws -> (viewModel: DashboardViewModel, viewID: UUID) {
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         let store = ViewsStore(defaults: defaults)
         let identity = makeIdentity(suiteName: suiteName)
@@ -32,10 +32,10 @@ struct DashboardViewModelTests {
 
     @Test("loads pull requests for a view on refresh")
     func loadsPullRequests() async throws {
-        let pr = makePullRequest(number: 1, title: "Fix bug")
+        let pr = try makePullRequest(number: 1, title: "Fix bug")
         await mockClient.setPullRequestsToReturn([pr])
 
-        let (viewModel, viewID) = makeViewModel(suiteName: "LoadsPRs")
+        let (viewModel, viewID) = try makeViewModel(suiteName: "LoadsPRs")
         await viewModel.refresh(viewID: viewID)
 
         let state = try #require(viewModel.viewStates[viewID])
@@ -49,7 +49,7 @@ struct DashboardViewModelTests {
     func handlesError() async throws {
         await mockClient.setErrorToThrow(GitHubClientError.unauthorized)
 
-        let (viewModel, viewID) = makeViewModel(suiteName: "HandlesError")
+        let (viewModel, viewID) = try makeViewModel(suiteName: "HandlesError")
         await viewModel.refresh(viewID: viewID)
 
         let state = try #require(viewModel.viewStates[viewID])
@@ -61,7 +61,7 @@ struct DashboardViewModelTests {
     func isEmpty() async throws {
         await mockClient.setPullRequestsToReturn([])
 
-        let (viewModel, viewID) = makeViewModel(suiteName: "IsEmpty")
+        let (viewModel, viewID) = try makeViewModel(suiteName: "IsEmpty")
         await viewModel.refresh(viewID: viewID)
 
         let state = try #require(viewModel.viewStates[viewID])
@@ -69,8 +69,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("passes the view query to the client")
-    func passesQueryToClient() async {
-        let (viewModel, viewID) = makeViewModel(suiteName: "PassesQuery")
+    func passesQueryToClient() async throws {
+        let (viewModel, viewID) = try makeViewModel(suiteName: "PassesQuery")
         let view = viewModel.views.first(where: { $0.id == viewID })
         await viewModel.refresh(viewID: viewID)
 
@@ -78,8 +78,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("add and delete views")
-    func addAndDeleteViews() {
-        let (viewModel, _) = makeViewModel(suiteName: "AddDeleteViews")
+    func addAndDeleteViews() throws {
+        let (viewModel, _) = try makeViewModel(suiteName: "AddDeleteViews")
         let initialCount = viewModel.views.count
 
         let newView = DashboardView(id: UUID(), title: "My PRs", query: "is:pr author:@me")
@@ -92,19 +92,19 @@ struct DashboardViewModelTests {
 
     @Test("hideReviewed filters out PRs with active reviews but keeps dismissed")
     func hideReviewedFiltering() async throws {
-        let approvedPR = makePullRequest(number: 1, title: "Approved", reviews: [
+        let approvedPR = try makePullRequest(number: 1, title: "Approved", reviews: [
             UserReview(login: "testuser", state: .approved)
         ])
-        let dismissedPR = makePullRequest(number: 2, title: "Dismissed", reviews: [
+        let dismissedPR = try makePullRequest(number: 2, title: "Dismissed", reviews: [
             UserReview(login: "testuser", state: .dismissed)
         ])
-        let unreviewedPR = makePullRequest(number: 3, title: "Unreviewed", reviews: [])
-        let otherReviewPR = makePullRequest(number: 4, title: "Other reviewed", reviews: [
+        let unreviewedPR = try makePullRequest(number: 3, title: "Unreviewed", reviews: [])
+        let otherReviewPR = try makePullRequest(number: 4, title: "Other reviewed", reviews: [
             UserReview(login: "someone-else", state: .approved)
         ])
         await mockClient.setPullRequestsToReturn([approvedPR, dismissedPR, unreviewedPR, otherReviewPR])
 
-        let defaults = UserDefaults(suiteName: "HideReviewedTests")!
+        let defaults = try #require(UserDefaults(suiteName: "HideReviewedTests"))
         defaults.removePersistentDomain(forName: "HideReviewedTests")
         let store = ViewsStore(defaults: defaults)
         await mockClient.setViewerLogin("testuser")
@@ -131,7 +131,7 @@ struct DashboardViewModelTests {
     func refreshSetsNetworkError() async throws {
         await mockClient.setErrorToThrow(GitHubClientError.networkError(URLError(.notConnectedToInternet)))
 
-        let (viewModel, viewID) = makeViewModel(suiteName: "NetworkError")
+        let (viewModel, viewID) = try makeViewModel(suiteName: "NetworkError")
         await viewModel.refresh(viewID: viewID)
 
         let state = try #require(viewModel.viewStates[viewID])
@@ -143,12 +143,12 @@ struct DashboardViewModelTests {
     func refreshClearsNetworkError() async throws {
         await mockClient.setErrorToThrow(GitHubClientError.networkError(URLError(.notConnectedToInternet)))
 
-        let (viewModel, viewID) = makeViewModel(suiteName: "ClearsNetworkError")
+        let (viewModel, viewID) = try makeViewModel(suiteName: "ClearsNetworkError")
         await viewModel.refresh(viewID: viewID)
         #expect(viewModel.viewStates[viewID]?.isNetworkError == true)
 
         await mockClient.setErrorToThrow(nil)
-        await mockClient.setPullRequestsToReturn([makePullRequest(number: 1, title: "OK")])
+        await mockClient.setPullRequestsToReturn([try makePullRequest(number: 1, title: "OK")])
         await viewModel.refresh(viewID: viewID)
 
         let state = try #require(viewModel.viewStates[viewID])
@@ -160,7 +160,7 @@ struct DashboardViewModelTests {
     func nonNetworkErrorDoesNotSetFlag() async throws {
         await mockClient.setErrorToThrow(GitHubClientError.unauthorized)
 
-        let (viewModel, viewID) = makeViewModel(suiteName: "NonNetworkError")
+        let (viewModel, viewID) = try makeViewModel(suiteName: "NonNetworkError")
         await viewModel.refresh(viewID: viewID)
 
         let state = try #require(viewModel.viewStates[viewID])
@@ -171,14 +171,14 @@ struct DashboardViewModelTests {
     // MARK: - showingSettings
 
     @Test("showingSettings defaults to false")
-    func showingSettingsDefault() {
-        let (viewModel, _) = makeViewModel(suiteName: "SettingsDefault")
+    func showingSettingsDefault() throws {
+        let (viewModel, _) = try makeViewModel(suiteName: "SettingsDefault")
         #expect(!viewModel.showingSettings)
     }
 
     @Test("showingSettings can be toggled")
-    func showingSettingsToggle() {
-        let (viewModel, _) = makeViewModel(suiteName: "SettingsToggle")
+    func showingSettingsToggle() throws {
+        let (viewModel, _) = try makeViewModel(suiteName: "SettingsToggle")
         viewModel.showingSettings = true
         #expect(viewModel.showingSettings)
         viewModel.showingSettings = false
@@ -188,8 +188,8 @@ struct DashboardViewModelTests {
     // MARK: - Selected View Persistence
 
     @Test("selectedViewID is persisted to UserDefaults on change")
-    func selectedViewIDPersisted() {
-        let defaults = UserDefaults(suiteName: "SelectedViewPersist")!
+    func selectedViewIDPersisted() throws {
+        let defaults = try #require(UserDefaults(suiteName: "SelectedViewPersist"))
         defaults.removePersistentDomain(forName: "SelectedViewPersist")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -205,8 +205,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("selectedViewID is restored from UserDefaults on init")
-    func selectedViewIDRestored() {
-        let defaults = UserDefaults(suiteName: "SelectedViewRestore")!
+    func selectedViewIDRestored() throws {
+        let defaults = try #require(UserDefaults(suiteName: "SelectedViewRestore"))
         defaults.removePersistentDomain(forName: "SelectedViewRestore")
         let store = ViewsStore(defaults: defaults)
 
@@ -220,8 +220,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("selectedViewID falls back to first view when stored ID is invalid")
-    func selectedViewIDFallsBackOnInvalidID() {
-        let defaults = UserDefaults(suiteName: "SelectedViewFallback")!
+    func selectedViewIDFallsBackOnInvalidID() throws {
+        let defaults = try #require(UserDefaults(suiteName: "SelectedViewFallback"))
         defaults.removePersistentDomain(forName: "SelectedViewFallback")
         let store = ViewsStore(defaults: defaults)
 
@@ -234,8 +234,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("clearAllData removes persisted selectedViewID")
-    func clearAllDataRemovesSelectedViewID() {
-        let defaults = UserDefaults(suiteName: "ClearSelectedView")!
+    func clearAllDataRemovesSelectedViewID() throws {
+        let defaults = try #require(UserDefaults(suiteName: "ClearSelectedView"))
         defaults.removePersistentDomain(forName: "ClearSelectedView")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -252,11 +252,11 @@ struct DashboardViewModelTests {
     // MARK: - Badge Count
 
     @Test("badgeCount tracks unseen PRs that appear after initial load")
-    func badgeCountTracksUnseen() async {
-        let pr1 = makePullRequest(number: 1, title: "PR 1")
-        let pr2 = makePullRequest(number: 2, title: "PR 2")
+    func badgeCountTracksUnseen() async throws {
+        let pr1 = try makePullRequest(number: 1, title: "PR 1")
+        let pr2 = try makePullRequest(number: 2, title: "PR 2")
 
-        let defaults = UserDefaults(suiteName: "BadgeUnseen")!
+        let defaults = try #require(UserDefaults(suiteName: "BadgeUnseen"))
         defaults.removePersistentDomain(forName: "BadgeUnseen")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -276,20 +276,20 @@ struct DashboardViewModelTests {
     }
 
     @Test("badgeCount returns 0 when no views have badge enabled")
-    func badgeCountZeroWhenNoneEnabled() async {
-        await mockClient.setPullRequestsToReturn([makePullRequest(number: 1, title: "PR 1")])
-        let (viewModel, viewID) = makeViewModel(suiteName: "BadgeCountNone")
+    func badgeCountZeroWhenNoneEnabled() async throws {
+        await mockClient.setPullRequestsToReturn([try makePullRequest(number: 1, title: "PR 1")])
+        let (viewModel, viewID) = try makeViewModel(suiteName: "BadgeCountNone")
         await viewModel.refresh(viewID: viewID)
 
         #expect(viewModel.badgeCount == 0)
     }
 
     @Test("markBadgeAsSeen resets badgeCount to zero")
-    func markBadgeAsSeen() async {
-        let pr1 = makePullRequest(number: 1, title: "PR 1")
-        let pr2 = makePullRequest(number: 2, title: "PR 2")
+    func markBadgeAsSeen() async throws {
+        let pr1 = try makePullRequest(number: 1, title: "PR 1")
+        let pr2 = try makePullRequest(number: 2, title: "PR 2")
 
-        let defaults = UserDefaults(suiteName: "BadgeSeen")!
+        let defaults = try #require(UserDefaults(suiteName: "BadgeSeen"))
         defaults.removePersistentDomain(forName: "BadgeSeen")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -308,8 +308,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("isBadgeEnabled and setBadge toggle correctly")
-    func badgeToggle() {
-        let (viewModel, viewID) = makeViewModel(suiteName: "DashboardViewModelTests.BadgeToggle")
+    func badgeToggle() throws {
+        let (viewModel, viewID) = try makeViewModel(suiteName: "DashboardViewModelTests.BadgeToggle")
 
         #expect(!viewModel.isBadgeEnabled(for: viewID))
         viewModel.setBadge(for: viewID, enabled: true)
@@ -319,9 +319,9 @@ struct DashboardViewModelTests {
     }
 
     @Test("setBadge sets baseline so existing PRs are not counted as new")
-    func setBadgeBaseline() async {
-        await mockClient.setPullRequestsToReturn([makePullRequest(number: 1, title: "PR 1")])
-        let defaults = UserDefaults(suiteName: "BadgeBaseline")!
+    func setBadgeBaseline() async throws {
+        await mockClient.setPullRequestsToReturn([try makePullRequest(number: 1, title: "PR 1")])
+        let defaults = try #require(UserDefaults(suiteName: "BadgeBaseline"))
         defaults.removePersistentDomain(forName: "BadgeBaseline")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -338,8 +338,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("badgeViewIDs persists to UserDefaults")
-    func badgeViewIDsPersisted() {
-        let defaults = UserDefaults(suiteName: "BadgePersist")!
+    func badgeViewIDsPersisted() throws {
+        let defaults = try #require(UserDefaults(suiteName: "BadgePersist"))
         defaults.removePersistentDomain(forName: "BadgePersist")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -353,8 +353,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("badgeViewIDs restores from UserDefaults on init")
-    func badgeViewIDsRestored() {
-        let defaults = UserDefaults(suiteName: "BadgeRestore")!
+    func badgeViewIDsRestored() throws {
+        let defaults = try #require(UserDefaults(suiteName: "BadgeRestore"))
         defaults.removePersistentDomain(forName: "BadgeRestore")
         let viewID = UUID()
         defaults.set([viewID.uuidString], forKey: Constants.UserDefaultsKeys.badgeViewIDs)
@@ -365,8 +365,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("clearAllData clears badgeViewIDs and unseen count")
-    func clearAllDataClearsBadge() async {
-        let defaults = UserDefaults(suiteName: "ClearBadge")!
+    func clearAllDataClearsBadge() async throws {
+        let defaults = try #require(UserDefaults(suiteName: "ClearBadge"))
         defaults.removePersistentDomain(forName: "ClearBadge")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -380,11 +380,11 @@ struct DashboardViewModelTests {
     }
 
     @Test("onBadgeCountChanged is called when new PRs appear")
-    func badgeCallbackOnNewPRs() async {
-        let pr1 = makePullRequest(number: 1, title: "PR 1")
-        let pr2 = makePullRequest(number: 2, title: "PR 2")
+    func badgeCallbackOnNewPRs() async throws {
+        let pr1 = try makePullRequest(number: 1, title: "PR 1")
+        let pr2 = try makePullRequest(number: 2, title: "PR 2")
 
-        let defaults = UserDefaults(suiteName: "DashboardViewModelTests.BadgeCallback")!
+        let defaults = try #require(UserDefaults(suiteName: "DashboardViewModelTests.BadgeCallback"))
         defaults.removePersistentDomain(forName: "DashboardViewModelTests.BadgeCallback")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -406,8 +406,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("deleteView removes view from badgeViewIDs")
-    func deleteViewRemovesBadge() {
-        let defaults = UserDefaults(suiteName: "DeleteBadge")!
+    func deleteViewRemovesBadge() throws {
+        let defaults = try #require(UserDefaults(suiteName: "DeleteBadge"))
         defaults.removePersistentDomain(forName: "DeleteBadge")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -420,11 +420,11 @@ struct DashboardViewModelTests {
     }
 
     @Test("deleteView prunes unseen badge PRs from deleted view")
-    func deleteViewPrunesUnseenBadgePRs() async {
-        let pr1 = makePullRequest(number: 1, title: "PR 1")
-        let pr2 = makePullRequest(number: 2, title: "PR 2")
+    func deleteViewPrunesUnseenBadgePRs() async throws {
+        let pr1 = try makePullRequest(number: 1, title: "PR 1")
+        let pr2 = try makePullRequest(number: 2, title: "PR 2")
 
-        let defaults = UserDefaults(suiteName: "DeletePrunes")!
+        let defaults = try #require(UserDefaults(suiteName: "DeletePrunes"))
         defaults.removePersistentDomain(forName: "DeletePrunes")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -446,7 +446,7 @@ struct DashboardViewModelTests {
 
     @Test("swapping token refreshes viewer login so filter uses the new user")
     func tokenSwapResetsViewerLoginForFilter() async throws {
-        let defaults = UserDefaults(suiteName: "SwapViewer")!
+        let defaults = try #require(UserDefaults(suiteName: "SwapViewer"))
         defaults.removePersistentDomain(forName: "SwapViewer")
         let store = ViewsStore(defaults: defaults)
         let harness = IdentityActorTestFactory.makeHarness(github: mockClient)
@@ -460,7 +460,7 @@ struct DashboardViewModelTests {
         _ = try await identity.swap(to: "ghp_first")
         try harness.deleteStoredToken()
 
-        let approvedPR = makePullRequest(number: 1, title: "Approved", reviews: [
+        let approvedPR = try makePullRequest(number: 1, title: "Approved", reviews: [
             UserReview(login: "testuser", state: .approved)
         ])
         await mockClient.setPullRequestsToReturn([approvedPR])
@@ -481,12 +481,12 @@ struct DashboardViewModelTests {
     // MARK: - View Navigation
 
     @Test("markBadgeAsSeenForSelectedView clears only the selected view's unseen PRs")
-    func markBadgeAsSeenForSelectedView() async {
-        let pr1 = makePullRequest(number: 1, title: "PR 1")
-        let pr2 = makePullRequest(number: 2, title: "PR 2")
-        let pr3 = makePullRequest(number: 3, title: "PR 3")
+    func markBadgeAsSeenForSelectedView() async throws {
+        let pr1 = try makePullRequest(number: 1, title: "PR 1")
+        let pr2 = try makePullRequest(number: 2, title: "PR 2")
+        let pr3 = try makePullRequest(number: 3, title: "PR 3")
 
-        let defaults = UserDefaults(suiteName: "BadgeSeenPerView")!
+        let defaults = try #require(UserDefaults(suiteName: "BadgeSeenPerView"))
         defaults.removePersistentDomain(forName: "BadgeSeenPerView")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -517,13 +517,13 @@ struct DashboardViewModelTests {
     }
 
     @Test("switching views clears badge for the newly selected view only")
-    func switchingViewsClearsBadgePerView() async {
-        let pr1 = makePullRequest(number: 1, title: "PR 1")
-        let pr2 = makePullRequest(number: 2, title: "PR 2")
-        let pr3 = makePullRequest(number: 3, title: "PR 3")
-        let pr4 = makePullRequest(number: 4, title: "PR 4")
+    func switchingViewsClearsBadgePerView() async throws {
+        let pr1 = try makePullRequest(number: 1, title: "PR 1")
+        let pr2 = try makePullRequest(number: 2, title: "PR 2")
+        let pr3 = try makePullRequest(number: 3, title: "PR 3")
+        let pr4 = try makePullRequest(number: 4, title: "PR 4")
 
-        let defaults = UserDefaults(suiteName: "BadgeSwitchView")!
+        let defaults = try #require(UserDefaults(suiteName: "BadgeSwitchView"))
         defaults.removePersistentDomain(forName: "BadgeSwitchView")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -558,8 +558,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("selectNextView cycles to next view")
-    func selectNextView() {
-        let defaults = UserDefaults(suiteName: "SelectNextView")!
+    func selectNextView() throws {
+        let defaults = try #require(UserDefaults(suiteName: "SelectNextView"))
         defaults.removePersistentDomain(forName: "SelectNextView")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -579,8 +579,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("selectNextView wraps around to first view")
-    func selectNextViewWraps() {
-        let defaults = UserDefaults(suiteName: "SelectNextViewWrap")!
+    func selectNextViewWraps() throws {
+        let defaults = try #require(UserDefaults(suiteName: "SelectNextViewWrap"))
         defaults.removePersistentDomain(forName: "SelectNextViewWrap")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -595,8 +595,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("selectPreviousView cycles to previous view")
-    func selectPreviousView() {
-        let defaults = UserDefaults(suiteName: "SelectPrevView")!
+    func selectPreviousView() throws {
+        let defaults = try #require(UserDefaults(suiteName: "SelectPrevView"))
         defaults.removePersistentDomain(forName: "SelectPrevView")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -616,8 +616,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("selectPreviousView wraps around to last view")
-    func selectPreviousViewWraps() {
-        let defaults = UserDefaults(suiteName: "SelectPrevViewWrap")!
+    func selectPreviousViewWraps() throws {
+        let defaults = try #require(UserDefaults(suiteName: "SelectPrevViewWrap"))
         defaults.removePersistentDomain(forName: "SelectPrevViewWrap")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -632,8 +632,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("selectNextView is no-op when no views exist")
-    func selectNextViewNoViews() {
-        let defaults = UserDefaults(suiteName: "SelectNextNoViews")!
+    func selectNextViewNoViews() throws {
+        let defaults = try #require(UserDefaults(suiteName: "SelectNextNoViews"))
         defaults.removePersistentDomain(forName: "SelectNextNoViews")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -646,8 +646,8 @@ struct DashboardViewModelTests {
     // MARK: - Collapsed Sections Persistence
 
     @Test("collapsedOrgs is persisted to UserDefaults on change")
-    func collapsedOrgsPersisted() {
-        let defaults = UserDefaults(suiteName: "CollapsedOrgsPersist")!
+    func collapsedOrgsPersisted() throws {
+        let defaults = try #require(UserDefaults(suiteName: "CollapsedOrgsPersist"))
         defaults.removePersistentDomain(forName: "CollapsedOrgsPersist")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -660,8 +660,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("collapsedRepos is persisted to UserDefaults on change")
-    func collapsedReposPersisted() {
-        let defaults = UserDefaults(suiteName: "CollapsedReposPersist")!
+    func collapsedReposPersisted() throws {
+        let defaults = try #require(UserDefaults(suiteName: "CollapsedReposPersist"))
         defaults.removePersistentDomain(forName: "CollapsedReposPersist")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -673,8 +673,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("collapsed sections are restored from UserDefaults on init")
-    func collapsedSectionsRestored() {
-        let defaults = UserDefaults(suiteName: "CollapsedRestore")!
+    func collapsedSectionsRestored() throws {
+        let defaults = try #require(UserDefaults(suiteName: "CollapsedRestore"))
         defaults.removePersistentDomain(forName: "CollapsedRestore")
         defaults.set(["org-a", "org-b"], forKey: Constants.UserDefaultsKeys.collapsedOrgs)
         defaults.set(["org-a/repo-1"], forKey: Constants.UserDefaultsKeys.collapsedRepos)
@@ -687,8 +687,8 @@ struct DashboardViewModelTests {
     }
 
     @Test("clearAllData resets collapsed sections")
-    func clearAllDataResetsCollapsedSections() {
-        let defaults = UserDefaults(suiteName: "ClearCollapsed")!
+    func clearAllDataResetsCollapsedSections() throws {
+        let defaults = try #require(UserDefaults(suiteName: "ClearCollapsed"))
         defaults.removePersistentDomain(forName: "ClearCollapsed")
         let store = ViewsStore(defaults: defaults)
         let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
@@ -705,8 +705,8 @@ struct DashboardViewModelTests {
 
     @Test("turning the badge off keeps the baseline while the bell is still on")
     func badgeOffKeepsBaselineForBell() async throws {
-        let (viewModel, viewID) = makeViewModel(suiteName: "BaselineBadgeOff")
-        let pr1 = makePullRequest(number: 1, title: "One")
+        let (viewModel, viewID) = try makeViewModel(suiteName: "BaselineBadgeOff")
+        let pr1 = try makePullRequest(number: 1, title: "One")
         await mockClient.setPullRequestsToReturn([pr1])
         await viewModel.refresh(viewID: viewID)
 
@@ -714,15 +714,15 @@ struct DashboardViewModelTests {
         viewModel.setBadge(for: viewID, enabled: true)
         viewModel.setBadge(for: viewID, enabled: false)
 
-        let pr2 = makePullRequest(number: 2, title: "Two")
+        let pr2 = try makePullRequest(number: 2, title: "Two")
         let added = viewModel.badgeTracker.detectNewPRs(viewID: viewID, currentPRs: [pr1, pr2])
         #expect(added == ["PR_2"], "the bell must still see PR 2 as new")
     }
 
     @Test("re-enabling after both were off starts from the rows on screen, not a backlog")
     func reEnableStartsFromCurrentRows() async throws {
-        let (viewModel, viewID) = makeViewModel(suiteName: "BaselineReEnable")
-        let prs = (1...3).map { makePullRequest(number: $0, title: "PR \($0)") }
+        let (viewModel, viewID) = try makeViewModel(suiteName: "BaselineReEnable")
+        let prs = try (1...3).map { try makePullRequest(number: $0, title: "PR \($0)") }
         await mockClient.setPullRequestsToReturn([prs[0]])
         await viewModel.refresh(viewID: viewID)
         viewModel.setNotification(for: viewID, enabled: true)
@@ -738,9 +738,9 @@ struct DashboardViewModelTests {
 
     @Test("editing a view's query doesn't announce its new rows as new PRs")
     func queryEditRestartsBaseline() async throws {
-        let (viewModel, viewID) = makeViewModel(suiteName: "BaselineQueryEdit")
+        let (viewModel, viewID) = try makeViewModel(suiteName: "BaselineQueryEdit")
         viewModel.setBadge(for: viewID, enabled: true)
-        let prs = (1...3).map { makePullRequest(number: $0, title: "PR \($0)") }
+        let prs = try (1...3).map { try makePullRequest(number: $0, title: "PR \($0)") }
         await mockClient.setPullRequestsToReturn([prs[0]])
         await viewModel.refresh(viewID: viewID)
         await viewModel.refresh(viewID: viewID)
@@ -755,8 +755,8 @@ struct DashboardViewModelTests {
 
     @Test("resetting a view to a different query drops the old rows and cursor")
     func updateViewWithNewQueryResetsResults() async throws {
-        let (viewModel, viewID) = makeViewModel(suiteName: "UpdateViewResets")
-        await mockClient.setPullRequestsToReturn([makePullRequest(number: 1, title: "Old query")])
+        let (viewModel, viewID) = try makeViewModel(suiteName: "UpdateViewResets")
+        await mockClient.setPullRequestsToReturn([try makePullRequest(number: 1, title: "Old query")])
         await mockClient.setNextCursorToReturn("old-cursor")
         await viewModel.refresh(viewID: viewID)
         let view = try #require(viewModel.views.first { $0.id == viewID })
@@ -770,8 +770,8 @@ struct DashboardViewModelTests {
 
     @Test("renaming a view keeps its rows")
     func updateViewTitleKeepsResults() async throws {
-        let (viewModel, viewID) = makeViewModel(suiteName: "UpdateViewRename")
-        await mockClient.setPullRequestsToReturn([makePullRequest(number: 1, title: "Kept")])
+        let (viewModel, viewID) = try makeViewModel(suiteName: "UpdateViewRename")
+        await mockClient.setPullRequestsToReturn([try makePullRequest(number: 1, title: "Kept")])
         await viewModel.refresh(viewID: viewID)
         let view = try #require(viewModel.views.first { $0.id == viewID })
 
@@ -785,8 +785,8 @@ struct DashboardViewModelTests {
     @Test("setDraft sends the change, confirms it, and refreshes the views")
     func setDraftSuccess() async throws {
         let recorder = EventRecorder()
-        let (viewModel, viewID) = makeViewModel(suiteName: "SetDraftSuccess", reporter: recorder.reporter())
-        let pr = makePullRequest(number: 42, title: "Work in progress")
+        let (viewModel, viewID) = try makeViewModel(suiteName: "SetDraftSuccess", reporter: recorder.reporter())
+        let pr = try makePullRequest(number: 42, title: "Work in progress")
         await mockClient.setPullRequestsToReturn([pr])
 
         await viewModel.setDraft(pr, isDraft: true)
@@ -801,8 +801,8 @@ struct DashboardViewModelTests {
     @Test("setDraft refused by GitHub reports the reason and skips the refresh")
     func setDraftRefused() async throws {
         let recorder = EventRecorder()
-        let (viewModel, _) = makeViewModel(suiteName: "SetDraftRefused", reporter: recorder.reporter())
-        let pr = makePullRequest(number: 42, title: "Draft")
+        let (viewModel, _) = try makeViewModel(suiteName: "SetDraftRefused", reporter: recorder.reporter())
+        let pr = try makePullRequest(number: 42, title: "Draft")
         await mockClient.setSetDraftError(GitHubClientError.graphQLErrors(["Resource not accessible by personal access token"]))
 
         await viewModel.setDraft(pr, isDraft: false)
@@ -821,10 +821,10 @@ struct DashboardViewModelTests {
     @Test("setDraft with an invalid token posts the token error")
     func setDraftUnauthorized() async throws {
         let recorder = EventRecorder()
-        let (viewModel, _) = makeViewModel(suiteName: "SetDraftUnauthorized", reporter: recorder.reporter())
+        let (viewModel, _) = try makeViewModel(suiteName: "SetDraftUnauthorized", reporter: recorder.reporter())
         await mockClient.setSetDraftError(GitHubClientError.unauthorized)
 
-        await viewModel.setDraft(makePullRequest(number: 7, title: "Feature"), isDraft: true)
+        await viewModel.setDraft(try makePullRequest(number: 7, title: "Feature"), isDraft: true)
 
         #expect(recorder.events.map(\.appError) == [.unauthorized])
         #expect(await mockClient.fetchPullRequestsCallCount == 0)
@@ -833,10 +833,10 @@ struct DashboardViewModelTests {
     @Test("setDraft cancelled posts nothing and skips the refresh")
     func setDraftCancelled() async throws {
         let recorder = EventRecorder()
-        let (viewModel, _) = makeViewModel(suiteName: "SetDraftCancelled", reporter: recorder.reporter())
+        let (viewModel, _) = try makeViewModel(suiteName: "SetDraftCancelled", reporter: recorder.reporter())
         await mockClient.setSetDraftError(CancellationError())
 
-        await viewModel.setDraft(makePullRequest(number: 7, title: "Feature"), isDraft: true)
+        await viewModel.setDraft(try makePullRequest(number: 7, title: "Feature"), isDraft: true)
 
         #expect(recorder.events.isEmpty)
         #expect(await mockClient.fetchPullRequestsCallCount == 0)
@@ -855,12 +855,12 @@ struct DashboardViewModelTests {
         }
     }
 
-    private func makePullRequest(number: Int, title: String, reviews: [UserReview] = []) -> PullRequest {
+    private func makePullRequest(number: Int, title: String, reviews: [UserReview] = []) throws -> PullRequest {
         PullRequest(
             id: "PR_\(number)",
             number: number,
             title: title,
-            url: URL(string: "https://github.com/owner/repo/pull/\(number)")!,
+            url: try #require(URL(string: "https://github.com/owner/repo/pull/\(number)")),
             repository: Repository(nameWithOwner: "owner/repo"),
             author: Author(login: "author", avatarURL: nil),
             createdAt: Date().addingTimeInterval(-3600),

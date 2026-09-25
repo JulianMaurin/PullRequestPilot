@@ -356,7 +356,7 @@ struct LocalRepositoryGitParsingTests {
         let service = LocalRepositoryService()
         await service.scan(directories: [tempDir])
 
-        let pr = TestPullRequestFactory.make(
+        let pr = try TestPullRequestFactory.make(
             repository: Repository(nameWithOwner: "owner/my-repo"),
             headRefName: "feature-xyz"
         )
@@ -382,14 +382,14 @@ struct LocalRepositoryGitParsingTests {
         let service = LocalRepositoryService()
         await service.scan(directories: [tempDir])
 
-        let forkOnMain = TestPullRequestFactory.make(
+        let forkOnMain = try TestPullRequestFactory.make(
             repository: Repository(nameWithOwner: "owner/repo"),
             headRefName: "main",
             isCrossRepository: true
         )
         #expect(service.findLocalDirectory(for: forkOnMain) == nil)
 
-        let fetchedFork = TestPullRequestFactory.make(
+        let fetchedFork = try TestPullRequestFactory.make(
             repository: Repository(nameWithOwner: "owner/repo"),
             headRefName: "main",
             headCommitSha: sha,
@@ -416,7 +416,7 @@ struct LocalRepositoryGitParsingTests {
         let service = LocalRepositoryService()
         await service.scan(directories: [tempDir])
 
-        let pr = TestPullRequestFactory.make(
+        let pr = try TestPullRequestFactory.make(
             repository: Repository(nameWithOwner: "owner/repo"),
             headRefName: "my-feature"
         )
@@ -442,7 +442,7 @@ struct LocalRepositoryGitParsingTests {
         let service = LocalRepositoryService()
         await service.scan(directories: [tempDir])
 
-        let pr = TestPullRequestFactory.make(
+        let pr = try TestPullRequestFactory.make(
             repository: Repository(nameWithOwner: "owner/repo"),
             headRefName: "other-branch",
             headCommitSha: sha

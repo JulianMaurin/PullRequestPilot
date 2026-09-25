@@ -6,8 +6,8 @@ import Foundation
 @MainActor
 struct GitDirectoriesStoreTests {
 
-    private func makeStore(suiteName: String) -> (GitDirectoriesStore, UserDefaults) {
-        let defaults = UserDefaults(suiteName: suiteName)!
+    private func makeStore(suiteName: String) throws -> (GitDirectoriesStore, UserDefaults) {
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         let store = GitDirectoriesStore(defaults: defaults)
         return (store, defaults)
@@ -16,8 +16,8 @@ struct GitDirectoriesStoreTests {
     // MARK: - Load / Save
 
     @Test("load returns empty array when no data exists")
-    func loadReturnsEmpty() {
-        let (store, _) = makeStore(suiteName: "GDSEmpty")
+    func loadReturnsEmpty() throws {
+        let (store, _) = try makeStore(suiteName: "GDSEmpty")
         let dirs = store.load()
         #expect(dirs.isEmpty)
     }
@@ -28,7 +28,7 @@ struct GitDirectoriesStoreTests {
         try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tmpDir) }
 
-        let (store, _) = makeStore(suiteName: "GDSRoundTrip")
+        let (store, _) = try makeStore(suiteName: "GDSRoundTrip")
         store.save([tmpDir])
 
         let loaded = store.load()
@@ -50,7 +50,7 @@ struct GitDirectoriesStoreTests {
             try? FileManager.default.removeItem(at: tmpDir2)
         }
 
-        let (store, _) = makeStore(suiteName: "GDSPanel")
+        let (store, _) = try makeStore(suiteName: "GDSPanel")
         let result1 = store.saveFromPanel(tmpDir1)
         #expect(result1 != nil)
 
@@ -62,8 +62,8 @@ struct GitDirectoriesStoreTests {
     }
 
     @Test("saveFromPanel returns nil for nonexistent directory")
-    func saveFromPanelNonexistent() {
-        let (store, _) = makeStore(suiteName: "GDSPanelNonexist")
+    func saveFromPanelNonexistent() throws {
+        let (store, _) = try makeStore(suiteName: "GDSPanelNonexist")
         let result = store.saveFromPanel(URL(fileURLWithPath: "/nonexistent/\(UUID().uuidString)"))
         #expect(result == nil)
     }
@@ -76,14 +76,14 @@ struct GitDirectoriesStoreTests {
         try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tmpDir) }
 
-        let (store, _) = makeStore(suiteName: "GDSAccess")
+        let (store, _) = try makeStore(suiteName: "GDSAccess")
         store.startAccessing([tmpDir])
         store.stopAccessing([tmpDir])
     }
 
     @Test("startAccessing with empty array is safe")
-    func accessingEmptyArray() {
-        let (store, _) = makeStore(suiteName: "GDSAccessEmpty")
+    func accessingEmptyArray() throws {
+        let (store, _) = try makeStore(suiteName: "GDSAccessEmpty")
         store.startAccessing([])
         store.stopAccessing([])
     }
@@ -97,7 +97,7 @@ struct GitDirectoriesStoreTests {
         defer { try? FileManager.default.removeItem(at: tmpDir) }
 
         let suiteName = "GDSLegacy"
-        let defaults = UserDefaults(suiteName: suiteName)!
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
 
         // Write legacy data before constructing the store (migration happens in init)
@@ -115,8 +115,8 @@ struct GitDirectoriesStoreTests {
     }
 
     @Test("migrateLegacyPathsIfNeeded is no-op when no legacy data")
-    func legacyMigrationNoOp() {
-        let (store, defaults) = makeStore(suiteName: "GDSLegacyNoOp")
+    func legacyMigrationNoOp() throws {
+        let (store, defaults) = try makeStore(suiteName: "GDSLegacyNoOp")
         // No legacy key set — migration should be a no-op
         #expect(defaults.stringArray(forKey: "git_directories") == nil)
         let loaded = store.load()
@@ -137,7 +137,7 @@ struct GitDirectoriesStoreTests {
             try? FileManager.default.removeItem(at: tmpDir2)
         }
 
-        let (store, _) = makeStore(suiteName: "GDSReplace")
+        let (store, _) = try makeStore(suiteName: "GDSReplace")
         store.save([tmpDir1, tmpDir2])
         #expect(store.load().count == 2)
 

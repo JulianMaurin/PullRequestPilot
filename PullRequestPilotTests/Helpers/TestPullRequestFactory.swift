@@ -1,4 +1,5 @@
 import Foundation
+import Testing
 @testable import PullRequestPilot
 
 enum TestPullRequestFactory {
@@ -6,7 +7,7 @@ enum TestPullRequestFactory {
         id: String = "PR_1",
         number: Int = 1,
         title: String = "Test PR",
-        url: URL = URL(string: "https://github.com/owner/repo/pull/1")!,
+        url: URL? = nil,
         repository: Repository = Repository(nameWithOwner: "owner/repo"),
         author: Author = Author(login: "author", avatarURL: nil),
         createdAt: Date = Date().addingTimeInterval(-3600),
@@ -26,12 +27,13 @@ enum TestPullRequestFactory {
         isCrossRepository: Bool = false,
         lastActivity: LastActivity? = nil,
         latestReviews: [UserReview] = []
-    ) -> PullRequest {
-        PullRequest(
+    ) throws -> PullRequest {
+        let defaultURL = try #require(URL(string: "https://github.com/owner/repo/pull/1"))
+        return PullRequest(
             id: id,
             number: number,
             title: title,
-            url: url,
+            url: url ?? defaultURL,
             repository: repository,
             author: author,
             createdAt: createdAt,

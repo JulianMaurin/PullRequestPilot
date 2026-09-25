@@ -43,12 +43,12 @@ struct LocalRepositoryServiceTests {
     // MARK: - findLocalDirectory: Strategy 1 — Exact branch match
 
     @Test("finds repo by exact branch match in main working tree")
-    func findByExactBranch() {
+    func findByExactBranch() throws {
         let service = makeService(repos: [
             makeRepoEntry(path: "/repos/my-repo", nameWithOwner: "owner/repo", currentBranch: "feature-x"),
         ])
 
-        let pr = TestPullRequestFactory.make(
+        let pr = try TestPullRequestFactory.make(
             repository: Repository(nameWithOwner: "owner/repo"),
             headRefName: "feature-x"
         )
@@ -59,12 +59,12 @@ struct LocalRepositoryServiceTests {
     }
 
     @Test("returns nil when branch doesn't match")
-    func noMatchWhenBranchDiffers() {
+    func noMatchWhenBranchDiffers() throws {
         let service = makeService(repos: [
             makeRepoEntry(path: "/repos/repo", nameWithOwner: "owner/repo", currentBranch: "main"),
         ])
 
-        let pr = TestPullRequestFactory.make(
+        let pr = try TestPullRequestFactory.make(
             repository: Repository(nameWithOwner: "owner/repo"),
             headRefName: "feature-y",
             headCommitSha: nil
@@ -73,12 +73,12 @@ struct LocalRepositoryServiceTests {
     }
 
     @Test("returns nil when repo name doesn't match")
-    func noMatchWhenRepoDiffers() {
+    func noMatchWhenRepoDiffers() throws {
         let service = makeService(repos: [
             makeRepoEntry(nameWithOwner: "owner/other-repo", currentBranch: "main"),
         ])
 
-        let pr = TestPullRequestFactory.make(
+        let pr = try TestPullRequestFactory.make(
             repository: Repository(nameWithOwner: "owner/repo"),
             headRefName: "main"
         )
@@ -88,7 +88,7 @@ struct LocalRepositoryServiceTests {
     // MARK: - findLocalDirectory: Strategy 2 — Worktree branch match
 
     @Test("finds repo by worktree branch match")
-    func findByWorktreeBranch() {
+    func findByWorktreeBranch() throws {
         let wt = makeWorktreeEntry(path: "/repos/repo-wt/feature-z", branch: "feature-z")
         let service = makeService(repos: [
             makeRepoEntry(
@@ -99,7 +99,7 @@ struct LocalRepositoryServiceTests {
             ),
         ])
 
-        let pr = TestPullRequestFactory.make(
+        let pr = try TestPullRequestFactory.make(
             repository: Repository(nameWithOwner: "owner/repo"),
             headRefName: "feature-z"
         )
@@ -110,7 +110,7 @@ struct LocalRepositoryServiceTests {
     }
 
     @Test("exact branch takes priority over worktree")
-    func exactBranchPriority() {
+    func exactBranchPriority() throws {
         let wt = makeWorktreeEntry(path: "/repos/repo-wt/main", branch: "main")
         let service = makeService(repos: [
             makeRepoEntry(
@@ -121,7 +121,7 @@ struct LocalRepositoryServiceTests {
             ),
         ])
 
-        let pr = TestPullRequestFactory.make(
+        let pr = try TestPullRequestFactory.make(
             repository: Repository(nameWithOwner: "owner/repo"),
             headRefName: "main"
         )
@@ -133,7 +133,7 @@ struct LocalRepositoryServiceTests {
     // MARK: - findLocalDirectory: Strategy 3 — Commit SHA match
 
     @Test("finds repo by commit SHA in main working tree")
-    func findByCommitShaMainTree() {
+    func findByCommitShaMainTree() throws {
         let service = makeService(repos: [
             makeRepoEntry(
                 path: "/repos/repo",
@@ -143,7 +143,7 @@ struct LocalRepositoryServiceTests {
             ),
         ])
 
-        let pr = TestPullRequestFactory.make(
+        let pr = try TestPullRequestFactory.make(
             repository: Repository(nameWithOwner: "owner/repo"),
             headRefName: "stacked-branch",
             headCommitSha: "abc123"
@@ -155,7 +155,7 @@ struct LocalRepositoryServiceTests {
     }
 
     @Test("finds repo by commit SHA in worktree")
-    func findByCommitShaWorktree() {
+    func findByCommitShaWorktree() throws {
         let wt = makeWorktreeEntry(
             path: "/repos/repo-wt/stack",
             branch: "stack-base",
@@ -171,7 +171,7 @@ struct LocalRepositoryServiceTests {
             ),
         ])
 
-        let pr = TestPullRequestFactory.make(
+        let pr = try TestPullRequestFactory.make(
             repository: Repository(nameWithOwner: "owner/repo"),
             headRefName: "stack-pr-2",
             headCommitSha: "sha999"
@@ -183,7 +183,7 @@ struct LocalRepositoryServiceTests {
     }
 
     @Test("SHA match is skipped when headCommitSha is nil")
-    func noShaMatchWhenNil() {
+    func noShaMatchWhenNil() throws {
         let service = makeService(repos: [
             makeRepoEntry(
                 nameWithOwner: "owner/repo",
@@ -192,7 +192,7 @@ struct LocalRepositoryServiceTests {
             ),
         ])
 
-        let pr = TestPullRequestFactory.make(
+        let pr = try TestPullRequestFactory.make(
             repository: Repository(nameWithOwner: "owner/repo"),
             headRefName: "other-branch",
             headCommitSha: nil
@@ -203,12 +203,12 @@ struct LocalRepositoryServiceTests {
     // MARK: - Case insensitivity
 
     @Test("nameWithOwner matching is case-insensitive")
-    func caseInsensitiveMatch() {
+    func caseInsensitiveMatch() throws {
         let service = makeService(repos: [
             makeRepoEntry(nameWithOwner: "owner/myrepo", currentBranch: "main"),
         ])
 
-        let pr = TestPullRequestFactory.make(
+        let pr = try TestPullRequestFactory.make(
             repository: Repository(nameWithOwner: "Owner/MyRepo"),
             headRefName: "main"
         )
@@ -218,13 +218,13 @@ struct LocalRepositoryServiceTests {
     // MARK: - Multiple repos
 
     @Test("matches correct repo among multiple")
-    func multipleRepos() {
+    func multipleRepos() throws {
         let service = makeService(repos: [
             makeRepoEntry(path: "/repos/repo-a", nameWithOwner: "org/repo-a", currentBranch: "main"),
             makeRepoEntry(path: "/repos/repo-b", nameWithOwner: "org/repo-b", currentBranch: "feature"),
         ])
 
-        let pr = TestPullRequestFactory.make(
+        let pr = try TestPullRequestFactory.make(
             repository: Repository(nameWithOwner: "org/repo-b"),
             headRefName: "feature"
         )
@@ -235,9 +235,9 @@ struct LocalRepositoryServiceTests {
     // MARK: - Empty index
 
     @Test("returns nil when index is empty")
-    func emptyIndex() {
+    func emptyIndex() throws {
         let service = makeService(repos: [])
-        let pr = TestPullRequestFactory.make()
+        let pr = try TestPullRequestFactory.make()
         #expect(service.findLocalDirectory(for: pr) == nil)
     }
 
@@ -279,7 +279,7 @@ struct LocalRepositoryServiceTests {
     // MARK: - Multiple worktrees
 
     @Test("checks all worktrees for branch match")
-    func multipleWorktrees() {
+    func multipleWorktrees() throws {
         let wt1 = makeWorktreeEntry(path: "/repos/wt1", branch: "feature-a")
         let wt2 = makeWorktreeEntry(path: "/repos/wt2", branch: "feature-b")
         let service = makeService(repos: [
@@ -290,7 +290,7 @@ struct LocalRepositoryServiceTests {
             ),
         ])
 
-        let pr = TestPullRequestFactory.make(
+        let pr = try TestPullRequestFactory.make(
             repository: Repository(nameWithOwner: "owner/repo"),
             headRefName: "feature-b"
         )

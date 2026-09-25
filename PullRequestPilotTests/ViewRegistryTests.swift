@@ -19,9 +19,9 @@ struct ViewRegistryTests {
         func save(_ views: [DashboardView]) { storedViews = views }
     }
 
-    private static func isolatedDefaults(_ suiteName: String = #function) -> UserDefaults {
+    private static func isolatedDefaults(_ suiteName: String = #function) throws -> UserDefaults {
         let sanitized = suiteName.replacingOccurrences(of: "()", with: "")
-        let defaults = UserDefaults(suiteName: "ViewRegistryTests.\(sanitized)")!
+        let defaults = try #require(UserDefaults(suiteName: "ViewRegistryTests.\(sanitized)"))
         defaults.removePersistentDomain(forName: "ViewRegistryTests.\(sanitized)")
         return defaults
     }
@@ -41,8 +41,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("init with empty store yields empty views and nil selection")
-    func initEmpty() {
-        let defaults = Self.isolatedDefaults()
+    func initEmpty() throws {
+        let defaults = try Self.isolatedDefaults()
         let (registry, _) = Self.makeRegistry(defaults: defaults)
         #expect(registry.views.isEmpty)
         #expect(registry.selectedViewID == nil)
@@ -50,8 +50,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("init selects the first view when no selection is persisted")
-    func initSelectsFirstView() {
-        let defaults = Self.isolatedDefaults()
+    func initSelectsFirstView() throws {
+        let defaults = try Self.isolatedDefaults()
         let v1 = Self.makeView("A")
         let v2 = Self.makeView("B")
         let (registry, _) = Self.makeRegistry(initial: [v1, v2], defaults: defaults)
@@ -62,8 +62,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("addView appends to the registry and persists")
-    func addAppends() {
-        let defaults = Self.isolatedDefaults()
+    func addAppends() throws {
+        let defaults = try Self.isolatedDefaults()
         let (registry, store) = Self.makeRegistry(defaults: defaults)
         let v = Self.makeView("New")
         registry.addView(v)
@@ -74,8 +74,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("addView to empty registry auto-selects the new view")
-    func addAutoSelects() {
-        let defaults = Self.isolatedDefaults()
+    func addAutoSelects() throws {
+        let defaults = try Self.isolatedDefaults()
         let (registry, _) = Self.makeRegistry(defaults: defaults)
         let v = Self.makeView("New")
         registry.addView(v)
@@ -84,8 +84,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("addView does not change selection when one is already selected")
-    func addDoesNotChangeSelection() {
-        let defaults = Self.isolatedDefaults()
+    func addDoesNotChangeSelection() throws {
+        let defaults = try Self.isolatedDefaults()
         let existing = Self.makeView("A")
         let (registry, _) = Self.makeRegistry(initial: [existing], defaults: defaults)
         let originalSelection = registry.selectedViewID
@@ -97,7 +97,7 @@ struct ViewRegistryTests {
     @MainActor
     @Test("updateView mutates in place and persists")
     func updateMutates() throws {
-        let defaults = Self.isolatedDefaults()
+        let defaults = try Self.isolatedDefaults()
         let v = Self.makeView("Original")
         let (registry, store) = Self.makeRegistry(initial: [v], defaults: defaults)
         let updated = DashboardView(id: v.id, title: "Updated", query: "is:open")
@@ -111,8 +111,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("updateView is a no-op when the ID does not exist")
-    func updateUnknownID() {
-        let defaults = Self.isolatedDefaults()
+    func updateUnknownID() throws {
+        let defaults = try Self.isolatedDefaults()
         let existing = Self.makeView("A")
         let (registry, _) = Self.makeRegistry(initial: [existing], defaults: defaults)
         let ghost = DashboardView(id: UUID(), title: "Ghost", query: "x")
@@ -124,7 +124,7 @@ struct ViewRegistryTests {
     @MainActor
     @Test("deleteView removes and re-selects the next available view")
     func deleteReselects() throws {
-        let defaults = Self.isolatedDefaults()
+        let defaults = try Self.isolatedDefaults()
         let a = Self.makeView("A")
         let b = Self.makeView("B")
         let (registry, _) = Self.makeRegistry(initial: [a, b], defaults: defaults)
@@ -137,8 +137,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("deleteView clears selection when last view is deleted")
-    func deleteLastClearsSelection() {
-        let defaults = Self.isolatedDefaults()
+    func deleteLastClearsSelection() throws {
+        let defaults = try Self.isolatedDefaults()
         let a = Self.makeView("only")
         let (registry, _) = Self.makeRegistry(initial: [a], defaults: defaults)
         _ = registry.deleteView(id: a.id)
@@ -148,8 +148,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("deleteView returns false for unknown ID")
-    func deleteUnknownReturnsFalse() {
-        let defaults = Self.isolatedDefaults()
+    func deleteUnknownReturnsFalse() throws {
+        let defaults = try Self.isolatedDefaults()
         let a = Self.makeView("A")
         let (registry, _) = Self.makeRegistry(initial: [a], defaults: defaults)
         let removed = registry.deleteView(id: UUID())
@@ -161,8 +161,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("moveView reorders forward")
-    func moveForward() {
-        let defaults = Self.isolatedDefaults()
+    func moveForward() throws {
+        let defaults = try Self.isolatedDefaults()
         let a = Self.makeView("A")
         let b = Self.makeView("B")
         let c = Self.makeView("C")
@@ -173,8 +173,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("moveView reorders backward")
-    func moveBackward() {
-        let defaults = Self.isolatedDefaults()
+    func moveBackward() throws {
+        let defaults = try Self.isolatedDefaults()
         let a = Self.makeView("A")
         let b = Self.makeView("B")
         let c = Self.makeView("C")
@@ -185,8 +185,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("moveView to the same position is a no-op")
-    func moveSelfIsNoop() {
-        let defaults = Self.isolatedDefaults()
+    func moveSelfIsNoop() throws {
+        let defaults = try Self.isolatedDefaults()
         let a = Self.makeView("A")
         let b = Self.makeView("B")
         let (registry, _) = Self.makeRegistry(initial: [a, b], defaults: defaults)
@@ -198,8 +198,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("selectNext wraps around")
-    func selectNextWraps() {
-        let defaults = Self.isolatedDefaults()
+    func selectNextWraps() throws {
+        let defaults = try Self.isolatedDefaults()
         let a = Self.makeView("A")
         let b = Self.makeView("B")
         let (registry, _) = Self.makeRegistry(initial: [a, b], defaults: defaults)
@@ -210,8 +210,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("selectPrevious wraps around")
-    func selectPreviousWraps() {
-        let defaults = Self.isolatedDefaults()
+    func selectPreviousWraps() throws {
+        let defaults = try Self.isolatedDefaults()
         let a = Self.makeView("A")
         let b = Self.makeView("B")
         let (registry, _) = Self.makeRegistry(initial: [a, b], defaults: defaults)
@@ -224,8 +224,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("selectedViewID persists across registry instances")
-    func selectedViewIDPersists() {
-        let defaults = Self.isolatedDefaults()
+    func selectedViewIDPersists() throws {
+        let defaults = try Self.isolatedDefaults()
         let a = Self.makeView("A")
         let b = Self.makeView("B")
         let store = InMemoryViewsStore(initial: [a, b])
@@ -238,8 +238,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("stored selectedViewID is ignored when the view no longer exists")
-    func selectedViewIDFallsBackToFirst() {
-        let defaults = Self.isolatedDefaults()
+    func selectedViewIDFallsBackToFirst() throws {
+        let defaults = try Self.isolatedDefaults()
         defaults.set(UUID().uuidString, forKey: Constants.UserDefaultsKeys.selectedViewID)
         let a = Self.makeView("A")
         let store = InMemoryViewsStore(initial: [a])
@@ -252,8 +252,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("clear wipes views, selection, and persisted selection")
-    func clearWipesEverything() {
-        let defaults = Self.isolatedDefaults()
+    func clearWipesEverything() throws {
+        let defaults = try Self.isolatedDefaults()
         let a = Self.makeView("A")
         let store = InMemoryViewsStore(initial: [a])
         let registry = ViewRegistry(viewsStore: store, defaults: defaults)
@@ -269,8 +269,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("replaceAll re-selects first when current selection is absent")
-    func replaceAllReselects() {
-        let defaults = Self.isolatedDefaults()
+    func replaceAllReselects() throws {
+        let defaults = try Self.isolatedDefaults()
         let a = Self.makeView("A")
         let (registry, _) = Self.makeRegistry(initial: [a], defaults: defaults)
         registry.selectedViewID = a.id
@@ -283,8 +283,8 @@ struct ViewRegistryTests {
 
     @MainActor
     @Test("replaceAll keeps selection when the selected view survives")
-    func replaceAllKeepsSelection() {
-        let defaults = Self.isolatedDefaults()
+    func replaceAllKeepsSelection() throws {
+        let defaults = try Self.isolatedDefaults()
         let a = Self.makeView("A")
         let b = Self.makeView("B")
         let (registry, _) = Self.makeRegistry(initial: [a, b], defaults: defaults)

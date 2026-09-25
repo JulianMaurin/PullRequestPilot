@@ -2,7 +2,7 @@ import Foundation
 
 /// Minimal controllable Clock for deterministic tests.
 ///
-/// Waiters suspended inside `sleep(until:)` resume only when `advance(by:)`
+/// Waiters suspended inside `try sleep(until:)` resume only when `advance(by:)`
 /// pushes `now` past their deadline. No real wall-clock sleep, no flakiness
 /// under parallel test runners.
 final class TestClock: Clock, @unchecked Sendable {

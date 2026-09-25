@@ -6,8 +6,8 @@ import Foundation
 @Suite("PRDetailViewModel.retry")
 struct PRDetailRetryTests {
 
-    private func makePR(id: String = "PR_1") -> PullRequest {
-        TestPullRequestFactory.make(id: id)
+    private func makePR(id: String = "PR_1") throws -> PullRequest {
+        try TestPullRequestFactory.make(id: id)
     }
 
     /// Wait for the fire-and-forget Task to start and finish loading.
@@ -30,7 +30,7 @@ struct PRDetailRetryTests {
         let vm = PRDetailViewModel(gitHubClient: client)
 
         // Select PR — will error
-        vm.selectPR(makePR())
+        vm.selectPR(try makePR())
         try await waitForLoad(vm)
         #expect(vm.error != nil)
         #expect(vm.selectedPR != nil)

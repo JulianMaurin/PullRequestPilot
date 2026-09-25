@@ -37,7 +37,7 @@ struct DashboardViewTests {
         let json = """
         {"id":"\(id.uuidString)","title":"Old View","query":"is:pr"}
         """
-        let data = json.data(using: .utf8)!
+        let data = Data(json.utf8)
         let decoded = try JSONDecoder().decode(DashboardView.self, from: data)
 
         #expect(decoded.hideReviewed == false)

@@ -25,7 +25,7 @@ make clean-deep       # Wipes DerivedData + Xcode caches + NotificationCenter (g
 
 Build output is piped through `scripts/xcb-filter.sh` (falls back to `xcpretty` if installed), which drops per-file compile/link chatter and keeps errors, warnings, and test results. The `make build` xcodegen step is file-dependency-driven: adding, removing, or modifying any `.swift` file under `PullRequestPilot/`, `Shared/`, `PullRequestPilotTests/`, or `PullRequestPilotWidget/` triggers regeneration on the next build.
 
-**SwiftLint is required.** `brew install swiftlint`. Both `make build` and `make test` run `make lint` first — lint failures block the build. Rules live in `.swiftlint.yml` at the repo root; tests use a smaller subset via `PullRequestPilotTests/.swiftlint.yml`.
+**SwiftLint is required.** `brew install swiftlint`. Both `make build` and `make test` run `make lint` first — lint failures block the build. Rules live in `.swiftlint.yml` at the repo root and cover the tests too.
 
 In debug builds, `IdentityActor.readStoredToken(from:)` prefers `GITHUB_TOKEN` from the environment over the Keychain (`#if DEBUG`). Create a `.env` file at the project root and `make debug` will source it automatically.
 

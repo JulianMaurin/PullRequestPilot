@@ -15,9 +15,9 @@ struct PRFetcherTests {
     /// exercise filter behaviour.
     private static let identityFilter: PRFetcher.PRFilter = { prs, _ in prs }
 
-    private static func page(ids: [String], cursor: String?) -> PullRequestPage {
+    private static func page(ids: [String], cursor: String?) throws -> PullRequestPage {
         PullRequestPage(
-            pullRequests: ids.map { TestPullRequestFactory.make(id: $0) },
+            pullRequests: try ids.map { try TestPullRequestFactory.make(id: $0) },
             nextCursor: cursor
         )
     }
@@ -83,7 +83,7 @@ struct PRFetcherTests {
     @Test("refresh writes fetched PRs into the view state")
     func refreshWritesPRs() async throws {
         let client = MockGitHubClient()
-        let pr = TestPullRequestFactory.make(id: "PR_1", title: "One")
+        let pr = try TestPullRequestFactory.make(id: "PR_1", title: "One")
         await client.setPullRequestsToReturn([pr])
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
@@ -100,8 +100,8 @@ struct PRFetcherTests {
     @Test("a refresh re-fetches as deep as the user has paged, keeping page-2 rows")
     func refreshKeepsLoadedDepth() async throws {
         let client = MockGitHubClient()
-        let firstPage = (1...50).map { TestPullRequestFactory.make(id: "PR_\($0)") }
-        let secondPage = (51...100).map { TestPullRequestFactory.make(id: "PR_\($0)") }
+        let firstPage = try (1...50).map { try TestPullRequestFactory.make(id: "PR_\($0)") }
+        let secondPage = try (51...100).map { try TestPullRequestFactory.make(id: "PR_\($0)") }
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
 
@@ -127,19 +127,19 @@ struct PRFetcherTests {
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
 
-        await client.setPullRequestsToReturn((1...50).map { TestPullRequestFactory.make(id: "PR_\($0)") })
+        try await client.setPullRequestsToReturn((1...50).map { try TestPullRequestFactory.make(id: "PR_\($0)") })
         await client.setNextCursorToReturn("cursor-1")
         await fetcher.refresh(for: view)
-        await client.setPullRequestsToReturn((51...60).map { TestPullRequestFactory.make(id: "PR_\($0)") })
+        try await client.setPullRequestsToReturn((51...60).map { try TestPullRequestFactory.make(id: "PR_\($0)") })
         await client.setNextCursorToReturn(nil)
         await fetcher.loadMore(for: view)
 
         // More matches arrived since: the refresh fetches the 60 already
         // loaded and reports another page.
-        await client.setPullRequestsToReturn((1...60).map { TestPullRequestFactory.make(id: "PR_\($0)") })
+        try await client.setPullRequestsToReturn((1...60).map { try TestPullRequestFactory.make(id: "PR_\($0)") })
         await client.setNextCursorToReturn("cursor-2")
         await fetcher.refresh(for: view)
-        await client.setPullRequestsToReturn((61...100).map { TestPullRequestFactory.make(id: "PR_\($0)") })
+        try await client.setPullRequestsToReturn((61...100).map { try TestPullRequestFactory.make(id: "PR_\($0)") })
         await fetcher.loadMore(for: view)
 
         #expect(await client.receivedPageSizes == [50, 50, 60, 40])
@@ -177,7 +177,7 @@ struct PRFetcherTests {
     @Test("onFetched fires after the state is committed")
     func onFetchedAfterStateCommit() async throws {
         let client = MockGitHubClient()
-        let pr = TestPullRequestFactory.make(id: "PR_onFetched")
+        let pr = try TestPullRequestFactory.make(id: "PR_onFetched")
         await client.setPullRequestsToReturn([pr])
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
@@ -232,7 +232,7 @@ struct PRFetcherTests {
         // If coalescing works, two concurrent refresh(for:) calls should
         // result in a *single* call to fetchPullRequests.
         let client = MockGitHubClient()
-        await client.setPullRequestsToReturn([TestPullRequestFactory.make(id: "PR_coalesce")])
+        await client.setPullRequestsToReturn([try TestPullRequestFactory.make(id: "PR_coalesce")])
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
 
@@ -296,8 +296,8 @@ struct PRFetcherTests {
     @Test("the filter closure sees the unique PRs and can drop entries")
     func filterDrops() async throws {
         let client = MockGitHubClient()
-        let a = TestPullRequestFactory.make(id: "PR_keep", title: "keep")
-        let b = TestPullRequestFactory.make(id: "PR_drop", title: "drop")
+        let a = try TestPullRequestFactory.make(id: "PR_keep", title: "keep")
+        let b = try TestPullRequestFactory.make(id: "PR_drop", title: "drop")
         await client.setPullRequestsToReturn([a, b])
 
         let filter: PRFetcher.PRFilter = { prs, _ in
@@ -317,7 +317,7 @@ struct PRFetcherTests {
     @Test("loadMore appends new PRs without replacing the existing list")
     func loadMoreAppends() async throws {
         let client = MockGitHubClient()
-        let initial = TestPullRequestFactory.make(id: "PR_1", title: "first")
+        let initial = try TestPullRequestFactory.make(id: "PR_1", title: "first")
         await client.setPullRequestsToReturn([initial])
         await client.setNextCursorToReturn("cursor-1")
         let fetcher = Self.makeFetcher(client: client)
@@ -325,7 +325,7 @@ struct PRFetcherTests {
 
         await fetcher.refresh(for: view)
         // Second page: return a new PR; cursor ends.
-        let second = TestPullRequestFactory.make(id: "PR_2", title: "second")
+        let second = try TestPullRequestFactory.make(id: "PR_2", title: "second")
         await client.setPullRequestsToReturn([second])
         await client.setNextCursorToReturn(nil)
 
@@ -339,7 +339,7 @@ struct PRFetcherTests {
     @Test("loadMore deduplicates PRs that appear on both pages")
     func loadMoreDeduplicates() async throws {
         let client = MockGitHubClient()
-        let pr = TestPullRequestFactory.make(id: "PR_dup", title: "dup")
+        let pr = try TestPullRequestFactory.make(id: "PR_dup", title: "dup")
         await client.setPullRequestsToReturn([pr])
         await client.setNextCursorToReturn("cursor-1")
         let fetcher = Self.makeFetcher(client: client)
@@ -393,9 +393,11 @@ struct PRFetcherTests {
         // Release the new page and wait for its commit before releasing the
         // stale one: the old-query result then resolves strictly after the
         // new commit and must be dropped, not written over it.
-        #expect(await client.releaseFetch(query: newView.query, cursor: nil, returning: Self.page(ids: ["PR_new"], cursor: "cursor-new")))
+        let pageNew = try Self.page(ids: ["PR_new"], cursor: "cursor-new")
+        #expect(await client.releaseFetch(query: newView.query, cursor: nil, returning: pageNew))
         try await Self.waitUntil { fetcher.states[viewID]?.pullRequests.map(\.id) == ["PR_new"] }
-        #expect(await client.releaseFetch(query: oldView.query, cursor: nil, returning: Self.page(ids: ["PR_old"], cursor: "cursor-old")))
+        let pageOld = try Self.page(ids: ["PR_old"], cursor: "cursor-old")
+        #expect(await client.releaseFetch(query: oldView.query, cursor: nil, returning: pageOld))
         _ = await newRefresh
         _ = await oldRefresh
 
@@ -418,7 +420,8 @@ struct PRFetcherTests {
 
         async let initialRefresh: Void = fetcher.refresh(for: view)
         try await client.waitForFetch(query: view.query, cursor: nil)
-        #expect(await client.releaseFetch(query: view.query, cursor: nil, returning: Self.page(ids: ["PR_1"], cursor: "cursor-1")))
+        let page1 = try Self.page(ids: ["PR_1"], cursor: "cursor-1")
+        #expect(await client.releaseFetch(query: view.query, cursor: nil, returning: page1))
         _ = await initialRefresh
 
         async let staleLoadMore: Void = fetcher.loadMore(for: view)
@@ -426,10 +429,12 @@ struct PRFetcherTests {
 
         async let secondRefresh: Void = fetcher.refresh(for: view)
         try await client.waitForFetch(query: view.query, cursor: nil)
-        #expect(await client.releaseFetch(query: view.query, cursor: nil, returning: Self.page(ids: ["PR_2"], cursor: "cursor-2")))
+        let page2 = try Self.page(ids: ["PR_2"], cursor: "cursor-2")
+        #expect(await client.releaseFetch(query: view.query, cursor: nil, returning: page2))
         _ = await secondRefresh
 
-        #expect(await client.releaseFetch(query: view.query, cursor: "cursor-1", returning: Self.page(ids: ["PR_stale"], cursor: "cursor-stale")))
+        let pageStale = try Self.page(ids: ["PR_stale"], cursor: "cursor-stale")
+        #expect(await client.releaseFetch(query: view.query, cursor: "cursor-1", returning: pageStale))
         _ = await staleLoadMore
 
         let state = try #require(fetcher.states[view.id])
@@ -449,7 +454,8 @@ struct PRFetcherTests {
 
         async let initialRefresh: Void = fetcher.refresh(for: view)
         try await client.waitForFetch(query: view.query, cursor: nil)
-        #expect(await client.releaseFetch(query: view.query, cursor: nil, returning: Self.page(ids: ["PR_1"], cursor: "cursor-1")))
+        let page1 = try Self.page(ids: ["PR_1"], cursor: "cursor-1")
+        #expect(await client.releaseFetch(query: view.query, cursor: nil, returning: page1))
         _ = await initialRefresh
 
         // Refresh first — its start-of-fetch loadMore cancellation misses a
@@ -460,10 +466,12 @@ struct PRFetcherTests {
         async let staleLoadMore: Void = fetcher.loadMore(for: view)
         try await client.waitForFetch(query: view.query, cursor: "cursor-1")
 
-        #expect(await client.releaseFetch(query: view.query, cursor: nil, returning: Self.page(ids: ["PR_2"], cursor: "cursor-2")))
+        let page2 = try Self.page(ids: ["PR_2"], cursor: "cursor-2")
+        #expect(await client.releaseFetch(query: view.query, cursor: nil, returning: page2))
         _ = await secondRefresh
 
-        #expect(await client.releaseFetch(query: view.query, cursor: "cursor-1", returning: Self.page(ids: ["PR_stale"], cursor: "cursor-stale")))
+        let pageStale = try Self.page(ids: ["PR_stale"], cursor: "cursor-stale")
+        #expect(await client.releaseFetch(query: view.query, cursor: "cursor-1", returning: pageStale))
         _ = await staleLoadMore
 
         let state = try #require(fetcher.states[view.id])
@@ -490,7 +498,7 @@ struct PRFetcherTests {
     @Test("resetState clears the entry to an empty ViewState")
     func resetStateClears() async throws {
         let client = MockGitHubClient()
-        await client.setPullRequestsToReturn([TestPullRequestFactory.make(id: "PR_R")])
+        await client.setPullRequestsToReturn([try TestPullRequestFactory.make(id: "PR_R")])
         let fetcher = Self.makeFetcher(client: client)
         let view = Self.makeView()
         await fetcher.refresh(for: view)
@@ -504,7 +512,7 @@ struct PRFetcherTests {
     @Test("clearAll removes every entry")
     func clearAllWipes() async throws {
         let client = MockGitHubClient()
-        await client.setPullRequestsToReturn([TestPullRequestFactory.make(id: "PR_C")])
+        await client.setPullRequestsToReturn([try TestPullRequestFactory.make(id: "PR_C")])
         let fetcher = Self.makeFetcher(client: client)
         let viewA = Self.makeView()
         let viewB = Self.makeView()
