@@ -186,13 +186,14 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
     private let session: URLSession
     private let logger = Logger(category: "GitHubClient")
 
-    /// Coalesces concurrent identical reads (same query + token) into a single
-    /// network round-trip. Two dashboard views polling the same repo, or two
-    /// `refreshAll` calls overlapping, now share one request instead of racing.
+    /// Coalesces concurrent identical reads (same request + token) into a
+    /// single network round-trip. Two dashboard views polling the same repo,
+    /// or two `refreshAll` calls overlapping, share one request instead of
+    /// racing.
     private let networkCoalescer = RequestCoalescer<NetworkKey, RawResponse>()
 
     private struct NetworkKey: Hashable, Sendable {
-        let query: String
+        let request: GraphQLRequest
         let token: String
     }
 
@@ -214,8 +215,8 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
     }
 
     func fetchPullRequests(query searchQuery: String, cursor: String?, pageSize: Int) async throws -> PullRequestPage {
-        let query = GitHubGraphQL.searchQuery(query: searchQuery, cursor: cursor, pageSize: pageSize)
-        let response: GraphQLResponse<SearchData> = try await execute(query: query)
+        let request = GitHubGraphQL.searchQuery(query: searchQuery, cursor: cursor, pageSize: pageSize)
+        let response: GraphQLResponse<SearchData> = try await execute(request)
 
         if let errors = response.errors, !errors.isEmpty, response.data != nil {
             logger.warning("GraphQL partial errors: \(errors.map(\.message).joined(separator: "; "), privacy: .public)")
@@ -248,8 +249,8 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
     }
 
     func fetchTimeline(nodeID: String, cursor: String? = nil, eventPageOffset: Int = 0, checksPageOffset: Int = 0) async throws -> TimelinePage {
-        let query = GitHubGraphQL.timelineQuery(nodeID: nodeID, cursor: cursor)
-        let response: GraphQLResponse<TimelineNodeData> = try await execute(query: query)
+        let request = GitHubGraphQL.timelineQuery(nodeID: nodeID, cursor: cursor)
+        let response: GraphQLResponse<TimelineNodeData> = try await execute(request)
 
         if let errors = response.errors, !errors.isEmpty, response.data != nil {
             logger.warning("GraphQL partial errors: \(errors.map(\.message).joined(separator: "; "), privacy: .public)")
@@ -284,8 +285,8 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
     }
 
     func fetchChecks(nodeID: String, cursor: String, checksPageOffset: Int = 0) async throws -> ChecksPage {
-        let query = GitHubGraphQL.checksQuery(nodeID: nodeID, cursor: cursor)
-        let response: GraphQLResponse<TimelineNodeData> = try await execute(query: query)
+        let request = GitHubGraphQL.checksQuery(nodeID: nodeID, cursor: cursor)
+        let response: GraphQLResponse<TimelineNodeData> = try await execute(request)
 
         if let errors = response.errors, !errors.isEmpty, response.data != nil {
             logger.warning("GraphQL partial errors: \(errors.map(\.message).joined(separator: "; "), privacy: .public)")
@@ -307,12 +308,12 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
     }
 
     func fetchViewer() async throws -> (login: String, avatarURL: URL?) {
-        let response: GraphQLResponse<ViewerData> = try await execute(query: GitHubGraphQL.viewerQuery)
+        let response: GraphQLResponse<ViewerData> = try await execute(GitHubGraphQL.viewerQuery)
         return try viewerResult(from: response)
     }
 
     func validateToken(_ token: String) async throws -> TokenValidation {
-        let raw = try await fetchRawResponse(query: GitHubGraphQL.viewerQuery, token: token)
+        let raw = try await fetchRawResponse(GitHubGraphQL.viewerQuery, token: token)
         let response: GraphQLResponse<ViewerData> = try decode(raw.body)
         let viewer = try viewerResult(from: response)
         return TokenValidation(
@@ -330,7 +331,7 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
     func setDraft(pullRequestID: String, isDraft: Bool) async throws {
         // Both mutations are idempotent, so sharing the coalesced request path is safe.
         let mutation = GitHubGraphQL.setDraftMutation(pullRequestID: pullRequestID, isDraft: isDraft)
-        let response: GraphQLResponse<DraftStateMutationData> = try await execute(query: mutation)
+        let response: GraphQLResponse<DraftStateMutationData> = try await execute(mutation)
 
         if let errors = response.errors, !errors.isEmpty {
             throw GitHubClientError.graphQLErrors(errors.map(\.message))
@@ -363,18 +364,11 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         return (login: data.viewer.login, avatarURL: avatarURL)
     }
 
-    private func execute<T: Decodable>(query: String, overrideToken: String? = nil) async throws -> GraphQLResponse<T> {
-        let resolvedToken: String?
-        if let overrideToken {
-            resolvedToken = overrideToken
-        } else {
-            resolvedToken = await tokenProvider()
-        }
-        guard let token = resolvedToken, !token.isEmpty else {
+    private func execute<T: Decodable>(_ request: GraphQLRequest) async throws -> GraphQLResponse<T> {
+        guard let token = await tokenProvider(), !token.isEmpty else {
             throw GitHubClientError.unauthorized
         }
-
-        let raw = try await fetchRawResponse(query: query, token: token)
+        let raw = try await fetchRawResponse(request, token: token)
         return try decode(raw.body)
     }
 
@@ -398,10 +392,10 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
     }
 
     /// Performs the network round-trip and HTTP status classification, returning
-    /// the raw response. Coalesced on (query, token): concurrent callers with
+    /// the raw response. Coalesced on (request, token): concurrent callers with
     /// the same key share a single request, decode independently.
-    private func fetchRawResponse(query: String, token: String) async throws -> RawResponse {
-        let key = NetworkKey(query: query, token: token)
+    private func fetchRawResponse(_ graphQLRequest: GraphQLRequest, token: String) async throws -> RawResponse {
+        let key = NetworkKey(request: graphQLRequest, token: token)
         let session = self.session
         let onUnauthorized = self.onUnauthorized
         return try await networkCoalescer.run(key: key) {
@@ -409,7 +403,7 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             request.httpMethod = "POST"
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONSerialization.data(withJSONObject: ["query": query])
+            request.httpBody = try JSONEncoder().encode(graphQLRequest)
 
             let data: Data
             let response: URLResponse
