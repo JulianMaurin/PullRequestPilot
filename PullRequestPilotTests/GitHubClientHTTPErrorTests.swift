@@ -314,6 +314,14 @@ struct GitHubClientHTTPErrorTests {
         #expect(error.errorDescription?.contains("400") == true)
     }
 
+    @Test("a 4xx reads as a rejected request, the same inline and in the toast")
+    func clientErrorIsRejectedRequest() {
+        let error = GitHubClientError.clientError(statusCode: 422)
+        #expect(error.asAppError == .requestRejected(statusCode: 422))
+        #expect(error.errorDescription == AppError.requestRejected(statusCode: 422).errorDescription)
+        #expect(error.errorDescription?.contains("experiencing issues") == false)
+    }
+
     @Test("serverError includes status code")
     func serverErrorDescription() {
         let error = GitHubClientError.serverError(statusCode: 503)

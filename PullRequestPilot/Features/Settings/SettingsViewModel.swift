@@ -264,14 +264,6 @@ final class SettingsViewModel {
         }
     }
 
-    func removeGitDirectory(at offsets: IndexSet) {
-        let removing = offsets.map { gitDirectories[$0] }
-        gitDirectoriesStore.stopAccessing(removing)
-        gitDirectories.remove(atOffsets: offsets)
-        gitDirectoriesStore.save(gitDirectories)
-        triggerRescan()
-    }
-
     func removeGitDirectory(_ url: URL) {
         gitDirectoriesStore.stopAccessing([url])
         gitDirectories.removeAll { $0 == url }

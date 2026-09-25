@@ -157,26 +157,10 @@ final class PRDetailViewModel {
             } catch {
                 guard !Task.isCancelled else { return }
                 self.isNetworkError = error.isNetworkError
-                self.error = error.localizedDescription
-                reporter.post(.error(appError(from: error)))
+                self.error = error.asAppError.errorDescription
+                reporter.post(.error(error.asAppError))
             }
             isLoading = false
         }
     }
-}
-
-// MARK: - Error mapping helper
-
-@MainActor
-func appError(from error: Error) -> AppError {
-    if let clientError = error as? GitHubClientError {
-        return clientError.asAppError
-    }
-    if let appError = error as? AppError {
-        return appError
-    }
-    if let urlError = error as? URLError {
-        return .network(underlying: urlError.localizedDescription)
-    }
-    return .network(underlying: error.localizedDescription)
 }

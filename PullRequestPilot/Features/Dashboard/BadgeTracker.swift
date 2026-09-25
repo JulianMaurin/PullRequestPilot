@@ -60,12 +60,6 @@ final class BadgeTracker {
         completedInitialLoad.remove(viewID)
     }
 
-    func markAsSeen() {
-        guard !unseenPRIDs.isEmpty else { return }
-        unseenPRIDs.removeAll()
-        notifyCount()
-    }
-
     func markAsSeen(prIDs: Set<String>) {
         let removed = unseenPRIDs.intersection(prIDs)
         guard !removed.isEmpty else { return }

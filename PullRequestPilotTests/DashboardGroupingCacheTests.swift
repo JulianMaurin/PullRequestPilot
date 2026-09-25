@@ -117,7 +117,7 @@ struct DashboardGroupingCacheTests {
     }
 
     @MainActor
-    @Test("cached grouping structurally matches a fresh groupedByOrgAndRepo call")
+    @Test("cached grouping structurally matches a fresh PRGrouping.groupedByOrgAndRepo call")
     func cacheReturnsEquivalentValue() async throws {
         let (vm, mock, _) = try Self.makeViewModel(suiteName: "Equivalence")
         let pr1 = try TestPullRequestFactory.make(id: "PR_1", repository: Repository(nameWithOwner: "acme/web"), headRefName: "a")
@@ -125,7 +125,7 @@ struct DashboardGroupingCacheTests {
         let pr3 = try TestPullRequestFactory.make(id: "PR_3", repository: Repository(nameWithOwner: "acme/api"), headRefName: "c")
         _ = await Self.addViewAndRefresh(vm, title: "A", prs: [pr1, pr2, pr3], mock: mock)
         let cached = vm.groupedSelected
-        let fresh = vm.groupedByOrgAndRepo(vm.selectedViewState.pullRequests)
+        let fresh = PRGrouping.groupedByOrgAndRepo(vm.selectedViewState.pullRequests)
         // OrgGroup isn't Equatable — compare the structural shape that the
         // UI renders against: org names, repo names per org, and the set of
         // PR IDs per repo.

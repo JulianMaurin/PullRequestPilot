@@ -252,19 +252,6 @@ struct SettingsViewModelTests {
         #expect(vm.gitDirectories.isEmpty)
     }
 
-    @Test("removeGitDirectory by offsets removes correct entry")
-    func removeGitDirectoryByOffset() throws {
-        let (vm, _, _, _, _) = try makeViewModel(suiteName: "RemoveDirOffset")
-        let url1 = URL(fileURLWithPath: "/tmp/repo1")
-        let url2 = URL(fileURLWithPath: "/tmp/repo2")
-        vm.gitDirectories = [url1, url2]
-
-        vm.removeGitDirectory(at: IndexSet(integer: 0))
-
-        #expect(vm.gitDirectories.count == 1)
-        #expect(vm.gitDirectories.first == url2)
-    }
-
     // MARK: - Refresh Intervals
 
     @Test("refreshIntervalOptions has reasonable values")

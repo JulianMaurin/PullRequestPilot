@@ -110,29 +110,10 @@ enum GitHubClientError: LocalizedError {
     case networkError(Error)
     case decodingError(Error)
 
+    /// `AppError` owns the wording, so the inline error and the toast for
+    /// one failure always read the same.
     var errorDescription: String? {
-        switch self {
-        case .unauthorized:
-            "Invalid or missing GitHub token. Check your token in Settings."
-        case .rateLimited:
-            "GitHub API rate limit exceeded. Wait a few minutes and try again."
-        case .permissionDenied(let detail):
-            if let detail, !detail.isEmpty {
-                "GitHub refused the request: \(detail)."
-            } else {
-                "GitHub refused the request. Check that your token has the required scopes."
-            }
-        case .clientError(let statusCode):
-            "Request error (HTTP \(statusCode)). Check that your query uses valid GitHub search syntax."
-        case .serverError(let statusCode):
-            "GitHub is experiencing issues (HTTP \(statusCode)). Try again later."
-        case .graphQLErrors(let messages):
-            "GitHub API error: \(messages.joined(separator: "; "))"
-        case .networkError(let error):
-            "Network error: \(error.localizedDescription)"
-        case .decodingError:
-            "Unexpected response from GitHub. Check that your query uses valid GitHub search qualifiers (e.g. \"is:pr is:open review-requested:@me\")."
-        }
+        asAppError.errorDescription
     }
 
     /// Map this typed error to the app-wide `AppError` surface.
@@ -146,7 +127,7 @@ enum GitHubClientError: LocalizedError {
         case .permissionDenied(let detail):
             return .permissionDenied(detail: detail)
         case .clientError(let code):
-            return .serverError(statusCode: code)
+            return .requestRejected(statusCode: code)
         case .serverError(let code):
             return .serverError(statusCode: code)
         case .graphQLErrors(let messages):
@@ -171,6 +152,17 @@ enum GitHubClientError: LocalizedError {
 // MARK: - Error helpers
 
 extension Error {
+    /// The user-facing form of any failure the app's layers throw.
+    var asAppError: AppError {
+        if let clientError = self as? GitHubClientError {
+            return clientError.asAppError
+        }
+        if let appError = self as? AppError {
+            return appError
+        }
+        return .network(underlying: localizedDescription)
+    }
+
     /// Generic network-failure detector for any `Error` — handles typed client
     /// errors and raw `URLError` codes alike. Replaces the old
     /// `ErrorNetworkCheck` extension that lived alongside the classifier.

@@ -135,6 +135,8 @@ final class AppState {
     }
 }
 
+extension DashboardViewModel: DashboardActionsProtocol {}
+
 /// Lets GitHubClient's token-provider closure reach IdentityActor without a
 /// chicken-and-egg dependency cycle at init time. Single-writer: AppState.init
 /// assigns once and then only reads occur.

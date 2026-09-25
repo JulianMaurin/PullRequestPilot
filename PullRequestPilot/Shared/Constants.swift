@@ -11,7 +11,6 @@ enum Constants {
         static let maxPullRequests = 100
         /// Search results per page; GitHub allows at most 100.
         static let searchPageSize = 50
-        static let appGroupIdentifier = WidgetData.appGroupIdentifier
     }
 
     enum UserDefaultsKeys {

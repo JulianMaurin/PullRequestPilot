@@ -61,16 +61,6 @@ struct BadgeTrackerTests {
         #expect(tracker.count == 2)
     }
 
-    @Test("markAsSeen clears unseen count")
-    func markAsSeen() throws {
-        let tracker = try makeTracker(suiteName: "BadgeMarkSeen")
-        tracker.trackUnseen(Set(["PR_1"]))
-        #expect(tracker.count == 1)
-
-        tracker.markAsSeen()
-        #expect(tracker.count == 0)
-    }
-
     @Test("pruneUnseen removes IDs no longer in any view")
     func pruneUnseen() throws {
         let tracker = try makeTracker(suiteName: "BadgePrune")
@@ -119,7 +109,7 @@ struct BadgeTrackerTests {
         tracker.onCountChanged = { callbackValues.append($0) }
 
         tracker.trackUnseen(Set(["PR_1"]))
-        tracker.markAsSeen()
+        tracker.markAsSeen(prIDs: ["PR_1"])
 
         #expect(callbackValues == [1, 0])
     }

@@ -98,6 +98,7 @@ enum AppError: LocalizedError, Sendable, Hashable {
     case permissionDenied(detail: String?)
     case network(underlying: String)
     case serverError(statusCode: Int)
+    case requestRejected(statusCode: Int)
     case graphQLErrors([String])
     case decodeResponse(detail: String)
     case tokenSaveFailed(underlying: String)
@@ -136,6 +137,8 @@ enum AppError: LocalizedError, Sendable, Hashable {
             return "Network error: \(underlying)"
         case .serverError(let statusCode):
             return "GitHub is experiencing issues (HTTP \(statusCode)). Try again later."
+        case .requestRejected(let statusCode):
+            return "GitHub rejected the request (HTTP \(statusCode)). Check that the query uses valid GitHub search syntax."
         case .graphQLErrors(let messages):
             return "GitHub API error: \(messages.joined(separator: "; "))"
         case .decodeResponse(let detail):
@@ -196,6 +199,7 @@ enum AppError: LocalizedError, Sendable, Hashable {
         case .rateLimited,
              .network,
              .serverError,
+             .requestRejected,
              .graphQLErrors,
              .decodeResponse,
              .bookmarkCreationFailed,

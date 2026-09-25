@@ -284,29 +284,6 @@ struct DashboardViewModelTests {
         #expect(viewModel.badgeCount == 0)
     }
 
-    @Test("markBadgeAsSeen resets badgeCount to zero")
-    func markBadgeAsSeen() async throws {
-        let pr1 = try makePullRequest(number: 1, title: "PR 1")
-        let pr2 = try makePullRequest(number: 2, title: "PR 2")
-
-        let defaults = try #require(UserDefaults(suiteName: "BadgeSeen"))
-        defaults.removePersistentDomain(forName: "BadgeSeen")
-        let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
-        let view1 = DashboardView(id: UUID(), title: "View 1", query: "is:pr")
-        viewModel.addView(view1)
-        viewModel.setBadge(for: view1.id, enabled: true)
-
-        await mockClient.setPullRequestsToReturn([pr1])
-        await viewModel.refresh(viewID: view1.id)
-        await mockClient.setPullRequestsToReturn([pr1, pr2])
-        await viewModel.refresh(viewID: view1.id)
-        #expect(viewModel.badgeCount == 1)
-
-        viewModel.markBadgeAsSeen()
-        #expect(viewModel.badgeCount == 0)
-    }
-
     @Test("isBadgeEnabled and setBadge toggle correctly")
     func badgeToggle() throws {
         let (viewModel, viewID) = try makeViewModel(suiteName: "DashboardViewModelTests.BadgeToggle")

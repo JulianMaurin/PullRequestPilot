@@ -27,7 +27,7 @@ struct ViewState: Sendable {
 
 @MainActor
 @Observable
-final class DashboardViewModel: DashboardActionsProtocol {
+final class DashboardViewModel {
 
     // MARK: - Collaborators
 
@@ -207,10 +207,6 @@ final class DashboardViewModel: DashboardActionsProtocol {
         }
     }
 
-    func markBadgeAsSeen() {
-        badgeTracker.markAsSeen()
-    }
-
     func markBadgeAsSeenForSelectedView() {
         guard let viewID = selectedViewID else { return }
         let prIDs = Set(fetcher.state(for: viewID).pullRequests.map(\.id))
@@ -300,10 +296,6 @@ final class DashboardViewModel: DashboardActionsProtocol {
         groupedCache = GroupedCache(viewID: viewID, prs: prs, groups: groups)
         groupedRecomputeCount &+= 1
         return groups
-    }
-
-    func groupedByOrgAndRepo(_ pullRequests: [PullRequest]) -> [OrgGroup] {
-        PRGrouping.groupedByOrgAndRepo(pullRequests)
     }
 
     // MARK: - Refresh
@@ -519,7 +511,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
             ))
             return
         } catch {
-            reporter.postError(appError(from: error))
+            reporter.postError(error.asAppError)
             return
         }
         reporter.postInfo(isDraft ? "#\(pr.number) converted to draft." : "#\(pr.number) marked as ready for review.")

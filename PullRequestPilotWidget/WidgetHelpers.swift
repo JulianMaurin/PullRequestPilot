@@ -1,27 +1,5 @@
 import SwiftUI
 
-// MARK: - Color Palette
-
-enum WidgetColors {
-    static func reviewColor(for decision: String?) -> Color {
-        switch decision {
-        case "APPROVED": .green
-        case "CHANGES_REQUESTED": .red
-        case "REVIEW_REQUIRED": .orange
-        default: .secondary
-        }
-    }
-
-    static func checkColor(for status: String?) -> Color {
-        switch status {
-        case "SUCCESS": .green
-        case "FAILURE", "ERROR": .red
-        case "PENDING", "EXPECTED": .orange
-        default: .secondary
-        }
-    }
-}
-
 // MARK: - CI Status Icon (matches app's checkStatusBadge)
 
 struct WidgetCheckStatusIcon: View {
@@ -42,39 +20,6 @@ struct WidgetCheckStatusIcon: View {
         case "FAILURE", "ERROR": return ("xmark", .red)
         default: return nil
         }
-    }
-}
-
-// MARK: - Review Decision Icon (kept for summary pills)
-
-struct ReviewDecisionIcon: View {
-    let decision: String?
-
-    var body: some View {
-        Image(systemName: iconName)
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(WidgetColors.reviewColor(for: decision))
-    }
-
-    private var iconName: String {
-        switch decision {
-        case "APPROVED": "checkmark.circle.fill"
-        case "CHANGES_REQUESTED": "xmark.circle.fill"
-        case "REVIEW_REQUIRED": "clock.fill"
-        default: "circle.dashed"
-        }
-    }
-}
-
-// MARK: - Check Status Dot (kept for summary pills)
-
-struct CheckStatusDot: View {
-    let status: String?
-
-    var body: some View {
-        Circle()
-            .fill(WidgetColors.checkColor(for: status))
-            .frame(width: 6, height: 6)
     }
 }
 

@@ -12,10 +12,6 @@ final class TaskMap: Sendable {
 
     private let storage = OSAllocatedUnfairLock<[UUID: Entry]>(initialState: [:])
 
-    func task(for key: UUID) -> Task<Void, Never>? {
-        storage.withLock { $0[key]?.task }
-    }
-
     /// Returns the pending task only when its label matches. Joining is
     /// keyed on (view, query): a pending fetch for a different query is
     /// superseded input, and joining it would return the old query's results
@@ -262,11 +258,11 @@ final class PRFetcher {
             guard !Task.isCancelled else { return }
             logger.error("Failed to fetch PRs for '\(view.title, privacy: .public)': \(error, privacy: .public)")
             states[view.id]?.isNetworkError = error.isNetworkError
-            states[view.id]?.error = error.localizedDescription
+            states[view.id]?.error = error.asAppError.errorDescription
             if let clientError = error as? GitHubClientError, case .rateLimited(let retryAfter) = clientError {
                 states[view.id]?.rateLimitRetryAfter = retryAfter
             }
-            reporter.post(.error(appError(from: error)))
+            reporter.post(.error(error.asAppError))
         }
 
         states[view.id]?.isLoading = false
@@ -330,11 +326,11 @@ final class PRFetcher {
             }
             logger.error("Failed to load more PRs for '\(view.title, privacy: .public)': \(error, privacy: .public)")
             states[view.id]?.isNetworkError = error.isNetworkError
-            states[view.id]?.error = error.localizedDescription
+            states[view.id]?.error = error.asAppError.errorDescription
             if let clientError = error as? GitHubClientError, case .rateLimited(let retryAfter) = clientError {
                 states[view.id]?.rateLimitRetryAfter = retryAfter
             }
-            reporter.post(.error(appError(from: error)))
+            reporter.post(.error(error.asAppError))
         }
 
         states[view.id]?.isLoadingMore = false

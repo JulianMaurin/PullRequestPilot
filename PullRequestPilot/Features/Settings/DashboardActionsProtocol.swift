@@ -1,8 +1,9 @@
 import Foundation
 import Observation
 
-/// Defines the dashboard capabilities that SettingsView needs,
-/// decoupling it from the concrete DashboardViewModel type.
+/// The dashboard capabilities SettingsView needs. Settings owns the protocol
+/// so it never names the Dashboard feature; `AppState` declares the
+/// conformance.
 @MainActor
 protocol DashboardActionsProtocol: Observable, AnyObject {
     var views: [DashboardView] { get }

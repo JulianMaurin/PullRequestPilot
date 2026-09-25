@@ -372,9 +372,9 @@ struct PRFetcherTests {
         let second: Task<Void, Never> = Task {}
         map.insert(first, for: key)
         map.removeIfIdentical(second, for: key)
-        #expect(map.task(for: key) == first)
+        #expect(map.task(for: key, label: nil) == first)
         map.removeIfIdentical(first, for: key)
-        #expect(map.task(for: key) == nil)
+        #expect(map.task(for: key, label: nil) == nil)
     }
 
     // MARK: - query-edit supersession
