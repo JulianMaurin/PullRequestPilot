@@ -48,7 +48,7 @@ struct PullRequestRowView<RowMenu: View>: View {
     @ViewBuilder
     private func filterMenuItems(_ onFilterBy: @escaping (String) -> Void) -> some View {
         Button {
-            onFilterBy("author:\(pullRequest.author.login)")
+            onFilterBy("author:\(pullRequest.author.searchQualifierValue)")
         } label: {
             SwiftUI.Label(
                 "Filter by author \"\(pullRequest.author.login)\"",
@@ -57,7 +57,7 @@ struct PullRequestRowView<RowMenu: View>: View {
         }
 
         Button {
-            onFilterBy("-author:\(pullRequest.author.login)")
+            onFilterBy("-author:\(pullRequest.author.searchQualifierValue)")
         } label: {
             SwiftUI.Label(
                 "Exclude author \"\(pullRequest.author.login)\"",

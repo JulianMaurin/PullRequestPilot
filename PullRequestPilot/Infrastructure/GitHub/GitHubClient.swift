@@ -6,7 +6,29 @@ import os
 struct PullRequestPage: Sendable {
     let pullRequests: [PullRequest]
     let nextCursor: String?
-    let skippedNodeCount: Int
+    /// Issues or discussions the query matched; only pull requests are listed.
+    let nonPullRequestCount: Int
+    /// Matches GitHub withheld (e.g. SAML SSO); `partialErrorMessages` says why.
+    let withheldResultCount: Int
+    let undecodablePullRequestCount: Int
+    /// GitHub's messages for errors returned alongside data, de-duplicated.
+    let partialErrorMessages: [String]
+
+    init(
+        pullRequests: [PullRequest],
+        nextCursor: String?,
+        nonPullRequestCount: Int = 0,
+        withheldResultCount: Int = 0,
+        undecodablePullRequestCount: Int = 0,
+        partialErrorMessages: [String] = []
+    ) {
+        self.pullRequests = pullRequests
+        self.nextCursor = nextCursor
+        self.nonPullRequestCount = nonPullRequestCount
+        self.withheldResultCount = withheldResultCount
+        self.undecodablePullRequestCount = undecodablePullRequestCount
+        self.partialErrorMessages = partialErrorMessages
+    }
 }
 
 struct TimelinePage: Sendable {
@@ -171,16 +193,25 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             throw GitHubClientError.graphQLErrors(messages)
         }
 
-        let prs = data.search.nodes.compactMap { $0.toDomain() }
-        let skipped = data.search.skippedNodeCount
-        if skipped > 0 {
-            logger.warning("Skipped \(skipped, privacy: .public) node(s) that failed to decode as pull requests")
+        let search = data.search
+        let prs = search.nodes.compactMap { $0.toDomain() }
+        if search.undecodablePullRequestCount > 0 || search.withheldResultCount > 0 {
+            logger.warning("Search hid \(search.withheldResultCount, privacy: .public) withheld and \(search.undecodablePullRequestCount, privacy: .public) undecodable pull request(s)")
         }
-        logger.info("Page returned \(data.search.nodes.count, privacy: .public) node(s), mapped \(prs.count, privacy: .public) PR(s)")
+        logger.info("Page returned \(search.nodes.count, privacy: .public) node(s), mapped \(prs.count, privacy: .public) PR(s)")
 
-        let rawCursor = data.search.pageInfo.hasNextPage ? data.search.pageInfo.endCursor : nil
+        let rawCursor = search.pageInfo.hasNextPage ? search.pageInfo.endCursor : nil
         let nextCursor = rawCursor?.isEmpty == false ? rawCursor : nil
-        return PullRequestPage(pullRequests: prs, nextCursor: nextCursor, skippedNodeCount: skipped)
+        var seenMessages = Set<String>()
+        let partialErrorMessages = (response.errors ?? []).map(\.message).filter { seenMessages.insert($0).inserted }
+        return PullRequestPage(
+            pullRequests: prs,
+            nextCursor: nextCursor,
+            nonPullRequestCount: search.nonPullRequestCount,
+            withheldResultCount: search.withheldResultCount,
+            undecodablePullRequestCount: search.undecodablePullRequestCount,
+            partialErrorMessages: partialErrorMessages
+        )
     }
 
     func fetchTimeline(nodeID: String, cursor: String? = nil, eventPageOffset: Int = 0, checksPageOffset: Int = 0) async throws -> TimelinePage {
@@ -197,7 +228,7 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         }
 
         guard let prNode = data.node else {
-            return TimelinePage(events: [], checkRuns: [], reviewers: [], nextCursor: nil, checksNextCursor: nil)
+            throw Self.unavailablePullRequestError(response.errors)
         }
 
         let events = prNode.timelineItems?.toDomain(pageOffset: eventPageOffset) ?? []
@@ -225,8 +256,11 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             throw GitHubClientError.graphQLErrors(messages)
         }
 
-        let checkRuns = data.node?.commits?.toDomain(pageOffset: checksPageOffset) ?? []
-        let pageInfo = data.node?.commits?.nodes.first?.commit.statusCheckRollup?.contexts.pageInfo
+        guard let prNode = data.node else {
+            throw Self.unavailablePullRequestError(response.errors)
+        }
+        let checkRuns = prNode.commits?.toDomain(pageOffset: checksPageOffset) ?? []
+        let pageInfo = prNode.commits?.nodes.first?.commit.statusCheckRollup?.contexts.pageInfo
         let rawCheckCursor = pageInfo?.hasNextPage == true ? pageInfo?.endCursor : nil
         let nextCursor = rawCheckCursor?.isEmpty == false ? rawCheckCursor : nil
         return ChecksPage(checkRuns: checkRuns, nextCursor: nextCursor)
@@ -256,6 +290,13 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
     }
 
     // MARK: - Private
+
+    /// `node: null`: the PR was deleted, transferred, or the token lost access
+    /// (SAML SSO included). GitHub's own messages name the cause when present.
+    private static func unavailablePullRequestError(_ errors: [GraphQLError]?) -> GitHubClientError {
+        let messages = (errors ?? []).map(\.message)
+        return .graphQLErrors(messages.isEmpty ? ["This pull request is no longer available."] : messages)
+    }
 
     private func viewerResult(from response: GraphQLResponse<ViewerData>) throws -> (login: String, avatarURL: URL?) {
         if let errors = response.errors, !errors.isEmpty, response.data != nil {
@@ -324,19 +365,24 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             if let httpResponse = response as? HTTPURLResponse {
                 switch httpResponse.statusCode {
                 case 200...299:
-                    break
+                    // GitHub reports the GraphQL rate limits as HTTP 200 with
+                    // an error body, not as a 403/429.
+                    if Self.isGraphQLRateLimited(response: httpResponse, body: data) {
+                        throw GitHubClientError.rateLimited(retryAfter: Self.rateLimitWait(from: httpResponse))
+                    }
                 case 401:
                     onUnauthorized(token)
                     throw GitHubClientError.unauthorized
                 case 403:
-                    // Only treat 403 as rate-limit when the rate-limit headers say so.
-                    // A bare 403 with no rate headers is a permission/scope error.
-                    if Self.isRateLimited(response: httpResponse) {
-                        throw GitHubClientError.rateLimited(retryAfter: Self.parseRetryAfter(from: httpResponse))
+                    // A 403 is a rate limit only when the headers or the message
+                    // say so; otherwise it's a permission/scope error.
+                    let message = Self.extractErrorMessage(from: data)
+                    if Self.isRateLimited(response: httpResponse) || Self.mentionsRateLimit(message) {
+                        throw GitHubClientError.rateLimited(retryAfter: Self.rateLimitWait(from: httpResponse))
                     }
-                    throw GitHubClientError.permissionDenied(detail: Self.extractErrorMessage(from: data))
+                    throw GitHubClientError.permissionDenied(detail: message)
                 case 429:
-                    throw GitHubClientError.rateLimited(retryAfter: Self.parseRetryAfter(from: httpResponse))
+                    throw GitHubClientError.rateLimited(retryAfter: Self.rateLimitWait(from: httpResponse))
                 case 400...499:
                     throw GitHubClientError.clientError(statusCode: httpResponse.statusCode)
                 case 500...599:
@@ -367,6 +413,30 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             return true
         }
         return false
+    }
+
+    /// A 200 carrying GraphQL errors is rate-limited when GitHub types it
+    /// `RATE_LIMITED`, the message says so (secondary limits), or the quota
+    /// header reads zero. Bodies without an `errors` key skip the decode.
+    static func isGraphQLRateLimited(response: HTTPURLResponse, body: Data) -> Bool {
+        guard body.range(of: Data(#""errors""#.utf8)) != nil,
+              let errors = try? JSONDecoder().decode(GraphQLErrorResponse.self, from: body).errors,
+              !errors.isEmpty
+        else { return false }
+        if errors.contains(where: { $0.type == "RATE_LIMITED" || mentionsRateLimit($0.message) }) {
+            return true
+        }
+        return response.value(forHTTPHeaderField: "X-RateLimit-Remaining") == "0"
+    }
+
+    static func mentionsRateLimit(_ message: String?) -> Bool {
+        message?.localizedCaseInsensitiveContains("rate limit") == true
+    }
+
+    /// GitHub's guidance: honor Retry-After, else wait for the quota reset,
+    /// else wait at least a minute.
+    static func rateLimitWait(from response: HTTPURLResponse) -> TimeInterval {
+        parseRetryAfter(from: response) ?? 60
     }
 
     static func extractErrorMessage(from data: Data) -> String? {

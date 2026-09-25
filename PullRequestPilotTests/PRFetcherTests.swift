@@ -18,8 +18,7 @@ struct PRFetcherTests {
     private static func page(ids: [String], cursor: String?) -> PullRequestPage {
         PullRequestPage(
             pullRequests: ids.map { TestPullRequestFactory.make(id: $0) },
-            nextCursor: cursor,
-            skippedNodeCount: 0
+            nextCursor: cursor
         )
     }
 
@@ -93,6 +92,31 @@ struct PRFetcherTests {
         #expect(state.pullRequests.map(\.id) == ["PR_1"])
         #expect(state.isLoading == false)
         #expect(state.error == nil)
+    }
+
+    // MARK: - hidden results notice
+
+    @Test("withheld results explain themselves with GitHub's reason")
+    func hiddenResultsNoticeForWithheldResults() {
+        let page = PullRequestPage(
+            pullRequests: [],
+            nextCursor: nil,
+            withheldResultCount: 3,
+            partialErrorMessages: ["Resource protected by organization SAML enforcement."]
+        )
+        #expect(PRFetcher.hiddenResultsNotice(for: page) == "GitHub withheld 3 results. Resource protected by organization SAML enforcement.")
+    }
+
+    @Test("undecodable pull requests are reported with where to look")
+    func hiddenResultsNoticeForUndecodablePullRequests() {
+        let page = PullRequestPage(pullRequests: [], nextCursor: nil, undecodablePullRequestCount: 1)
+        #expect(PRFetcher.hiddenResultsNotice(for: page) == "1 pull request couldn't be read and is hidden; Help › Export Logs… has the details.")
+    }
+
+    @Test("a complete page has no notice, and non-PR matches aren't hidden results")
+    func noHiddenResultsNotice() {
+        let page = PullRequestPage(pullRequests: [], nextCursor: nil, nonPullRequestCount: 4)
+        #expect(PRFetcher.hiddenResultsNotice(for: page) == nil)
     }
 
     // MARK: - onFetched contract

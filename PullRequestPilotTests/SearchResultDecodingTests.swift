@@ -49,11 +49,7 @@ struct SearchResultDecodingTests {
         let json = """
         {
             "nodes": [
-                {
-                    "id": "ISSUE_1",
-                    "title": "Bug report",
-                    "url": "https://github.com/owner/repo/issues/1"
-                },
+                {"__typename": "Issue"},
                 {
                     "id": "PR_2",
                     "number": 99,
@@ -86,6 +82,8 @@ struct SearchResultDecodingTests {
         // Should only contain the valid PR node, skipping the Issue
         #expect(result.nodes.count == 1)
         #expect(result.nodes[0].id == "PR_2")
+        #expect(result.nonPullRequestCount == 1)
+        #expect(result.undecodablePullRequestCount == 0)
         #expect(result.pageInfo.hasNextPage == true)
         #expect(result.pageInfo.endCursor == "cursor_abc")
     }
@@ -108,8 +106,8 @@ struct SearchResultDecodingTests {
         let json = """
         {
             "nodes": [
-                {"id": "ISSUE_1", "title": "Bug 1"},
-                {"id": "ISSUE_2", "title": "Bug 2"},
+                {"__typename": "Issue"},
+                {"__typename": "Discussion"},
                 {"garbage": true}
             ],
             "pageInfo": {"hasNextPage": false, "endCursor": null}
@@ -118,6 +116,7 @@ struct SearchResultDecodingTests {
         let data = json.data(using: .utf8)!
         let result = try JSONDecoder().decode(SearchResult.self, from: data)
         #expect(result.nodes.isEmpty)
+        #expect(result.nonPullRequestCount == 3)
     }
 
     @Test("skips null nodes and keeps surrounding PRs", .timeLimit(.minutes(1)))
@@ -127,7 +126,7 @@ struct SearchResultDecodingTests {
             "nodes": [
                 \(makePRNodeJSON(id: "PR_1", number: 1)),
                 null,
-                {"id": "ISSUE_1", "title": "Bug report"},
+                {"__typename": "Issue"},
                 null,
                 \(makePRNodeJSON(id: "PR_2", number: 2))
             ],
@@ -138,8 +137,9 @@ struct SearchResultDecodingTests {
         let result = try JSONDecoder().decode(SearchResult.self, from: data)
         #expect(result.nodes.count == 2)
         #expect(result.nodes.map(\.id) == ["PR_1", "PR_2"])
-        // Nulls are not "skipped nodes with an id" — only the Issue counts.
-        #expect(result.skippedNodeCount == 1)
+        #expect(result.nonPullRequestCount == 1)
+        #expect(result.withheldResultCount == 2)
+        #expect(result.undecodablePullRequestCount == 0)
     }
 
     @Test("handles all-null nodes", .timeLimit(.minutes(1)))
@@ -153,7 +153,25 @@ struct SearchResultDecodingTests {
         let data = try #require(json.data(using: .utf8))
         let result = try JSONDecoder().decode(SearchResult.self, from: data)
         #expect(result.nodes.isEmpty)
-        #expect(result.skippedNodeCount == 0)
+        #expect(result.withheldResultCount == 2)
+        #expect(result.nonPullRequestCount == 0)
+    }
+
+    @Test("a pull request that fails to decode counts as undecodable, not as an issue")
+    func undecodablePullRequestCounted() throws {
+        let json = """
+        {
+            "nodes": [
+                {"__typename": "PullRequest", "id": "PR_BROKEN", "number": "not-a-number"},
+                \(makePRNodeJSON(id: "PR_1", number: 1))
+            ],
+            "pageInfo": {"hasNextPage": false, "endCursor": null}
+        }
+        """
+        let result = try JSONDecoder().decode(SearchResult.self, from: Data(json.utf8))
+        #expect(result.nodes.map(\.id) == ["PR_1"])
+        #expect(result.undecodablePullRequestCount == 1)
+        #expect(result.nonPullRequestCount == 0)
     }
 
     @Test("throws on a scalar node instead of looping", .timeLimit(.minutes(1)))

@@ -133,14 +133,17 @@ final class LocalRepositoryService {
         let prSha = pr.headCommitSha
 
         let matchingRepos = repoIndex.filter { $0.nameWithOwner == nameWithOwner }
+        // A fork's branch name says nothing about the local clone's branch of
+        // the same name, so fork PRs match by head commit only.
+        let matchByBranch = !pr.isCrossRepository
 
         for repo in matchingRepos {
-            if repo.currentBranch == headRef {
+            if matchByBranch, repo.currentBranch == headRef {
                 return LocalRepoMatch(path: repo.path, matchKind: .exactBranch)
             }
 
             for worktree in repo.worktrees {
-                if worktree.branch == headRef {
+                if matchByBranch, worktree.branch == headRef {
                     return LocalRepoMatch(path: worktree.path, matchKind: .worktreeBranch)
                 }
             }

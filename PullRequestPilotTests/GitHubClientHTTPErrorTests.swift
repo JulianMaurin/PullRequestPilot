@@ -63,6 +63,103 @@ struct GitHubClientHTTPErrorTests {
         }
     }
 
+    // MARK: - GraphQL rate limits reported as HTTP 200
+
+    /// The wait carried by a `.rateLimited` error; records an issue otherwise.
+    private func rateLimitedWait(_ fetch: () async throws -> Void) async -> TimeInterval? {
+        do {
+            try await fetch()
+            Issue.record("Expected rateLimited, but the call succeeded")
+        } catch GitHubClientError.rateLimited(let retryAfter) {
+            return retryAfter
+        } catch {
+            Issue.record("Expected rateLimited, got \(error)")
+        }
+        return nil
+    }
+
+    @Test("HTTP 200 carrying GitHub's RATE_LIMITED error waits until the quota resets")
+    func graphQLPrimaryRateLimit() async throws {
+        let (client, http) = makeClient()
+        let resetAt = Int(Date.now.timeIntervalSince1970 + 600)
+        let body = Data(#"{"errors":[{"type":"RATE_LIMITED","message":"API rate limit exceeded for user ID 1."}]}"#.utf8)
+        http.handler = { request in
+            try TestHTTP.response(for: request, body: body, headers: [
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": String(resetAt),
+            ])
+        }
+
+        let wait = try #require(await rateLimitedWait { _ = try await client.fetchPullRequests(query: "is:pr", cursor: nil) })
+        #expect((590...600).contains(wait))
+    }
+
+    @Test("HTTP 200 secondary rate-limit message waits a minute when no header says otherwise")
+    func graphQLSecondaryRateLimit() async throws {
+        let (client, http) = makeClient()
+        let body = Data(#"{"errors":[{"message":"You have exceeded a secondary rate limit. Please wait a few minutes before you try again."}]}"#.utf8)
+        http.handler = { request in
+            try TestHTTP.response(for: request, body: body)
+        }
+
+        let wait = await rateLimitedWait { _ = try await client.fetchPullRequests(query: "is:pr", cursor: nil) }
+        #expect(wait == 60)
+    }
+
+    @Test("a valid response with the quota just exhausted still decodes")
+    func exhaustedQuotaWithDataDecodes() async throws {
+        let (client, http) = makeClient()
+        let body = Data(#"{"data":{"search":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}"#.utf8)
+        http.handler = { request in
+            try TestHTTP.response(for: request, body: body, headers: ["X-RateLimit-Remaining": "0"])
+        }
+
+        let page = try await client.fetchPullRequests(query: "is:pr", cursor: nil)
+        #expect(page.pullRequests.isEmpty)
+    }
+
+    @Test("validating a token while rate-limited reports a network problem, not an invalid token")
+    func rateLimitedTokenValidationIsNotInvalidToken() async throws {
+        let (client, http) = makeClient()
+        let body = Data(#"{"errors":[{"type":"RATE_LIMITED","message":"API rate limit exceeded for user ID 1."}]}"#.utf8)
+        http.handler = { request in
+            try TestHTTP.response(for: request, body: body, headers: ["X-RateLimit-Remaining": "0"])
+        }
+        let identity = IdentityActorTestFactory.make(github: client)
+
+        do {
+            try await identity.swap(to: "ghp_valid_but_rate_limited")
+            Issue.record("Expected swap to throw")
+        } catch let error as AuthError {
+            #expect(error.reason == .network)
+        }
+    }
+
+    // MARK: - Secondary rate limits on 403 / 429
+
+    @Test("HTTP 403 whose message names a secondary rate limit is rate-limited, not permission-denied")
+    func http403SecondaryRateLimitMessage() async throws {
+        let (client, http) = makeClient()
+        let body = Data(#"{"message":"You have exceeded a secondary rate limit. Please wait a few minutes before you try again."}"#.utf8)
+        http.handler = { request in
+            try TestHTTP.response(for: request, statusCode: 403, body: body)
+        }
+
+        let wait = await rateLimitedWait { _ = try await client.fetchPullRequests(query: "is:pr", cursor: nil) }
+        #expect(wait == 60)
+    }
+
+    @Test("HTTP 429 without Retry-After waits a minute")
+    func http429WithoutRetryAfterWaitsAMinute() async throws {
+        let (client, http) = makeClient()
+        http.handler = { request in
+            try TestHTTP.response(for: request, statusCode: 429)
+        }
+
+        let wait = await rateLimitedWait { _ = try await client.fetchPullRequests(query: "is:pr", cursor: nil) }
+        #expect(wait == 60)
+    }
+
     // MARK: - HTTP 5xx
 
     @Test("throws serverError on HTTP 500 response")

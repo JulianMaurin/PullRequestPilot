@@ -137,18 +137,23 @@ final class AutoRefreshScheduler {
         consecutiveEmptyResults: inout Int,
         defaults: UserDefaults
     ) -> Double {
+        let interval = configuredInterval(defaults: defaults)
+        // Checked first: views keep their rows when a fetch fails, so `hasData`
+        // stays true through a rate limit and must not shortcut the wait.
+        if let wait = result.maxRateLimitWait, wait > 0 {
+            consecutiveEmptyResults = 0
+            return min(max(wait, interval), 3600)
+        }
         if result.hasData {
             consecutiveErrors = 0
             consecutiveEmptyResults = 0
-            return configuredInterval(defaults: defaults)
+            return interval
         }
         if result.hasError {
             consecutiveEmptyResults = 0
-            if let wait = result.maxRateLimitWait, wait > 0 {
-                return min(max(wait, 10), 3600)
-            }
             consecutiveErrors += 1
-            return min(10 * pow(2.0, Double(consecutiveErrors - 1)), 60)
+            // Fast retries at first, never settling below the user's interval.
+            return min(10 * pow(2.0, Double(consecutiveErrors - 1)), max(60, interval))
         }
         if !result.hasViews {
             // No views to refresh — sleep for the user's configured interval

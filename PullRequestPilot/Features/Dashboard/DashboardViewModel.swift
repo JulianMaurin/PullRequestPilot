@@ -13,7 +13,10 @@ struct ViewState: Sendable {
     var rateLimitRetryAfter: TimeInterval?
     var reachedLimit = false
     var rawFetchedCount = 0
-    var skippedPRCount = 0
+    var nonPullRequestCount = 0
+    /// Why GitHub matched results the list can't show (withheld behind SSO,
+    /// undecodable); nil when nothing is hidden.
+    var hiddenResultsNotice: String?
 
     var isEmpty: Bool { pullRequests.isEmpty && !isLoading }
     var hasData: Bool { !pullRequests.isEmpty }

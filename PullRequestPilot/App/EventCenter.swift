@@ -78,9 +78,17 @@ final class EventCenter {
     func post(_ event: AppEvent) {
         logEvent(event)
 
-        if let existing = events.first(where: { existing in
-            !dismissed.contains(existing.id) && existing.payload == event.payload
+        if let index = events.firstIndex(where: { existing in
+            !dismissed.contains(existing.id) && existing.payload.describesSameCondition(as: event.payload)
         }) {
+            let existing = events[index]
+            // Keep the identity, take the newest details (e.g. a later reset time).
+            events[index] = AppEvent(
+                id: existing.id,
+                payload: event.payload,
+                postedAt: existing.postedAt,
+                autoDismissAfter: existing.autoDismissAfter
+            )
             // A recurrence re-shows the toast if it had timed out.
             autoDismissed.remove(existing.id)
             if let duration = existing.autoDismissAfter {

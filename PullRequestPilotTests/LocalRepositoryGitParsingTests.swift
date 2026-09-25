@@ -364,6 +364,40 @@ struct LocalRepositoryGitParsingTests {
         #expect(match?.matchKind == .exactBranch)
     }
 
+    @Test("a fork PR is not matched to a local checkout by branch name")
+    func findLocalDirSkipsBranchMatchForForks() async throws {
+        let tempDir = try makeTempDir()
+        defer { try? fm.removeItem(at: tempDir) }
+
+        let sha = "feedfacefeedfacefeedfacefeedfacefeedface"
+        try createFakeRepo(
+            at: tempDir.appendingPathComponent("repo"),
+            remoteURL: "git@github.com:owner/repo.git",
+            branch: "main",
+            reflogEntries: [
+                "0000000000000000000000000000000000000000 \(sha) Author <a@b.com> 1700000000 +0000\tcommit: fetched fork head"
+            ]
+        )
+
+        let service = LocalRepositoryService()
+        await service.scan(directories: [tempDir])
+
+        let forkOnMain = TestPullRequestFactory.make(
+            repository: Repository(nameWithOwner: "owner/repo"),
+            headRefName: "main",
+            isCrossRepository: true
+        )
+        #expect(service.findLocalDirectory(for: forkOnMain) == nil)
+
+        let fetchedFork = TestPullRequestFactory.make(
+            repository: Repository(nameWithOwner: "owner/repo"),
+            headRefName: "main",
+            headCommitSha: sha,
+            isCrossRepository: true
+        )
+        #expect(service.findLocalDirectory(for: fetchedFork)?.matchKind == .commitMatch)
+    }
+
     @Test("findLocalDirectory matches worktree branch after scan")
     func findLocalDirWorktreeAfterScan() async throws {
         let tempDir = try makeTempDir()

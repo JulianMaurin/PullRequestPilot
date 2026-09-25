@@ -23,99 +23,108 @@ struct ReviewerMappingTests {
         )
     }
 
+    private func makeNode(
+        opinionated: [ReviewNode] = [],
+        latest: [ReviewNode] = [],
+        requests: [ReviewRequestNode] = [],
+        prAuthor: String? = nil
+    ) -> TimelinePullRequestNode {
+        TimelinePullRequestNode(
+            timelineItems: nil,
+            reviewRequests: requests.isEmpty ? nil : ReviewRequestsConnection(nodes: requests),
+            latestOpinionatedReviews: opinionated.isEmpty ? nil : ReviewsConnection(nodes: opinionated),
+            latestReviews: latest.isEmpty ? nil : ReviewsConnection(nodes: latest),
+            commits: nil,
+            author: prAuthor.map { PullRequestNode.AuthorNode(login: $0, avatarUrl: nil) }
+        )
+    }
+
     // MARK: - Basic Mapping
 
     @Test("empty reviews and requests returns empty")
     func emptyReturnsEmpty() {
-        let node = TimelinePullRequestNode(timelineItems: nil, reviewRequests: nil, reviews: nil, commits: nil)
-        let reviewers = node.toReviewers()
-        #expect(reviewers.isEmpty)
+        #expect(makeNode().toReviewers().isEmpty)
     }
 
     @Test("single approved reviewer maps correctly")
     func singleApprovedReviewer() {
-        let node = TimelinePullRequestNode(
-            timelineItems: nil,
-            reviewRequests: nil,
-            reviews: ReviewsConnection(nodes: [makeReviewNode(login: "alice", state: "APPROVED")]),
-            commits: nil
-        )
-        let reviewers = node.toReviewers()
+        let reviewers = makeNode(opinionated: [makeReviewNode(login: "alice", state: "APPROVED")]).toReviewers()
         #expect(reviewers.count == 1)
         #expect(reviewers[0].displayName == "alice")
         #expect(reviewers[0].state == .approved)
         #expect(!reviewers[0].isTeam)
     }
 
-    @Test("multiple review states mapped correctly")
+    @Test("review states map; opinionated reviewers come before comment-only ones")
     func multipleStates() {
-        let node = TimelinePullRequestNode(
-            timelineItems: nil,
-            reviewRequests: nil,
-            reviews: ReviewsConnection(nodes: [
+        let reviewers = makeNode(
+            opinionated: [
                 makeReviewNode(login: "alice", state: "APPROVED"),
                 makeReviewNode(login: "bob", state: "CHANGES_REQUESTED"),
-                makeReviewNode(login: "carol", state: "COMMENTED"),
                 makeReviewNode(login: "dave", state: "DISMISSED"),
-            ]),
-            commits: nil
-        )
-        let reviewers = node.toReviewers()
-        #expect(reviewers.count == 4)
-        #expect(reviewers[0].state == .approved)
-        #expect(reviewers[1].state == .changesRequested)
-        #expect(reviewers[2].state == .commented)
-        #expect(reviewers[3].state == .dismissed)
+            ],
+            latest: [makeReviewNode(login: "carol", state: "COMMENTED")]
+        ).toReviewers()
+        #expect(reviewers.map(\.displayName) == ["alice", "bob", "dave", "carol"])
+        #expect(reviewers.map(\.state) == [.approved, .changesRequested, .dismissed, .commented])
     }
 
-    // MARK: - Deduplication
+    // MARK: - GitHub's rollup rules
 
-    @Test("latest review per author wins")
-    func latestReviewWins() {
-        let node = TimelinePullRequestNode(
-            timelineItems: nil,
-            reviewRequests: nil,
-            reviews: ReviewsConnection(nodes: [
-                makeReviewNode(login: "alice", state: "CHANGES_REQUESTED"),
-                makeReviewNode(login: "alice", state: "APPROVED"),
-            ]),
-            commits: nil
-        )
-        let reviewers = node.toReviewers()
+    @Test("a later thread reply does not demote an approval")
+    func commentDoesNotDemoteApproval() {
+        let reviewers = makeNode(
+            opinionated: [makeReviewNode(login: "alice", state: "APPROVED")],
+            latest: [makeReviewNode(login: "alice", state: "COMMENTED")]
+        ).toReviewers()
         #expect(reviewers.count == 1)
         #expect(reviewers[0].state == .approved)
     }
 
-    @Test("author order is preserved (first appearance)")
-    func authorOrderPreserved() {
-        let node = TimelinePullRequestNode(
-            timelineItems: nil,
-            reviewRequests: nil,
-            reviews: ReviewsConnection(nodes: [
-                makeReviewNode(login: "bob", state: "APPROVED"),
-                makeReviewNode(login: "alice", state: "COMMENTED"),
-                makeReviewNode(login: "bob", state: "CHANGES_REQUESTED"),
-            ]),
-            commits: nil
-        )
-        let reviewers = node.toReviewers()
-        #expect(reviewers.count == 2)
-        #expect(reviewers[0].displayName == "bob")
-        #expect(reviewers[0].state == .changesRequested)
-        #expect(reviewers[1].displayName == "alice")
+    @Test("a later thread reply does not hide a change request")
+    func commentDoesNotDemoteChangeRequest() {
+        let reviewers = makeNode(
+            opinionated: [makeReviewNode(login: "bob", state: "CHANGES_REQUESTED")],
+            latest: [makeReviewNode(login: "bob", state: "COMMENTED")]
+        ).toReviewers()
+        #expect(reviewers.map(\.state) == [.changesRequested])
+    }
+
+    @Test("a comment-only reviewer is listed as commented")
+    func commentOnlyReviewer() {
+        let reviewers = makeNode(latest: [makeReviewNode(login: "carol", state: "COMMENTED")]).toReviewers()
+        #expect(reviewers.map(\.displayName) == ["carol"])
+        #expect(reviewers.map(\.state) == [.commented])
+    }
+
+    @Test("the PR author's own replies don't make them a reviewer")
+    func authorIsNotAReviewer() {
+        let reviewers = makeNode(
+            latest: [
+                makeReviewNode(login: "author", state: "COMMENTED"),
+                makeReviewNode(login: "carol", state: "COMMENTED"),
+            ],
+            prAuthor: "author"
+        ).toReviewers()
+        #expect(reviewers.map(\.displayName) == ["carol"])
+    }
+
+    @Test("a re-requested reviewer shows as awaiting review, not their old verdict")
+    func reRequestedReviewerIsPending() {
+        let reviewers = makeNode(
+            opinionated: [makeReviewNode(login: "alice", state: "CHANGES_REQUESTED")],
+            requests: [makeRequestNode(login: "alice")]
+        ).toReviewers()
+        #expect(reviewers.count == 1)
+        #expect(reviewers[0].displayName == "alice")
+        #expect(reviewers[0].state == .pending)
     }
 
     // MARK: - Requested Reviewers
 
     @Test("pending reviewer added from requests")
     func pendingReviewerFromRequests() {
-        let node = TimelinePullRequestNode(
-            timelineItems: nil,
-            reviewRequests: ReviewRequestsConnection(nodes: [makeRequestNode(login: "alice")]),
-            reviews: nil,
-            commits: nil
-        )
-        let reviewers = node.toReviewers()
+        let reviewers = makeNode(requests: [makeRequestNode(login: "alice")]).toReviewers()
         #expect(reviewers.count == 1)
         #expect(reviewers[0].state == .pending)
         #expect(reviewers[0].displayName == "alice")
@@ -123,53 +132,31 @@ struct ReviewerMappingTests {
 
     @Test("team reviewer has isTeam set and uses name")
     func teamReviewer() {
-        let node = TimelinePullRequestNode(
-            timelineItems: nil,
-            reviewRequests: ReviewRequestsConnection(nodes: [makeRequestNode(typename: "Team", name: "backend-team")]),
-            reviews: nil,
-            commits: nil
-        )
-        let reviewers = node.toReviewers()
+        let reviewers = makeNode(requests: [makeRequestNode(typename: "Team", name: "backend-team")]).toReviewers()
         #expect(reviewers.count == 1)
         #expect(reviewers[0].isTeam)
         #expect(reviewers[0].displayName == "backend-team")
         #expect(reviewers[0].state == .pending)
     }
 
-    @Test("requested reviewer who already reviewed is not duplicated")
-    func requestedReviewerNotDuplicated() {
-        let node = TimelinePullRequestNode(
-            timelineItems: nil,
-            reviewRequests: ReviewRequestsConnection(nodes: [makeRequestNode(login: "alice")]),
-            reviews: ReviewsConnection(nodes: [makeReviewNode(login: "alice", state: "APPROVED")]),
-            commits: nil
-        )
-        let reviewers = node.toReviewers()
-        #expect(reviewers.count == 1)
-        #expect(reviewers[0].state == .approved)
+    @Test("bot reviewers keep their login and stay distinct")
+    func botReviewers() {
+        let reviewers = makeNode(requests: [
+            makeRequestNode(typename: "Bot", login: "copilot-pull-request-reviewer"),
+            makeRequestNode(typename: "Bot", login: "coderabbitai"),
+        ]).toReviewers()
+        #expect(reviewers.map(\.displayName) == ["copilot-pull-request-reviewer", "coderabbitai"])
+        #expect(reviewers.allSatisfy { !$0.isTeam && $0.state == .pending })
     }
 
     @Test("unknown review state is skipped")
     func unknownStateIsSkipped() {
-        let node = TimelinePullRequestNode(
-            timelineItems: nil,
-            reviewRequests: nil,
-            reviews: ReviewsConnection(nodes: [makeReviewNode(login: "alice", state: "UNKNOWN_STATE")]),
-            commits: nil
-        )
-        let reviewers = node.toReviewers()
-        #expect(reviewers.isEmpty)
+        #expect(makeNode(latest: [makeReviewNode(login: "alice", state: "UNKNOWN_STATE")]).toReviewers().isEmpty)
     }
 
     @Test("review with nil author is skipped")
     func nilAuthorSkipped() {
-        let node = TimelinePullRequestNode(
-            timelineItems: nil,
-            reviewRequests: nil,
-            reviews: ReviewsConnection(nodes: [ReviewNode(author: nil, state: "APPROVED")]),
-            commits: nil
-        )
-        let reviewers = node.toReviewers()
-        #expect(reviewers.isEmpty)
+        let node = makeNode(latest: [ReviewNode(author: nil, state: "APPROVED")])
+        #expect(node.toReviewers().isEmpty)
     }
 }

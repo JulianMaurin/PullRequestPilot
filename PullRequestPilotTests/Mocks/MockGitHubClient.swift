@@ -75,8 +75,7 @@ actor MockGitHubClient: GitHubClientProtocol {
         if let errorToThrow { throw errorToThrow }
         return PullRequestPage(
             pullRequests: pullRequestsToReturn,
-            nextCursor: nextCursorToReturn,
-            skippedNodeCount: 0
+            nextCursor: nextCursorToReturn
         )
     }
 

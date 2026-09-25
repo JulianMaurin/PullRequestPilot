@@ -23,6 +23,7 @@ enum TestPullRequestFactory {
         baseRefName: String = "main",
         headRefName: String = "feature-1",
         headCommitSha: String? = nil,
+        isCrossRepository: Bool = false,
         lastActivity: LastActivity? = nil,
         latestReviews: [UserReview] = []
     ) -> PullRequest {
@@ -47,6 +48,7 @@ enum TestPullRequestFactory {
             baseRefName: baseRefName,
             headRefName: headRefName,
             headCommitSha: headCommitSha,
+            isCrossRepository: isCrossRepository,
             lastActivity: lastActivity,
             latestReviews: latestReviews
         )

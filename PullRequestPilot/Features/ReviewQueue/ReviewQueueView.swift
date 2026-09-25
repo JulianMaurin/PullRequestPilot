@@ -543,16 +543,22 @@ struct ReviewQueueView: View {
     }
 
     private var emptyView: some View {
-        let skipped = viewModel.selectedViewState.skippedPRCount
+        let state = viewModel.selectedViewState
+        let nonPullRequests = state.nonPullRequestCount
         return VStack(spacing: 12) {
             Image(systemName: "checkmark.circle")
                 .font(.largeTitle)
                 .foregroundStyle(.green)
             Text("No pull requests")
                 .font(.headline)
-            if skipped > 0 {
+            if let notice = state.hiddenResultsNotice {
+                Text(notice)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+            } else if nonPullRequests > 0 {
                 VStack(spacing: 4) {
-                    Text("Your query matched \(skipped) non-PR \(skipped == 1 ? "item" : "items") (issues, discussions).")
+                    Text("Your query matched \(nonPullRequests) non-PR \(nonPullRequests == 1 ? "item" : "items") (issues, discussions).")
                         .foregroundStyle(.secondary)
                     Text("Add `is:pr` to filter to pull requests.")
                         .font(.caption)
@@ -568,6 +574,21 @@ struct ReviewQueueView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private func hiddenResultsRow(_ notice: String) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "eye.slash")
+                .foregroundStyle(.orange)
+            Text(notice)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .font(.caption)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+    }
+
     private var listView: some View {
         // Memoized on the view model — repeated body evaluations within a
         // render cycle return the cached grouping in O(1). See FINDING-005.
@@ -578,6 +599,9 @@ struct ReviewQueueView: View {
         // 30 s. See FINDING-019.
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
+                if let notice = viewModel.selectedViewState.hiddenResultsNotice {
+                    hiddenResultsRow(notice)
+                }
                 ForEach(Array(grouped.enumerated()), id: \.element.org) { _, orgGroup in
                     orgSection(orgGroup)
                 }

@@ -197,6 +197,65 @@ struct GitHubClientTests {
         #expect(capturedRequest?.httpMethod == "POST")
     }
 
+    // MARK: - Partial results
+
+    @Test("results withheld behind SAML come back counted, with GitHub's reason once")
+    func partialErrorsReturnedWithPage() async throws {
+        let (client, http) = makeClient()
+        let samlMessage = "Resource protected by organization SAML enforcement. You must grant your Personal Access token access to this organization."
+        let samlError = #"{"type": "FORBIDDEN", "message": "\#(samlMessage)"}"#
+        let response = """
+        {
+            "data": {
+                "search": {
+                    "nodes": [null, null, \(makePullRequestNodeJSON())],
+                    "pageInfo": {"hasNextPage": false, "endCursor": null}
+                }
+            },
+            "errors": [\(samlError), \(samlError)]
+        }
+        """
+        http.handler = { request in
+            try TestHTTP.response(for: request, body: Data(response.utf8))
+        }
+
+        let page = try await client.fetchPullRequests(query: "is:pr", cursor: nil)
+
+        #expect(page.pullRequests.map(\.id) == ["PR_1"])
+        #expect(page.withheldResultCount == 2)
+        #expect(page.partialErrorMessages == [samlMessage])
+    }
+
+    @Test("a PR that no longer resolves throws GitHub's reason instead of an empty timeline")
+    func fetchTimelineNullNodeThrows() async {
+        let (client, http) = makeClient()
+        let body = #"{"data": {"node": null}, "errors": [{"type": "NOT_FOUND", "message": "Could not resolve to a node with the global id of 'PR_gone'"}]}"#
+        http.handler = { request in
+            try TestHTTP.response(for: request, body: Data(body.utf8))
+        }
+
+        do {
+            _ = try await client.fetchTimeline(nodeID: "PR_gone", cursor: nil, eventPageOffset: 0, checksPageOffset: 0)
+            Issue.record("Should have thrown")
+        } catch GitHubClientError.graphQLErrors(let messages) {
+            #expect(messages == ["Could not resolve to a node with the global id of 'PR_gone'"])
+        } catch {
+            Issue.record("Expected graphQLErrors, got \(error)")
+        }
+    }
+
+    @Test("a null PR node without errors still reports the PR as unavailable")
+    func fetchTimelineNullNodeWithoutErrorsThrows() async {
+        let (client, http) = makeClient()
+        http.handler = { request in
+            try TestHTTP.response(for: request, body: Data(#"{"data": {"node": null}}"#.utf8))
+        }
+
+        await #expect(throws: GitHubClientError.self) {
+            _ = try await client.fetchTimeline(nodeID: "PR_gone", cursor: nil, eventPageOffset: 0, checksPageOffset: 0)
+        }
+    }
+
     // MARK: - Draft State Mutation
 
     @Test("setDraft sends the convert mutation and accepts the draft result")
@@ -272,6 +331,36 @@ struct GitHubClientTests {
             data.append(buffer, count: count)
         }
         return String(bytes: data, encoding: .utf8) ?? ""
+    }
+
+    private func makePullRequestNodeJSON() -> String {
+        """
+        {
+            "__typename": "PullRequest",
+            "id": "PR_1",
+            "number": 1,
+            "title": "Test PR",
+            "url": "https://github.com/owner/repo/pull/1",
+            "createdAt": "2024-01-15T10:30:00.000Z",
+            "updatedAt": "2024-01-16T14:00:00.000Z",
+            "additions": 5,
+            "deletions": 2,
+            "state": "OPEN",
+            "isDraft": false,
+            "reviewDecision": "REVIEW_REQUIRED",
+            "commits": {"nodes": []},
+            "baseRefName": "main",
+            "headRefName": "feature",
+            "headRefOid": "sha123",
+            "isCrossRepository": false,
+            "repository": {"nameWithOwner": "owner/repo"},
+            "author": {"__typename": "User", "login": "dev", "avatarUrl": null},
+            "reviewThreads": {"totalCount": 0, "nodes": []},
+            "latestReviews": {"nodes": []},
+            "labels": {"nodes": []},
+            "timelineItems": {"nodes": []}
+        }
+        """
     }
 
     private func makeSearchResponseJSON(hasNextPage: Bool = false, endCursor: String? = nil) -> String {

@@ -15,6 +15,13 @@ struct PresetViewsTests {
         return DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
     }
 
+    @Test("presets don't pin a base branch, so repos on master or develop still match")
+    func presetsHaveNoBaseQualifier() {
+        for preset in DashboardView.presetViews {
+            #expect(!preset.query.contains("base:"), "\(preset.title) pins a base branch")
+        }
+    }
+
     // MARK: - presetConflicts
 
     @Test("presetConflicts returns titles that match existing views")

@@ -560,7 +560,7 @@ private actor GatedValidationClient: GitHubClientProtocol {
     }
 
     func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage {
-        PullRequestPage(pullRequests: [], nextCursor: nil, skippedNodeCount: 0)
+        PullRequestPage(pullRequests: [], nextCursor: nil)
     }
 
     func fetchTimeline(nodeID: String, cursor: String?, eventPageOffset: Int, checksPageOffset: Int) async throws -> TimelinePage {

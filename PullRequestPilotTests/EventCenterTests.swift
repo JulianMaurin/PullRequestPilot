@@ -48,6 +48,22 @@ struct EventCenterTests {
         #expect(center.activeEvents.count == 1)
     }
 
+    @Test("rate-limit errors with different reset times share one event carrying the newest time")
+    func rateLimitErrorsCoalesceAcrossResetTimes() throws {
+        let center = EventCenter()
+        let earlier = Date.now.addingTimeInterval(60)
+        let later = Date.now.addingTimeInterval(120)
+
+        center.post(.error(.rateLimited(resetAt: earlier)))
+        let id = try #require(center.events.first?.id)
+        center.post(.error(.rateLimited(resetAt: later)))
+
+        #expect(center.events.count == 1)
+        #expect(center.activeEvents.count == 1)
+        #expect(center.events.first?.id == id)
+        #expect(center.events.first?.appError == .rateLimited(resetAt: later))
+    }
+
     @Test("same-payload re-post past the old 3s window still coalesces while visible")
     func samePayloadRePost_pastOldDedupeWindow_stillCoalescesWhileVisible() async {
         let clock = TestClock()

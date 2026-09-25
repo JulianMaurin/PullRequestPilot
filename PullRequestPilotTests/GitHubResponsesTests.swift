@@ -354,6 +354,34 @@ struct GitHubResponsesTests {
         """
     }
 
+    @Test("toDomain marks a Bot author so filters can use author:app/")
+    func toDomainMapsBotAuthor() throws {
+        let json = makeFullPRNodeJSON(authorJSON: #"{"__typename": "Bot", "login": "dependabot", "avatarUrl": null}"#)
+        let node = try JSONDecoder().decode(PullRequestNode.self, from: Data(json.utf8))
+        let pr = try #require(node.toDomain())
+        #expect(pr.author.isBot)
+        #expect(pr.author.searchQualifierValue == "app/dependabot")
+    }
+
+    @Test("toDomain keeps a User author as a plain login")
+    func toDomainMapsUserAuthor() throws {
+        let json = makeFullPRNodeJSON(authorJSON: #"{"__typename": "User", "login": "octocat", "avatarUrl": null}"#)
+        let node = try JSONDecoder().decode(PullRequestNode.self, from: Data(json.utf8))
+        let pr = try #require(node.toDomain())
+        #expect(!pr.author.isBot)
+        #expect(pr.author.searchQualifierValue == "octocat")
+    }
+
+    @Test("toDomain maps isCrossRepository, defaulting to false when absent")
+    func toDomainMapsCrossRepository() throws {
+        let fork = try JSONDecoder().decode(PullRequestNode.self, from: Data(makeFullPRNodeJSON(isCrossRepository: true).utf8))
+        #expect(try #require(fork.toDomain()).isCrossRepository)
+
+        let legacyJSON = makeFullPRNodeJSON().replacingOccurrences(of: #""isCrossRepository": false,"#, with: "")
+        let legacy = try JSONDecoder().decode(PullRequestNode.self, from: Data(legacyJSON.utf8))
+        #expect(try #require(legacy.toDomain()).isCrossRepository == false)
+    }
+
     private func makeFullPRNodeJSON(
         url: String = "https://github.com/owner/repo/pull/42",
         createdAt: String = "2024-01-15T10:30:00.000Z",
@@ -364,7 +392,8 @@ struct GitHubResponsesTests {
         reviewThreadsJSON: String = #"{"totalCount": 0, "nodes": []}"#,
         latestReviewsJSON: String = #"{"nodes": []}"#,
         labelsJSON: String = #"{"nodes": []}"#,
-        timelineJSON: String = #"{"nodes": []}"#
+        timelineJSON: String = #"{"nodes": []}"#,
+        isCrossRepository: Bool = false
     ) -> String {
         """
         {
@@ -383,6 +412,7 @@ struct GitHubResponsesTests {
             "baseRefName": "main",
             "headRefName": "fix/thing",
             "headRefOid": "abc123def",
+            "isCrossRepository": \(isCrossRepository),
             "repository": {"nameWithOwner": "owner/repo"},
             "author": \(authorJSON),
             "reviewThreads": \(reviewThreadsJSON),

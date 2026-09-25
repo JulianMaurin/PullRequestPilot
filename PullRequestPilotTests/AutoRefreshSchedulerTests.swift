@@ -222,6 +222,72 @@ struct AutoRefreshSchedulerTests {
         #expect(first == 10)
     }
 
+    // MARK: - rate-limit and error delay policy
+
+    @MainActor
+    @Test("a rate-limit wait applies even while views still show their rows")
+    func rateLimitWaitHonouredWithData() async throws {
+        let (_, defaults, _, _) = try Self.makeScheduler(suiteName: "RateLimitWithData", intervalSeconds: 60)
+        var consecutiveErrors = 0
+        var consecutiveEmptyResults = 0
+        let delay = AutoRefreshScheduler.nextDelay(
+            result: AutoRefreshTickResult(hasData: true, hasError: true, maxRateLimitWait: 900, hasViews: true),
+            consecutiveErrors: &consecutiveErrors,
+            consecutiveEmptyResults: &consecutiveEmptyResults,
+            defaults: defaults
+        )
+        #expect(delay == 900)
+    }
+
+    @MainActor
+    @Test("a short rate-limit wait never polls faster than the configured interval")
+    func rateLimitWaitNeverUndercutsInterval() async throws {
+        let (_, defaults, _, _) = try Self.makeScheduler(suiteName: "RateLimitShortWait", intervalSeconds: 300)
+        var consecutiveErrors = 0
+        var consecutiveEmptyResults = 0
+        let delay = AutoRefreshScheduler.nextDelay(
+            result: AutoRefreshTickResult(hasData: false, hasError: true, maxRateLimitWait: 20, hasViews: true),
+            consecutiveErrors: &consecutiveErrors,
+            consecutiveEmptyResults: &consecutiveEmptyResults,
+            defaults: defaults
+        )
+        #expect(delay == 300)
+    }
+
+    @MainActor
+    @Test("error backoff grows toward a long configured interval instead of capping at a minute")
+    func errorBackoffReachesConfiguredInterval() async throws {
+        let (_, defaults, _, _) = try Self.makeScheduler(suiteName: "ErrorBackoffLong", intervalSeconds: 1800)
+        var consecutiveErrors = 0
+        var consecutiveEmptyResults = 0
+        let delays = (0..<10).map { _ in
+            AutoRefreshScheduler.nextDelay(
+                result: AutoRefreshTickResult(hasData: false, hasError: true, maxRateLimitWait: nil, hasViews: true),
+                consecutiveErrors: &consecutiveErrors,
+                consecutiveEmptyResults: &consecutiveEmptyResults,
+                defaults: defaults
+            )
+        }
+        #expect(delays == [10, 20, 40, 80, 160, 320, 640, 1280, 1800, 1800])
+    }
+
+    @MainActor
+    @Test("error backoff with the default interval still settles at a minute")
+    func errorBackoffDefaultInterval() async throws {
+        let (_, defaults, _, _) = try Self.makeScheduler(suiteName: "ErrorBackoffDefault", intervalSeconds: 60)
+        var consecutiveErrors = 0
+        var consecutiveEmptyResults = 0
+        let delays = (0..<5).map { _ in
+            AutoRefreshScheduler.nextDelay(
+                result: AutoRefreshTickResult(hasData: false, hasError: true, maxRateLimitWait: nil, hasViews: true),
+                consecutiveErrors: &consecutiveErrors,
+                consecutiveEmptyResults: &consecutiveEmptyResults,
+                defaults: defaults
+            )
+        }
+        #expect(delays == [10, 20, 40, 60, 60])
+    }
+
     // MARK: - interval-change notification restarts
 
     @MainActor

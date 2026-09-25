@@ -396,7 +396,7 @@ private actor PaginatingMockGitHubClient: GitHubClientProtocol {
     }
 
     func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage {
-        PullRequestPage(pullRequests: [], nextCursor: nil, skippedNodeCount: 0)
+        PullRequestPage(pullRequests: [], nextCursor: nil)
     }
 
     func fetchViewer() async throws -> (login: String, avatarURL: URL?) {

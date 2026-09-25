@@ -12,6 +12,8 @@ struct GraphQLResponse<T: Decodable>: Decodable {
 
 struct GraphQLError: Decodable {
     let message: String
+    /// GitHub's error class, e.g. `RATE_LIMITED`, `FORBIDDEN`, `NOT_FOUND`.
+    let type: String?
 }
 
 /// Lightweight type for extracting errors when the full response fails to decode.
@@ -28,33 +30,45 @@ struct SearchData: Decodable {
 struct SearchResult: Decodable {
     let nodes: [PullRequestNode]
     let pageInfo: PageInfo
-    let skippedNodeCount: Int
+    /// Issues or discussions the query matched. Only `... on PullRequest`
+    /// fields are selected, so these arrive as `{"__typename": "Issue"}`.
+    let nonPullRequestCount: Int
+    /// Null nodes: matches GitHub withheld, e.g. behind SAML SSO the token
+    /// isn't authorized for. The reasons arrive in the response's `errors`.
+    let withheldResultCount: Int
+    /// Pull request nodes that failed to decode.
+    let undecodablePullRequestCount: Int
 
-    /// Custom decoding: the `type: ISSUE` search can return non-PR nodes that
-    /// lack `... on PullRequest` fields, and the schema allows null elements
-    /// in `nodes`. Decode each node individually and silently skip any that
-    /// fail (e.g. plain Issue nodes) or are null.
+    /// Decodes each node individually so one unexpected node can't fail the
+    /// page, counting every node that doesn't become a pull request by cause.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         pageInfo = try container.decode(PageInfo.self, forKey: .pageInfo)
 
         var nodesContainer = try container.nestedUnkeyedContainer(forKey: .nodes)
         var decoded: [PullRequestNode] = []
-        var skipped = 0
+        var nonPullRequests = 0
+        var withheld = 0
+        var undecodable = 0
         while !nodesContainer.isAtEnd {
             // A null element must be consumed via decodeNil: decoding a
             // concrete type against null throws without advancing
             // currentIndex, so the loop would never terminate.
-            if try nodesContainer.decodeNil() { continue }
-            if let node = try? nodesContainer.decode(PullRequestNode.self) {
-                decoded.append(node)
-            } else {
+            if try nodesContainer.decodeNil() {
+                withheld += 1
+                continue
+            }
+            do {
+                decoded.append(try nodesContainer.decode(PullRequestNode.self))
+            } catch {
                 let indexBefore = nodesContainer.currentIndex
                 // Advance past the undecodable node
                 let skippedNode = try? nodesContainer.decode(SkippedNode.self)
-                if skippedNode?.id != nil {
-                    skipped += 1
-                    searchResultLogger.warning("Skipped node that had an id (possible PR decode failure)")
+                if skippedNode?.typename == "PullRequest" {
+                    undecodable += 1
+                    searchResultLogger.error("Dropped a pull request that failed to decode: \(error, privacy: .public)")
+                } else {
+                    nonPullRequests += 1
                 }
                 // Failed decode attempts do not advance currentIndex; if
                 // neither attempt consumed the element, fail the decode
@@ -68,16 +82,23 @@ struct SearchResult: Decodable {
             }
         }
         nodes = decoded
-        skippedNodeCount = skipped
+        nonPullRequestCount = nonPullRequests
+        withheldResultCount = withheld
+        undecodablePullRequestCount = undecodable
     }
 
     private enum CodingKeys: String, CodingKey {
         case nodes, pageInfo
     }
 
-    /// Lightweight type to advance past a skipped node and detect if it was a PR.
+    /// Advances past a node that isn't a decodable pull request and says
+    /// whether it was one.
     private struct SkippedNode: Decodable {
-        let id: String?
+        let typename: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case typename = "__typename"
+        }
     }
 }
 
@@ -102,6 +123,7 @@ struct PullRequestNode: Decodable {
     let baseRefName: String
     let headRefName: String
     let headRefOid: String?
+    let isCrossRepository: Bool?
     let repository: RepositoryNode
     let author: AuthorNode?
     let reviewThreads: ReviewThreadsConnection?
@@ -115,6 +137,19 @@ struct PullRequestNode: Decodable {
     struct AuthorNode: Decodable {
         let login: String
         let avatarUrl: String?
+        /// Selected on PR authors only; `Bot` marks a GitHub App account.
+        let typename: String?
+
+        init(login: String, avatarUrl: String?, typename: String? = nil) {
+            self.login = login
+            self.avatarUrl = avatarUrl
+            self.typename = typename
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case login, avatarUrl
+            case typename = "__typename"
+        }
     }
 
     struct CommitsConnection: Decodable {
@@ -224,8 +259,14 @@ struct TimelineNodeData: Decodable {
 struct TimelinePullRequestNode: Decodable {
     let timelineItems: TimelineItemsConnection?
     let reviewRequests: ReviewRequestsConnection?
-    let reviews: ReviewsConnection?
+    /// Latest approve / request-changes per user, including users whose
+    /// review was re-requested.
+    let latestOpinionatedReviews: ReviewsConnection?
+    /// Latest review of any state per user, excluding users with a pending
+    /// request. Supplies comment-only reviewers.
+    let latestReviews: ReviewsConnection?
     let commits: CheckRunCommitsConnection?
+    let author: PullRequestNode.AuthorNode?
 }
 
 // MARK: - Reviewer DTOs
@@ -264,48 +305,62 @@ struct ReviewNode: Decodable {
 }
 
 extension TimelinePullRequestNode {
+    /// GitHub's reviewer rollup: an approve or request-changes stands until a
+    /// later one replaces it (thread replies are COMMENTED reviews and must not
+    /// demote it), a pending request shows as awaiting even over an earlier
+    /// review, and the PR author's own replies don't make them a reviewer.
     func toReviewers() -> [Reviewer] {
-        var reviewers: [Reviewer] = []
-        var seen = Set<String>()
+        let prAuthor = author?.login
+        var states: [String: (state: ReviewerState, avatarUrl: String?)] = [:]
+        var order: [String] = []
 
-        // Keep the latest review per author (last occurrence in the list wins).
-        var latestState: [String: (state: ReviewerState, avatarUrl: String?)] = [:]
-        var authorOrder: [String] = []
-
-        for node in (reviews?.nodes ?? []) {
-            guard let author = node.author else { continue }
-            let state: ReviewerState
-            switch node.state {
-            case "APPROVED": state = .approved
-            case "CHANGES_REQUESTED": state = .changesRequested
-            case "COMMENTED": state = .commented
-            case "DISMISSED": state = .dismissed
-            default: continue
-            }
-            if latestState[author.login] == nil {
-                authorOrder.append(author.login)
-            }
-            latestState[author.login] = (state, author.avatarUrl)
+        func record(_ node: ReviewNode) {
+            guard let reviewAuthor = node.author, reviewAuthor.login != prAuthor,
+                  let state = Self.reviewerState(node.state),
+                  states[reviewAuthor.login] == nil
+            else { return }
+            order.append(reviewAuthor.login)
+            states[reviewAuthor.login] = (state, reviewAuthor.avatarUrl)
         }
+        (latestOpinionatedReviews?.nodes ?? []).forEach(record)
+        (latestReviews?.nodes ?? []).forEach(record)
 
-        for login in authorOrder {
-            guard let entry = latestState[login], seen.insert(login).inserted else { continue }
-            let avatarURL = entry.avatarUrl.flatMap(URL.init)
-            reviewers.append(Reviewer(id: login, displayName: login, avatarURL: avatarURL, isTeam: false, state: entry.state))
-        }
-
-        // Then, add requested reviewers who haven't reviewed yet
-        for node in (reviewRequests?.nodes ?? []) {
-            guard let requested = node.requestedReviewer else { continue }
-            let isTeam = requested.typename == "Team"
-            let displayName = isTeam ? (requested.name ?? "team") : (requested.login ?? "user")
+        var requested: [(id: String, displayName: String, avatarUrl: String?, isTeam: Bool)] = []
+        for node in reviewRequests?.nodes ?? [] {
+            guard let reviewer = node.requestedReviewer else { continue }
+            let isTeam = reviewer.typename == "Team" || reviewer.typename == "EnterpriseTeam"
+            let displayName = (isTeam ? reviewer.name : reviewer.login) ?? reviewer.typename
             let id = isTeam ? "team-\(displayName)" : displayName
-            guard seen.insert(id).inserted else { continue }
-            let avatarURL = requested.avatarUrl.flatMap { URL(string: $0) }
-            reviewers.append(Reviewer(id: id, displayName: displayName, avatarURL: avatarURL, isTeam: isTeam, state: .pending))
+            requested.append((id, displayName, reviewer.avatarUrl, isTeam))
         }
+        let requestedIDs = Set(requested.map(\.id))
 
+        var reviewers = order.compactMap { login -> Reviewer? in
+            guard let entry = states[login] else { return nil }
+            let state: ReviewerState = requestedIDs.contains(login) ? .pending : entry.state
+            return Reviewer(id: login, displayName: login, avatarURL: entry.avatarUrl.flatMap(URL.init), isTeam: false, state: state)
+        }
+        var seen = Set(order)
+        for request in requested where seen.insert(request.id).inserted {
+            reviewers.append(Reviewer(
+                id: request.id,
+                displayName: request.displayName,
+                avatarURL: request.avatarUrl.flatMap(URL.init),
+                isTeam: request.isTeam,
+                state: .pending
+            ))
+        }
         return reviewers
+    }
+
+    private static func reviewerState(_ raw: String) -> ReviewerState? {
+        switch raw {
+        case "APPROVED": .approved
+        case "CHANGES_REQUESTED": .changesRequested
+        case "COMMENTED": .commented
+        case "DISMISSED": .dismissed
+        default: nil
+        }
     }
 }
 
@@ -661,7 +716,8 @@ extension PullRequestNode {
             repository: Repository(nameWithOwner: repository.nameWithOwner),
             author: Author(
                 login: author?.login ?? "ghost",
-                avatarURL: author?.avatarUrl.flatMap(URL.init(string:))
+                avatarURL: author?.avatarUrl.flatMap(URL.init(string:)),
+                isBot: author?.typename == "Bot"
             ),
             createdAt: created,
             updatedAt: updated,
@@ -677,6 +733,7 @@ extension PullRequestNode {
             baseRefName: baseRefName,
             headRefName: headRefName,
             headCommitSha: headRefOid,
+            isCrossRepository: isCrossRepository ?? false,
             lastActivity: mapLastActivity(),
             latestReviews: latestReviews?.nodes.compactMap { node in
                 guard let login = node.author?.login,

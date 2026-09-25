@@ -29,6 +29,7 @@ enum GitHubGraphQL {
         {
           search(query: "\(escapedQuery)", type: ISSUE, first: 50\(after)) {
             nodes {
+              __typename
               ... on PullRequest {
                 id
                 number
@@ -53,14 +54,16 @@ enum GitHubGraphQL {
                 baseRefName
                 headRefName
                 headRefOid
+                isCrossRepository
                 repository {
                   nameWithOwner
                 }
                 author {
+                  __typename
                   login
                   avatarUrl
                 }
-                reviewThreads(first: 50) {
+                reviewThreads(last: 100) {
                   totalCount
                   nodes {
                     isResolved
@@ -194,6 +197,8 @@ enum GitHubGraphQL {
                     actor { login avatarUrl }
                     assignee {
                       ... on User { login }
+                      ... on Bot { login }
+                      ... on Mannequin { login }
                     }
                   }
                   ... on ReviewRequestedEvent {
@@ -202,6 +207,8 @@ enum GitHubGraphQL {
                     requestedReviewer {
                       ... on User { login }
                       ... on Team { name }
+                      ... on Bot { login }
+                      ... on Mannequin { login }
                     }
                   }
                 }
@@ -210,16 +217,25 @@ enum GitHubGraphQL {
                   endCursor
                 }
               }
+              author { login }
               reviewRequests(first: 20) {
                 nodes {
                   requestedReviewer {
                     __typename
                     ... on User { login avatarUrl }
                     ... on Team { name avatarUrl }
+                    ... on Bot { login avatarUrl }
+                    ... on Mannequin { login avatarUrl }
                   }
                 }
               }
-              reviews(last: 50) {
+              latestOpinionatedReviews(first: 100) {
+                nodes {
+                  author { login avatarUrl }
+                  state
+                }
+              }
+              latestReviews(first: 100) {
                 nodes {
                   author { login avatarUrl }
                   state

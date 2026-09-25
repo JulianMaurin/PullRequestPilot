@@ -26,6 +26,36 @@ struct GitHubGraphQLTests {
         #expect(mutation.contains(#"pullRequestId: "PR_\"x\"""#))
     }
 
+    @Test("searchQuery selects __typename outside the PR fragment so issues can be counted")
+    func searchQuerySelectsNodeTypename() throws {
+        let query = GitHubGraphQL.searchQuery(query: "is:pr")
+        let nodes = try #require(query.range(of: "nodes {"))
+        let fragment = try #require(query.range(of: "... on PullRequest {"))
+        let typename = try #require(query.range(of: "__typename", range: nodes.upperBound..<query.endIndex))
+        #expect(typename.lowerBound < fragment.lowerBound)
+    }
+
+    @Test("searchQuery fetches fork status, author type and the newest review threads")
+    func searchQueryFetchesForkAndAuthorType() throws {
+        let query = GitHubGraphQL.searchQuery(query: "is:pr")
+        #expect(query.contains("isCrossRepository"))
+        #expect(query.contains("reviewThreads(last: 100)"))
+        let authorOpen = try #require(query.range(of: "author {"))
+        let authorClose = try #require(query.range(of: "}", range: authorOpen.upperBound..<query.endIndex))
+        #expect(query[authorOpen.upperBound..<authorClose.lowerBound].contains("__typename"))
+    }
+
+    @Test("timelineQuery fetches the per-user review rollups, PR author and bot reviewers")
+    func timelineQueryFetchesReviewRollups() {
+        let query = GitHubGraphQL.timelineQuery(nodeID: "PR_1")
+        #expect(query.contains("latestOpinionatedReviews(first: 100)"))
+        #expect(query.contains("latestReviews(first: 100)"))
+        #expect(!query.contains("reviews(last:"))
+        #expect(query.contains("author { login }"))
+        #expect(query.contains("... on Bot { login avatarUrl }"))
+        #expect(query.contains("... on Mannequin { login avatarUrl }"))
+    }
+
     @Test("searchQuery without cursor omits after parameter")
     func searchQueryNoCursor() {
         let query = GitHubGraphQL.searchQuery(query: "is:pr is:open")

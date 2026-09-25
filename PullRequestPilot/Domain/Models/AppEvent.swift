@@ -15,6 +15,15 @@ struct AppEvent: Sendable, Identifiable, Equatable {
         case error(AppError)
         case warning(String)
         case info(String)
+
+        /// De-duplication equality. A rate limit is one ongoing condition even
+        /// though every failed request computes its own reset time.
+        func describesSameCondition(as other: Payload) -> Bool {
+            if case .error(.rateLimited) = self, case .error(.rateLimited) = other {
+                return true
+            }
+            return self == other
+        }
     }
 
     let id: UUID

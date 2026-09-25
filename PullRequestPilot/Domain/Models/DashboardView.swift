@@ -33,7 +33,7 @@ struct DashboardView: Identifiable, Codable, Hashable, Sendable {
         DashboardView(
             id: UUID(),
             title: "Needs my review",
-            query: "is:open is:pr review-requested:@me draft:false base:main",
+            query: "is:open is:pr review-requested:@me draft:false",
             hideReviewed: true
         ),
         DashboardView(

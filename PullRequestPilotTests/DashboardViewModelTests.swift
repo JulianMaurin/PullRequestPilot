@@ -787,6 +787,7 @@ struct DashboardViewModelTests {
             baseRefName: "main",
             headRefName: "feature-\(number)",
             headCommitSha: nil,
+            isCrossRepository: false,
             lastActivity: nil,
             latestReviews: reviews
         )

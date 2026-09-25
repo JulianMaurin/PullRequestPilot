@@ -21,6 +21,8 @@ struct PullRequest: Identifiable, Hashable, Sendable {
     let baseRefName: String
     let headRefName: String
     let headCommitSha: String?
+    /// Opened from a fork: `headRefName` names a branch in another repository.
+    let isCrossRepository: Bool
     let lastActivity: LastActivity?
     let latestReviews: [UserReview]
 
@@ -57,6 +59,20 @@ struct Repository: Hashable, Sendable {
 struct Author: Hashable, Sendable {
     let login: String
     let avatarURL: URL?
+    /// A GitHub App account; search qualifies it as `author:app/<login>`.
+    let isBot: Bool
+
+    init(login: String, avatarURL: URL?, isBot: Bool = false) {
+        self.login = login
+        self.avatarURL = avatarURL
+        self.isBot = isBot
+    }
+
+    /// Value for `author:` qualifiers. A bare login resolves to a user account,
+    /// so a GitHub App needs the `app/` prefix to match its pull requests.
+    var searchQualifierValue: String {
+        isBot ? "app/\(login)" : login
+    }
 }
 
 struct Label: Hashable, Sendable {

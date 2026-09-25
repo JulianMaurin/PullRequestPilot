@@ -180,6 +180,28 @@ final class PRFetcher {
         pendingLoadMores.removeIfIdentical(task, for: view.id)
     }
 
+    /// Explains matches the list can't show. Withheld results usually mean a
+    /// SAML SSO org the token isn't authorized for, and GitHub's message says so.
+    nonisolated static func hiddenResultsNotice(for page: PullRequestPage) -> String? {
+        var sentences: [String] = []
+        if page.withheldResultCount > 0 || !page.partialErrorMessages.isEmpty {
+            let count = page.withheldResultCount
+            var sentence = count > 0
+                ? "GitHub withheld \(count) \(count == 1 ? "result" : "results")."
+                : "GitHub returned partial results."
+            if !page.partialErrorMessages.isEmpty {
+                sentence += " " + page.partialErrorMessages.joined(separator: " ")
+            }
+            sentences.append(sentence)
+        }
+        if page.undecodablePullRequestCount > 0 {
+            let count = page.undecodablePullRequestCount
+            let noun = count == 1 ? "pull request couldn't be read and is" : "pull requests couldn't be read and are"
+            sentences.append("\(count) \(noun) hidden; Help › Export Logs… has the details.")
+        }
+        return sentences.isEmpty ? nil : sentences.joined(separator: " ")
+    }
+
     // MARK: - Private
 
     private func performRefresh(for view: DashboardView) async {
@@ -212,7 +234,8 @@ final class PRFetcher {
             states[view.id]?.nextCursor = page.nextCursor
             states[view.id]?.rawFetchedCount = uniquePRs.count
             states[view.id]?.reachedLimit = uniquePRs.count >= Constants.App.maxPullRequests
-            states[view.id]?.skippedPRCount = page.skippedNodeCount
+            states[view.id]?.nonPullRequestCount = page.nonPullRequestCount
+            states[view.id]?.hiddenResultsNotice = Self.hiddenResultsNotice(for: page)
             logger.info("Fetched \(uniquePRs.count, privacy: .public) PR(s) for '\(view.title, privacy: .public)'")
             onFetched?(FetchOutcome(viewID: view.id, pullRequests: filteredPRs))
         } catch is CancellationError {
@@ -276,6 +299,9 @@ final class PRFetcher {
 
             states[view.id]?.pullRequests.append(contentsOf: filteredNewPRs)
             states[view.id]?.nextCursor = page.nextCursor
+            if states[view.id]?.hiddenResultsNotice == nil {
+                states[view.id]?.hiddenResultsNotice = Self.hiddenResultsNotice(for: page)
+            }
             let rawTotal = (states[view.id]?.rawFetchedCount ?? 0) + newPRs.count
             states[view.id]?.rawFetchedCount = rawTotal
             states[view.id]?.reachedLimit = rawTotal >= Constants.App.maxPullRequests
