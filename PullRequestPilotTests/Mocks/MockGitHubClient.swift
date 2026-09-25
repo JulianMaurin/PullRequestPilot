@@ -41,6 +41,7 @@ actor MockGitHubClient: GitHubClientProtocol {
     var validateTokenCallCount = 0
     var receivedQueries: [String] = []
     var receivedCursors: [String?] = []
+    var receivedPageSizes: [Int] = []
     var receivedValidateTokens: [String] = []
     var receivedDraftStateRequests: [DraftStateRequest] = []
 
@@ -68,10 +69,11 @@ actor MockGitHubClient: GitHubClientProtocol {
 
     // MARK: - Protocol
 
-    func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage {
+    func fetchPullRequests(query: String, cursor: String?, pageSize: Int) async throws -> PullRequestPage {
         fetchPullRequestsCallCount += 1
         receivedQueries.append(query)
         receivedCursors.append(cursor)
+        receivedPageSizes.append(pageSize)
         if let errorToThrow { throw errorToThrow }
         return PullRequestPage(
             pullRequests: pullRequestsToReturn,

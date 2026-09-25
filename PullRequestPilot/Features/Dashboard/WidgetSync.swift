@@ -16,6 +16,8 @@ final class WidgetSync {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "WidgetSync")
 
     private var lastSyncAt: Date?
+    /// Content of the last write that triggered a timeline reload.
+    private var lastReloadedViews: [WidgetViewData]?
     private let pendingSyncTask = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
 
     // MARK: - Init
@@ -60,6 +62,11 @@ final class WidgetSync {
 
     /// Write immediately, bypassing the throttle. Used on sign-out so the
     /// widget reflects the empty state right away.
+    ///
+    /// Timelines reload only when the views changed: WidgetKit rations reloads
+    /// requested while the app isn't frontmost (typically 40–70 a day), and a
+    /// reload per refresh tick spends that in the first hour. The file is
+    /// still rewritten, so the widget's own timeline refresh reads it.
     func writeNow() {
         pendingSyncTask.withLock { $0?.cancel(); $0 = nil }
         let data = buildWidgetData()
@@ -69,6 +76,8 @@ final class WidgetSync {
             data.save()
         }
         lastSyncAt = .now
+        guard data.views != lastReloadedViews else { return }
+        lastReloadedViews = data.views
         reloadTimelines()
     }
 

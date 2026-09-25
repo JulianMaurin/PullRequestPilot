@@ -45,7 +45,7 @@ struct ChecksPage: Sendable {
 }
 
 protocol GitHubClientProtocol: Sendable {
-    func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage
+    func fetchPullRequests(query: String, cursor: String?, pageSize: Int) async throws -> PullRequestPage
     func fetchTimeline(nodeID: String, cursor: String?, eventPageOffset: Int, checksPageOffset: Int) async throws -> TimelinePage
     func fetchChecks(nodeID: String, cursor: String, checksPageOffset: Int) async throws -> ChecksPage
     func fetchViewer() async throws -> (login: String, avatarURL: URL?)
@@ -55,6 +55,12 @@ protocol GitHubClientProtocol: Sendable {
     /// Converts an open pull request to draft, or marks a draft ready for review.
     /// Throws unless GitHub reports the requested state afterwards.
     func setDraft(pullRequestID: String, isDraft: Bool) async throws
+}
+
+extension GitHubClientProtocol {
+    func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage {
+        try await fetchPullRequests(query: query, cursor: cursor, pageSize: Constants.App.searchPageSize)
+    }
 }
 
 // MARK: - Errors
@@ -180,8 +186,8 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         self.session = session ?? Self.defaultSession
     }
 
-    func fetchPullRequests(query searchQuery: String, cursor: String? = nil) async throws -> PullRequestPage {
-        let query = GitHubGraphQL.searchQuery(query: searchQuery, cursor: cursor)
+    func fetchPullRequests(query searchQuery: String, cursor: String?, pageSize: Int) async throws -> PullRequestPage {
+        let query = GitHubGraphQL.searchQuery(query: searchQuery, cursor: cursor, pageSize: pageSize)
         let response: GraphQLResponse<SearchData> = try await execute(query: query)
 
         if let errors = response.errors, !errors.isEmpty, response.data != nil {

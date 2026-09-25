@@ -12,6 +12,7 @@ final class AppState {
     let localRepositoryService: LocalRepositoryService
     let events: EventCenter
     let logExportService: LogExportService
+    let systemAvailabilityMonitor: SystemAvailabilityMonitor
     let userDefaults: UserDefaults
 
     let dashboardViewModel: DashboardViewModel
@@ -82,6 +83,8 @@ final class AppState {
         self.localRepositoryService = localRepositoryService
         self.events = events
         self.logExportService = logExportService
+        let systemAvailabilityMonitor = SystemAvailabilityMonitor()
+        self.systemAvailabilityMonitor = systemAvailabilityMonitor
         self.userDefaults = defaults
         self.prDetailViewModel = PRDetailViewModel(gitHubClient: gitHubClient, reporter: reporter)
         self.dashboardViewModel = DashboardViewModel(
@@ -90,7 +93,8 @@ final class AppState {
             viewsStore: viewsStore,
             localRepositoryService: localRepositoryService,
             defaults: defaults,
-            reporter: reporter
+            reporter: reporter,
+            availabilityEvents: systemAvailabilityMonitor.events
         )
         self.settingsViewModel = SettingsViewModel(
             identity: identity,

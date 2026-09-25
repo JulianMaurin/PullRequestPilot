@@ -31,26 +31,40 @@ final class AutoRefreshScheduler {
     /// re-pass it.
     private var tick: Tick?
 
+    /// Between `start()` and `stop()`, whether or not the loop is suspended.
+    private var isStarted = false
+    private var isAsleep = false
+    private var isOffline = false
+    private var isSuspended: Bool { isAsleep || isOffline }
+
+    /// Sleep/wake and reachability; nil in tests that don't exercise them.
+    private let availabilityEvents: AsyncStream<SystemAvailabilityEvent>?
+
     /// Lock-backed storage so `deinit` (outside actor isolation in Swift 6)
     /// can cancel the in-flight tasks.
     private let refreshTask = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
     private let intervalObserverTask = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+    private let availabilityObserverTask = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
 
     // MARK: - Init
 
-    init(defaults: UserDefaults, notificationCenter: NotificationCenter = .default) {
+    init(
+        defaults: UserDefaults,
+        notificationCenter: NotificationCenter = .default,
+        availabilityEvents: AsyncStream<SystemAvailabilityEvent>? = nil
+    ) {
         self.defaults = defaults
         self.notificationCenter = notificationCenter
+        self.availabilityEvents = availabilityEvents
+        startAvailabilityObserver()
     }
 
     deinit {
-        refreshTask.withLock { task in
-            task?.cancel()
-            task = nil
-        }
-        intervalObserverTask.withLock { task in
-            task?.cancel()
-            task = nil
+        for storage in [refreshTask, intervalObserverTask, availabilityObserverTask] {
+            storage.withLock { task in
+                task?.cancel()
+                task = nil
+            }
         }
     }
 
@@ -58,20 +72,21 @@ final class AutoRefreshScheduler {
 
     /// Idempotent: a second call while already running is a no-op. Stores the
     /// tick closure so the interval observer can restart the loop when the
-    /// user changes the configured refresh interval.
+    /// user changes the configured refresh interval. While asleep or offline
+    /// the loop waits and starts on the next wake or reconnect.
     func start(tick: @escaping Tick) {
         self.tick = tick
-        let alreadyRunning = refreshTask.withLock { $0 != nil }
-        guard !alreadyRunning else { return }
-        spawnRefreshLoop(tick: tick)
+        guard !isStarted else { return }
+        isStarted = true
+        if !isSuspended {
+            spawnRefreshLoop(tick: tick)
+        }
         startIntervalObserver()
     }
 
     func stop() {
-        refreshTask.withLock { task in
-            task?.cancel()
-            task = nil
-        }
+        isStarted = false
+        cancelRefreshLoop()
         intervalObserverTask.withLock { task in
             task?.cancel()
             task = nil
@@ -121,12 +136,45 @@ final class AutoRefreshScheduler {
     }
 
     private func restartLoop() {
+        cancelRefreshLoop()
+        if let tick, isStarted, !isSuspended {
+            spawnRefreshLoop(tick: tick)
+        }
+    }
+
+    private func cancelRefreshLoop() {
         refreshTask.withLock { task in
             task?.cancel()
             task = nil
         }
-        if let tick {
-            spawnRefreshLoop(tick: tick)
+    }
+
+    private func startAvailabilityObserver() {
+        guard let availabilityEvents else { return }
+        let observerTask = Task { @MainActor [weak self] in
+            for await event in availabilityEvents {
+                guard let self else { return }
+                self.handle(event)
+            }
+        }
+        availabilityObserverTask.withLock { $0 = observerTask }
+    }
+
+    /// Asleep or offline, a tick can only fail (and toast); the loop stops and
+    /// restarts with an immediate refresh once both clear.
+    private func handle(_ event: SystemAvailabilityEvent) {
+        let wasSuspended = isSuspended
+        switch event {
+        case .sleepStarted: isAsleep = true
+        case .sleepEnded: isAsleep = false
+        case .networkReachabilityChanged(let isReachable): isOffline = !isReachable
+        }
+        guard wasSuspended != isSuspended else { return }
+        logger.info("Auto-refresh \(self.isSuspended ? "suspended" : "resumed", privacy: .public) (asleep: \(self.isAsleep, privacy: .public), offline: \(self.isOffline, privacy: .public))")
+        if isSuspended {
+            cancelRefreshLoop()
+        } else {
+            restartLoop()
         }
     }
 

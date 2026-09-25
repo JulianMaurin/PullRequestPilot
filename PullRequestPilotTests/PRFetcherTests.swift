@@ -94,6 +94,58 @@ struct PRFetcherTests {
         #expect(state.error == nil)
     }
 
+    // MARK: - refresh depth
+
+    @MainActor
+    @Test("a refresh re-fetches as deep as the user has paged, keeping page-2 rows")
+    func refreshKeepsLoadedDepth() async throws {
+        let client = MockGitHubClient()
+        let firstPage = (1...50).map { TestPullRequestFactory.make(id: "PR_\($0)") }
+        let secondPage = (51...100).map { TestPullRequestFactory.make(id: "PR_\($0)") }
+        let fetcher = Self.makeFetcher(client: client)
+        let view = Self.makeView()
+
+        await client.setPullRequestsToReturn(firstPage)
+        await client.setNextCursorToReturn("cursor-1")
+        await fetcher.refresh(for: view)
+        await client.setPullRequestsToReturn(secondPage)
+        await client.setNextCursorToReturn("cursor-2")
+        await fetcher.loadMore(for: view)
+        #expect(fetcher.state(for: view.id).pullRequests.count == 100)
+
+        await client.setPullRequestsToReturn(firstPage + secondPage)
+        await fetcher.refresh(for: view)
+
+        #expect(await client.receivedPageSizes == [50, 50, 100])
+        #expect(fetcher.state(for: view.id).pullRequests.count == 100)
+    }
+
+    @MainActor
+    @Test("load-more after a deep refresh only asks for what fits under the cap")
+    func loadMoreFillsUpToCap() async throws {
+        let client = MockGitHubClient()
+        let fetcher = Self.makeFetcher(client: client)
+        let view = Self.makeView()
+
+        await client.setPullRequestsToReturn((1...50).map { TestPullRequestFactory.make(id: "PR_\($0)") })
+        await client.setNextCursorToReturn("cursor-1")
+        await fetcher.refresh(for: view)
+        await client.setPullRequestsToReturn((51...60).map { TestPullRequestFactory.make(id: "PR_\($0)") })
+        await client.setNextCursorToReturn(nil)
+        await fetcher.loadMore(for: view)
+
+        // More matches arrived since: the refresh fetches the 60 already
+        // loaded and reports another page.
+        await client.setPullRequestsToReturn((1...60).map { TestPullRequestFactory.make(id: "PR_\($0)") })
+        await client.setNextCursorToReturn("cursor-2")
+        await fetcher.refresh(for: view)
+        await client.setPullRequestsToReturn((61...100).map { TestPullRequestFactory.make(id: "PR_\($0)") })
+        await fetcher.loadMore(for: view)
+
+        #expect(await client.receivedPageSizes == [50, 50, 60, 40])
+        #expect(fetcher.state(for: view.id).reachedLimit)
+    }
+
     // MARK: - hidden results notice
 
     @Test("withheld results explain themselves with GitHub's reason")
@@ -480,7 +532,7 @@ private actor GatedGitHubClient: GitHubClientProtocol {
     private var isDraining = false
     private(set) var fetchPullRequestsCallCount = 0
 
-    func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage {
+    func fetchPullRequests(query: String, cursor: String?, pageSize: Int) async throws -> PullRequestPage {
         fetchPullRequestsCallCount += 1
         if isDraining { throw CancellationError() }
         return try await withCheckedThrowingContinuation { continuation in

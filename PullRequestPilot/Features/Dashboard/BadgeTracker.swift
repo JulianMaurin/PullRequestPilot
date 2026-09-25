@@ -10,9 +10,9 @@ final class BadgeTracker {
     private(set) var unseenPRIDs: Set<String> = []
     var onCountChanged: ((Int) -> Void)?
 
-    /// Baseline PR IDs per view — used to detect newly added PRs.
-    /// Shared with notification delivery so the first fetch doesn't
-    /// trigger a notification flood.
+    /// Baseline PR IDs per view — used to detect newly added PRs. Shared with
+    /// notification delivery, so its lifetime is managed by the owner of both
+    /// toggles (`DashboardViewModel`), not by the badge toggle alone.
     private var previousPRIDs: [UUID: Set<String>] = [:]
     private var completedInitialLoad: Set<UUID> = []
     private let defaults: UserDefaults
@@ -32,20 +32,32 @@ final class BadgeTracker {
         enabledViewIDs.contains(viewID.uuidString)
     }
 
-    func setEnabled(for viewID: UUID, enabled: Bool, currentPRs: [PullRequest]) {
+    func setEnabled(for viewID: UUID, enabled: Bool) {
         if enabled {
             enabledViewIDs.insert(viewID.uuidString)
-            if previousPRIDs[viewID] == nil, !currentPRs.isEmpty {
-                previousPRIDs[viewID] = Set(currentPRs.map(\.id))
-                completedInitialLoad.insert(viewID)
-            }
         } else {
             enabledViewIDs.remove(viewID.uuidString)
-            previousPRIDs.removeValue(forKey: viewID)
-            completedInitialLoad.remove(viewID)
         }
         persistEnabledViewIDs()
         notifyCount()
+    }
+
+    /// Starts the baseline from the rows already on screen. With no rows yet,
+    /// the next fetch becomes the baseline instead.
+    func seedBaseline(for viewID: UUID, currentPRs: [PullRequest]) {
+        guard !currentPRs.isEmpty else {
+            resetBaseline(for: viewID)
+            return
+        }
+        previousPRIDs[viewID] = Set(currentPRs.map(\.id))
+        completedInitialLoad.insert(viewID)
+    }
+
+    /// Forgets the baseline; the next fetch becomes the new one and reports
+    /// nothing as added.
+    func resetBaseline(for viewID: UUID) {
+        previousPRIDs.removeValue(forKey: viewID)
+        completedInitialLoad.remove(viewID)
     }
 
     func markAsSeen() {
@@ -103,8 +115,7 @@ final class BadgeTracker {
     func removeView(id: UUID) {
         enabledViewIDs.remove(id.uuidString)
         persistEnabledViewIDs()
-        previousPRIDs.removeValue(forKey: id)
-        completedInitialLoad.remove(id)
+        resetBaseline(for: id)
     }
 
     func reset() {

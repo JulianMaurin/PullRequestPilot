@@ -17,6 +17,8 @@ struct ViewState: Sendable {
     /// Why GitHub matched results the list can't show (withheld behind SSO,
     /// undecodable); nil when nothing is hidden.
     var hiddenResultsNotice: String?
+    /// When a refresh last succeeded; failed refreshes keep the old rows.
+    var lastRefreshedAt: Date?
 
     var isEmpty: Bool { pullRequests.isEmpty && !isLoading }
     var hasData: Bool { !pullRequests.isEmpty }
@@ -81,7 +83,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
 
     // MARK: - Init
 
-    init(gitHubClient: GitHubClientProtocol, identity: IdentityActor, viewsStore: any ViewsStoreProtocol, localRepositoryService: LocalRepositoryService, defaults: UserDefaults, reporter: EventReporter = .noop) {
+    init(gitHubClient: GitHubClientProtocol, identity: IdentityActor, viewsStore: any ViewsStoreProtocol, localRepositoryService: LocalRepositoryService, defaults: UserDefaults, reporter: EventReporter = .noop, availabilityEvents: AsyncStream<SystemAvailabilityEvent>? = nil) {
         self.gitHubClient = gitHubClient
         self.identity = identity
         self.localRepositoryService = localRepositoryService
@@ -129,7 +131,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
             return filtered
         }
         self.fetcher = PRFetcher(gitHubClient: gitHubClient, filter: filter, reporter: reporter)
-        self.scheduler = AutoRefreshScheduler(defaults: defaults)
+        self.scheduler = AutoRefreshScheduler(defaults: defaults, availabilityEvents: availabilityEvents)
 
         let widgetRegistry = viewRegistry
         let widgetFetcher = fetcher
@@ -181,7 +183,9 @@ final class DashboardViewModel: DashboardActionsProtocol {
     }
 
     func setBadge(for viewID: UUID, enabled: Bool) {
-        badgeTracker.setEnabled(for: viewID, enabled: enabled, currentPRs: fetcher.state(for: viewID).pullRequests)
+        let wasTracking = isTrackingNewPRs(in: viewID)
+        badgeTracker.setEnabled(for: viewID, enabled: enabled)
+        updateNewPRBaseline(for: viewID, wasTracking: wasTracking)
         if !enabled {
             // Drop any unseen IDs that were tracked for this view and are not
             // still surfaced by another enabled view.
@@ -207,7 +211,25 @@ final class DashboardViewModel: DashboardActionsProtocol {
     }
 
     func setNotification(for viewID: UUID, enabled: Bool) {
+        let wasTracking = isTrackingNewPRs(in: viewID)
         notificationService.setEnabled(for: viewID, enabled: enabled)
+        updateNewPRBaseline(for: viewID, wasTracking: wasTracking)
+    }
+
+    private func isTrackingNewPRs(in viewID: UUID) -> Bool {
+        badgeTracker.isEnabled(for: viewID) || notificationService.isEnabled(for: viewID)
+    }
+
+    /// The badge and the bell share one new-PR baseline. It lives while either
+    /// is on, and restarts from the rows on screen when the first of them turns
+    /// on, so a muted stretch can't come back as a backlog.
+    private func updateNewPRBaseline(for viewID: UUID, wasTracking: Bool) {
+        let isTracking = isTrackingNewPRs(in: viewID)
+        if isTracking && !wasTracking {
+            badgeTracker.seedBaseline(for: viewID, currentPRs: fetcher.state(for: viewID).pullRequests)
+        } else if !isTracking {
+            badgeTracker.resetBaseline(for: viewID)
+        }
     }
 
     func ensureNotificationPermission(for viewID: UUID) async {
@@ -322,7 +344,19 @@ final class DashboardViewModel: DashboardActionsProtocol {
     }
 
     func updateView(_ view: DashboardView) {
+        let previous = views.first { $0.id == view.id }
         viewRegistry.updateView(view)
+        if previous?.query != view.query || previous?.hideReviewed != view.hideReviewed {
+            resetResults(for: view.id)
+        }
+    }
+
+    /// A changed query or filter is a different result set: drop the old rows
+    /// and cursor, and restart the new-PR baseline so the rows that appear
+    /// aren't announced as new.
+    private func resetResults(for viewID: UUID) {
+        fetcher.resetState(for: viewID)
+        badgeTracker.resetBaseline(for: viewID)
     }
 
     func toggleHideReviewed(for viewID: UUID) {
@@ -333,7 +367,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
         // Clear the cached PR list so the user sees a loading state rather than
         // the stale pre-toggle list while the refresh is in flight. Mirrors
         // commitQueryEdit / appendFilter.
-        fetcher.resetState(for: viewID)
+        resetResults(for: viewID)
         scheduleRefresh(for: updated)
     }
 
@@ -488,7 +522,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
         guard !trimmed.isEmpty, trimmed != dashView.query else { return }
         let updated = DashboardView(id: dashView.id, title: dashView.title, query: trimmed, hideReviewed: dashView.hideReviewed)
         viewRegistry.updateView(updated)
-        fetcher.resetState(for: viewID)
+        resetResults(for: viewID)
         scheduleRefresh(for: updated)
     }
 
@@ -504,7 +538,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
         let newQuery = dashView.query + " " + qualifier
         let updated = DashboardView(id: dashView.id, title: dashView.title, query: newQuery, hideReviewed: dashView.hideReviewed)
         viewRegistry.updateView(updated)
-        fetcher.resetState(for: viewID)
+        resetResults(for: viewID)
         scheduleRefresh(for: updated)
     }
 
@@ -578,6 +612,8 @@ final class DashboardViewModel: DashboardActionsProtocol {
                 pullRequests: Array(widgetPRs)
             )
         }
-        return WidgetData(views: widgetViews, lastUpdated: .now)
+        // The widget's "Updated … ago" must not advance while fetches fail.
+        let lastRefreshedAt = registry.views.compactMap { fetcher.state(for: $0.id).lastRefreshedAt }.max()
+        return WidgetData(views: widgetViews, lastUpdated: lastRefreshedAt ?? .now)
     }
 }

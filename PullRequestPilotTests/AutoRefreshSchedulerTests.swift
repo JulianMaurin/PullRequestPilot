@@ -222,6 +222,111 @@ struct AutoRefreshSchedulerTests {
         #expect(first == 10)
     }
 
+    // MARK: - sleep, wake and reachability
+
+    /// A scheduler fed by a test-controlled availability stream. The interval
+    /// is long, so every tick observed comes from a start or a resume.
+    @MainActor
+    private static func makeAvailabilityScheduler(
+        suiteName: String
+    ) throws -> (AutoRefreshScheduler, TickRecorder, AsyncStream<SystemAvailabilityEvent>.Continuation) {
+        let defaults = try #require(UserDefaults(suiteName: "AutoRefreshSchedulerTests.\(suiteName)"))
+        defaults.removePersistentDomain(forName: "AutoRefreshSchedulerTests.\(suiteName)")
+        defaults.set(3600.0, forKey: Constants.UserDefaultsKeys.prRefreshInterval)
+        let (events, continuation) = AsyncStream.makeStream(of: SystemAvailabilityEvent.self)
+        let scheduler = AutoRefreshScheduler(defaults: defaults, notificationCenter: NotificationCenter(), availabilityEvents: events)
+        return (scheduler, TickRecorder(), continuation)
+    }
+
+    /// Lets the scheduler's event observer drain what was just yielded.
+    @MainActor
+    private static func deliverEvents() async {
+        for _ in 0..<50 { await Task.yield() }
+    }
+
+    @MainActor
+    @Test("reconnecting after an outage refreshes immediately")
+    func reconnectTicksImmediately() async throws {
+        let (scheduler, recorder, events) = try Self.makeAvailabilityScheduler(suiteName: "Reconnect")
+        defer { scheduler.stop() }
+        scheduler.start { @MainActor in
+            recorder.record()
+            return Self.haveViewsResult()
+        }
+        try await Self.waitUntil { recorder.count >= 1 }
+
+        events.yield(.networkReachabilityChanged(isReachable: false))
+        await Self.deliverEvents()
+        events.yield(.networkReachabilityChanged(isReachable: true))
+        try await Self.waitUntil { recorder.count >= 2 }
+
+        #expect(recorder.count == 2)
+    }
+
+    @MainActor
+    @Test("starting while offline waits for the network instead of failing a tick")
+    func startWhileOfflineWaits() async throws {
+        let (scheduler, recorder, events) = try Self.makeAvailabilityScheduler(suiteName: "StartOffline")
+        defer { scheduler.stop() }
+        events.yield(.networkReachabilityChanged(isReachable: false))
+        await Self.deliverEvents()
+
+        scheduler.start { @MainActor in
+            recorder.record()
+            return Self.haveViewsResult()
+        }
+        await Self.deliverEvents()
+        #expect(recorder.count == 0)
+
+        events.yield(.networkReachabilityChanged(isReachable: true))
+        try await Self.waitUntil { recorder.count >= 1 }
+        #expect(recorder.count == 1)
+    }
+
+    @MainActor
+    @Test("waking from sleep refreshes immediately; staying awake does not re-tick")
+    func wakeTicksImmediately() async throws {
+        let (scheduler, recorder, events) = try Self.makeAvailabilityScheduler(suiteName: "Wake")
+        defer { scheduler.stop() }
+        scheduler.start { @MainActor in
+            recorder.record()
+            return Self.haveViewsResult()
+        }
+        try await Self.waitUntil { recorder.count >= 1 }
+
+        // Reachability reported while awake and online is not a transition.
+        events.yield(.networkReachabilityChanged(isReachable: true))
+        events.yield(.sleepStarted)
+        await Self.deliverEvents()
+        #expect(recorder.count == 1)
+
+        events.yield(.sleepEnded)
+        try await Self.waitUntil { recorder.count >= 2 }
+        #expect(recorder.count == 2)
+    }
+
+    @MainActor
+    @Test("waking while still offline waits for the network")
+    func wakeWhileOfflineWaits() async throws {
+        let (scheduler, recorder, events) = try Self.makeAvailabilityScheduler(suiteName: "WakeOffline")
+        defer { scheduler.stop() }
+        scheduler.start { @MainActor in
+            recorder.record()
+            return Self.haveViewsResult()
+        }
+        try await Self.waitUntil { recorder.count >= 1 }
+
+        events.yield(.sleepStarted)
+        events.yield(.networkReachabilityChanged(isReachable: false))
+        events.yield(.sleepEnded)
+        await Self.deliverEvents()
+        #expect(recorder.count == 1)
+
+        events.yield(.networkReachabilityChanged(isReachable: true))
+        try await Self.waitUntil { recorder.count >= 2 }
+        #expect(recorder.count == 2)
+    }
+
     // MARK: - rate-limit and error delay policy
 
     @MainActor

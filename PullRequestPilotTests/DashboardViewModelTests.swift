@@ -701,6 +701,85 @@ struct DashboardViewModelTests {
         #expect(viewModel.collapsedRepos.isEmpty)
     }
 
+    // MARK: - New-PR baseline shared by badge and bell
+
+    @Test("turning the badge off keeps the baseline while the bell is still on")
+    func badgeOffKeepsBaselineForBell() async throws {
+        let (viewModel, viewID) = makeViewModel(suiteName: "BaselineBadgeOff")
+        let pr1 = makePullRequest(number: 1, title: "One")
+        await mockClient.setPullRequestsToReturn([pr1])
+        await viewModel.refresh(viewID: viewID)
+
+        viewModel.setNotification(for: viewID, enabled: true)
+        viewModel.setBadge(for: viewID, enabled: true)
+        viewModel.setBadge(for: viewID, enabled: false)
+
+        let pr2 = makePullRequest(number: 2, title: "Two")
+        let added = viewModel.badgeTracker.detectNewPRs(viewID: viewID, currentPRs: [pr1, pr2])
+        #expect(added == ["PR_2"], "the bell must still see PR 2 as new")
+    }
+
+    @Test("re-enabling after both were off starts from the rows on screen, not a backlog")
+    func reEnableStartsFromCurrentRows() async throws {
+        let (viewModel, viewID) = makeViewModel(suiteName: "BaselineReEnable")
+        let prs = (1...3).map { makePullRequest(number: $0, title: "PR \($0)") }
+        await mockClient.setPullRequestsToReturn([prs[0]])
+        await viewModel.refresh(viewID: viewID)
+        viewModel.setNotification(for: viewID, enabled: true)
+        viewModel.setNotification(for: viewID, enabled: false)
+
+        // PRs arrive while muted.
+        await mockClient.setPullRequestsToReturn(prs)
+        await viewModel.refresh(viewID: viewID)
+        viewModel.setNotification(for: viewID, enabled: true)
+
+        #expect(viewModel.badgeTracker.detectNewPRs(viewID: viewID, currentPRs: prs).isEmpty)
+    }
+
+    @Test("editing a view's query doesn't announce its new rows as new PRs")
+    func queryEditRestartsBaseline() async throws {
+        let (viewModel, viewID) = makeViewModel(suiteName: "BaselineQueryEdit")
+        viewModel.setBadge(for: viewID, enabled: true)
+        let prs = (1...3).map { makePullRequest(number: $0, title: "PR \($0)") }
+        await mockClient.setPullRequestsToReturn([prs[0]])
+        await viewModel.refresh(viewID: viewID)
+        await viewModel.refresh(viewID: viewID)
+
+        await mockClient.setPullRequestsToReturn(prs)
+        viewModel.commitQueryEdit(viewID: viewID, newQuery: "is:pr is:open author:@me")
+        try await Self.waitUntil { viewModel.viewStates[viewID]?.pullRequests.count == 3 }
+
+        #expect(viewModel.viewStates[viewID]?.pullRequests.count == 3)
+        #expect(viewModel.badgeCount == 0)
+    }
+
+    @Test("resetting a view to a different query drops the old rows and cursor")
+    func updateViewWithNewQueryResetsResults() async throws {
+        let (viewModel, viewID) = makeViewModel(suiteName: "UpdateViewResets")
+        await mockClient.setPullRequestsToReturn([makePullRequest(number: 1, title: "Old query")])
+        await mockClient.setNextCursorToReturn("old-cursor")
+        await viewModel.refresh(viewID: viewID)
+        let view = try #require(viewModel.views.first { $0.id == viewID })
+
+        viewModel.updateView(DashboardView(id: viewID, title: view.title, query: "is:pr review-requested:@me", hideReviewed: view.hideReviewed))
+
+        let state = try #require(viewModel.viewStates[viewID])
+        #expect(state.pullRequests.isEmpty)
+        #expect(state.nextCursor == nil)
+    }
+
+    @Test("renaming a view keeps its rows")
+    func updateViewTitleKeepsResults() async throws {
+        let (viewModel, viewID) = makeViewModel(suiteName: "UpdateViewRename")
+        await mockClient.setPullRequestsToReturn([makePullRequest(number: 1, title: "Kept")])
+        await viewModel.refresh(viewID: viewID)
+        let view = try #require(viewModel.views.first { $0.id == viewID })
+
+        viewModel.updateView(DashboardView(id: viewID, title: "Renamed", query: view.query, hideReviewed: view.hideReviewed))
+
+        #expect(viewModel.viewStates[viewID]?.pullRequests.count == 1)
+    }
+
     // MARK: - Draft State
 
     @Test("setDraft sends the change, confirms it, and refreshes the views")
@@ -764,6 +843,17 @@ struct DashboardViewModelTests {
     }
 
     // MARK: - Helpers
+
+    private static func waitUntil(
+        deadlineSeconds: Double = 2.0,
+        _ predicate: () -> Bool
+    ) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(deadlineSeconds))
+        while !predicate() {
+            if ContinuousClock.now >= deadline { return }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+    }
 
     private func makePullRequest(number: Int, title: String, reviews: [UserReview] = []) -> PullRequest {
         PullRequest(

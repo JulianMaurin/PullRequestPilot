@@ -22,12 +22,12 @@ enum GitHubGraphQL {
         return result
     }
 
-    static func searchQuery(query: String, cursor: String? = nil) -> String {
+    static func searchQuery(query: String, cursor: String? = nil, pageSize: Int = Constants.App.searchPageSize) -> String {
         let escapedQuery = escapeGraphQL(query)
         let after = cursor.map { ", after: \"\(escapeGraphQL($0))\"" } ?? ""
         return """
         {
-          search(query: "\(escapedQuery)", type: ISSUE, first: 50\(after)) {
+          search(query: "\(escapedQuery)", type: ISSUE, first: \(pageSize)\(after)) {
             nodes {
               __typename
               ... on PullRequest {

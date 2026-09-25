@@ -22,10 +22,10 @@ struct BadgeTrackerTests {
         let tracker = makeTracker(suiteName: "BadgeToggle")
         let viewID = UUID()
 
-        tracker.setEnabled(for: viewID, enabled: true, currentPRs: [])
+        tracker.setEnabled(for: viewID, enabled: true)
         #expect(tracker.isEnabled(for: viewID))
 
-        tracker.setEnabled(for: viewID, enabled: false, currentPRs: [])
+        tracker.setEnabled(for: viewID, enabled: false)
         #expect(!tracker.isEnabled(for: viewID))
     }
 
@@ -75,7 +75,7 @@ struct BadgeTrackerTests {
     func pruneUnseen() {
         let tracker = makeTracker(suiteName: "BadgePrune")
         let viewID = UUID()
-        tracker.setEnabled(for: viewID, enabled: true, currentPRs: [])
+        tracker.setEnabled(for: viewID, enabled: true)
         tracker.trackUnseen(Set(["PR_1", "PR_2"]))
 
         let pr1 = TestPullRequestFactory.make(id: "PR_1")
@@ -91,7 +91,7 @@ struct BadgeTrackerTests {
     func removeView() {
         let tracker = makeTracker(suiteName: "BadgeRemoveView")
         let viewID = UUID()
-        tracker.setEnabled(for: viewID, enabled: true, currentPRs: [])
+        tracker.setEnabled(for: viewID, enabled: true)
         #expect(tracker.isEnabled(for: viewID))
 
         tracker.removeView(id: viewID)
@@ -102,7 +102,7 @@ struct BadgeTrackerTests {
     func resetClearsAll() {
         let tracker = makeTracker(suiteName: "BadgeReset")
         let viewID = UUID()
-        tracker.setEnabled(for: viewID, enabled: true, currentPRs: [])
+        tracker.setEnabled(for: viewID, enabled: true)
         tracker.trackUnseen(Set(["PR_1"]))
 
         tracker.reset()
@@ -155,7 +155,7 @@ struct BadgeTrackerTests {
         let viewID = UUID()
 
         let tracker1 = BadgeTracker(defaults: defaults)
-        tracker1.setEnabled(for: viewID, enabled: true, currentPRs: [])
+        tracker1.setEnabled(for: viewID, enabled: true)
 
         let tracker2 = BadgeTracker(defaults: defaults)
         #expect(tracker2.isEnabled(for: viewID))

@@ -395,7 +395,7 @@ private actor PaginatingMockGitHubClient: GitHubClientProtocol {
         return ChecksPage(checkRuns: [], nextCursor: "checks-cursor-\(totalChecksCalls)")
     }
 
-    func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage {
+    func fetchPullRequests(query: String, cursor: String?, pageSize: Int) async throws -> PullRequestPage {
         PullRequestPage(pullRequests: [], nextCursor: nil)
     }
 

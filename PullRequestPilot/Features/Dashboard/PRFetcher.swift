@@ -213,11 +213,16 @@ final class PRFetcher {
         states[view.id]?.error = nil
         states[view.id]?.isNetworkError = false
         states[view.id]?.rateLimitRetryAfter = nil
+        // Re-fetch as deep as the user has paged: a one-page refresh would cut
+        // the list back to 50 rows every interval and close a detail pane
+        // opened further down.
+        let loadedCount = states[view.id]?.rawFetchedCount ?? 0
+        let pageSize = min(max(Constants.App.searchPageSize, loadedCount), Constants.App.maxPullRequests)
 
         logger.info("Fetching PRs for '\(view.title, privacy: .public)'...")
 
         do {
-            let page = try await gitHubClient.fetchPullRequests(query: view.query, cursor: nil)
+            let page = try await gitHubClient.fetchPullRequests(query: view.query, cursor: nil, pageSize: pageSize)
             var seenIDs = Set<String>()
             let uniquePRs = page.pullRequests.filter { seenIDs.insert($0.id).inserted }
             let filteredPRs = await filter(uniquePRs, view)
@@ -236,6 +241,7 @@ final class PRFetcher {
             states[view.id]?.reachedLimit = uniquePRs.count >= Constants.App.maxPullRequests
             states[view.id]?.nonPullRequestCount = page.nonPullRequestCount
             states[view.id]?.hiddenResultsNotice = Self.hiddenResultsNotice(for: page)
+            states[view.id]?.lastRefreshedAt = .now
             logger.info("Fetched \(uniquePRs.count, privacy: .public) PR(s) for '\(view.title, privacy: .public)'")
             onFetched?(FetchOutcome(viewID: view.id, pullRequests: filteredPRs))
         } catch is CancellationError {
@@ -265,6 +271,9 @@ final class PRFetcher {
 
     private func performLoadMore(for view: DashboardView) async {
         guard let state = states[view.id], state.canLoadMore else { return }
+        // A deep refresh can leave fewer than a full page before the cap.
+        let pageSize = min(Constants.App.searchPageSize, Constants.App.maxPullRequests - state.rawFetchedCount)
+        guard pageSize > 0 else { return }
 
         states[view.id]?.isLoadingMore = true
         states[view.id]?.error = nil
@@ -272,7 +281,7 @@ final class PRFetcher {
         states[view.id]?.rateLimitRetryAfter = nil
 
         do {
-            let page = try await gitHubClient.fetchPullRequests(query: view.query, cursor: state.nextCursor)
+            let page = try await gitHubClient.fetchPullRequests(query: view.query, cursor: state.nextCursor, pageSize: pageSize)
 
             // Drop the page if a reset or refresh superseded the pre-await
             // snapshot: appending would mix stale rows into the new list and

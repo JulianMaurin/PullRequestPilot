@@ -559,7 +559,7 @@ private actor GatedValidationClient: GitHubClientProtocol {
         }
     }
 
-    func fetchPullRequests(query: String, cursor: String?) async throws -> PullRequestPage {
+    func fetchPullRequests(query: String, cursor: String?, pageSize: Int) async throws -> PullRequestPage {
         PullRequestPage(pullRequests: [], nextCursor: nil)
     }
 

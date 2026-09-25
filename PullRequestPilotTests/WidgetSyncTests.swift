@@ -130,6 +130,30 @@ struct WidgetSyncTests {
     }
 
     @MainActor
+    @Test("timelines reload only when the views change; the file is rewritten every time")
+    func reloadsOnlyWhenViewsChange() throws {
+        @MainActor final class ViewsSource { var views: [WidgetViewData] = [] }
+        let source = ViewsSource()
+        let writes = BuildCounter()
+        let reloads = BuildCounter()
+        let url = Self.tempStorageURL()
+        let sync = WidgetSync(throttleInterval: 0, storageURL: url, reloadTimelines: { reloads.increment() }) {
+            writes.increment()
+            return WidgetData(views: source.views, lastUpdated: .now)
+        }
+
+        sync.writeNow()
+        sync.writeNow()
+        #expect(reloads.count == 1)
+
+        source.views = [WidgetViewData(id: "view-1", title: "Mine", count: 1, approvedCount: 0, changesRequestedCount: 0, pullRequests: [])]
+        sync.writeNow()
+        #expect(reloads.count == 2)
+        #expect(writes.count == 3)
+        #expect(try #require(WidgetData.load(from: url)).views.map(\.id) == ["view-1"])
+    }
+
+    @MainActor
     @Test("writeNow() cancels any pending deferred write")
     func writeNowCancelsDeferred() async throws {
         let counter = BuildCounter()
