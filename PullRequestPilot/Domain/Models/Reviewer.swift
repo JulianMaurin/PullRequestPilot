@@ -40,13 +40,13 @@ enum ReviewerState: Hashable, Sendable {
         }
     }
 
-    var iconColor: String {
+    var iconTint: StatusTint {
         switch self {
-        case .approved: return "green"
-        case .changesRequested: return "red"
-        case .commented: return "blue"
-        case .pending: return "yellow"
-        case .dismissed: return "gray"
+        case .approved: return .green
+        case .changesRequested: return .red
+        case .commented: return .blue
+        case .pending: return .yellow
+        case .dismissed: return .gray
         }
     }
 

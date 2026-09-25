@@ -93,16 +93,16 @@ struct ReviewerStateTests {
 
     // MARK: - Icon Color
 
-    @Test("iconColor returns correct color name for each state",
+    @Test("iconTint returns the right tint for each state",
           arguments: [
-              (ReviewerState.pending, "yellow"),
-              (ReviewerState.approved, "green"),
-              (ReviewerState.changesRequested, "red"),
-              (ReviewerState.commented, "blue"),
-              (ReviewerState.dismissed, "gray"),
+              (ReviewerState.pending, StatusTint.yellow),
+              (ReviewerState.approved, StatusTint.green),
+              (ReviewerState.changesRequested, StatusTint.red),
+              (ReviewerState.commented, StatusTint.blue),
+              (ReviewerState.dismissed, StatusTint.gray),
           ])
-    func iconColor(state: ReviewerState, expected: String) {
-        #expect(state.iconColor == expected)
+    func iconTint(state: ReviewerState, expected: StatusTint) {
+        #expect(state.iconTint == expected)
     }
 
     // MARK: - Label

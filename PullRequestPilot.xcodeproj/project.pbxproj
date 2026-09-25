@@ -58,6 +58,7 @@
 		59CDE2449BEDE0BE5FDFB3BF /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB660149F1FC0178896350F0 /* NotificationService.swift */; };
 		59E8786349A7F96E1D408F68 /* Logger+Category.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7956A945631A11303A53BA81 /* Logger+Category.swift */; };
 		5AC335CA2F4B2A43BA9C1C3E /* IdentityActor+Test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 271A388E76ECC617E9EECD04 /* IdentityActor+Test.swift */; };
+		6200F37377C065C781BF330F /* StatusTint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A3E74835C1F179A67C9A1F6 /* StatusTint.swift */; };
 		629BB18DF107FFB68D4C95C0 /* TestClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54AD8B8515D7E1520509F943 /* TestClock.swift */; };
 		63CAE8E5BAA27B337249CE9C /* PRDetailRetryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF6CADF881F6CA764CEC21D1 /* PRDetailRetryTests.swift */; };
 		64F1EC8602CA28E3C0FF1C79 /* TimelineEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40557FE42C98E62F2A4EBB42 /* TimelineEvent.swift */; };
@@ -211,6 +212,7 @@
 		40557FE42C98E62F2A4EBB42 /* TimelineEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEvent.swift; sourceTree = "<group>"; };
 		4413F26A2D4ADED62D096BED /* TestHTTP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestHTTP.swift; sourceTree = "<group>"; };
 		46D916DDB38D7B774FFC58D0 /* PullRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullRequest.swift; sourceTree = "<group>"; };
+		4A3E74835C1F179A67C9A1F6 /* StatusTint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusTint.swift; sourceTree = "<group>"; };
 		4A64ABB96B995A9910DE6D17 /* AutoRefreshScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoRefreshScheduler.swift; sourceTree = "<group>"; };
 		4BDE5E98E84A1E172858C467 /* PullRequestPilotWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PullRequestPilotWidget.entitlements; sourceTree = "<group>"; };
 		53AD27A0204C2931E1B75616 /* PullRequestTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullRequestTests.swift; sourceTree = "<group>"; };
@@ -361,6 +363,7 @@
 				46D916DDB38D7B774FFC58D0 /* PullRequest.swift */,
 				404EA06E3CB78A55D94A2B82 /* Reviewer.swift */,
 				DA81C009504CF47B9DA4EF95 /* SearchQuery.swift */,
+				4A3E74835C1F179A67C9A1F6 /* StatusTint.swift */,
 				40557FE42C98E62F2A4EBB42 /* TimelineEvent.swift */,
 			);
 			path = Models;
@@ -879,6 +882,7 @@
 				FA35319C6D686DE7154A81A9 /* SearchQuery.swift in Sources */,
 				7AE9D1D59D755D749A07689D /* SettingsView.swift in Sources */,
 				ECE4955ACF2E7F4D23DE0351 /* SettingsViewModel.swift in Sources */,
+				6200F37377C065C781BF330F /* StatusTint.swift in Sources */,
 				30154169320576700C2B1D64 /* SystemAvailabilityMonitor.swift in Sources */,
 				64F1EC8602CA28E3C0FF1C79 /* TimelineEvent.swift in Sources */,
 				DE6F6DAC33779B719399F10F /* ToastOverlay.swift in Sources */,

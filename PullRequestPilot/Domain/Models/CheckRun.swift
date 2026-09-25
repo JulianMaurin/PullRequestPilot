@@ -43,11 +43,11 @@ struct CheckRun: Identifiable, Hashable, Sendable {
         return status.iconName
     }
 
-    var iconColor: String {
+    var iconTint: StatusTint {
         if let conclusion {
-            return conclusion.iconColor
+            return conclusion.iconTint
         }
-        return status.iconColor
+        return status.iconTint
     }
 }
 
@@ -78,11 +78,11 @@ enum CheckRunStatus: String, Sendable {
         }
     }
 
-    var iconColor: String {
+    var iconTint: StatusTint {
         switch self {
-        case .queued, .waiting, .pending, .requested: return "gray"
-        case .inProgress: return "yellow"
-        case .completed: return "green"
+        case .queued, .waiting, .pending, .requested: return .gray
+        case .inProgress: return .yellow
+        case .completed: return .green
         }
     }
 }
@@ -170,13 +170,13 @@ enum CheckRunConclusion: String, Sendable {
         }
     }
 
-    var iconColor: String {
+    var iconTint: StatusTint {
         switch self {
-        case .success: return "green"
-        case .failure, .startupFailure, .timedOut: return "red"
-        case .cancelled, .stale: return "gray"
-        case .neutral, .skipped: return "gray"
-        case .actionRequired: return "yellow"
+        case .success: return .green
+        case .failure, .startupFailure, .timedOut: return .red
+        case .cancelled, .stale: return .gray
+        case .neutral, .skipped: return .gray
+        case .actionRequired: return .yellow
         }
     }
 }

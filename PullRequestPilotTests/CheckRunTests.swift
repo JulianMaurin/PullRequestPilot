@@ -35,16 +35,16 @@ struct CheckRunTests {
 
     // MARK: - IconColor
 
-    @Test("iconColor uses conclusion when present")
-    func iconColorWithConclusion() {
+    @Test("iconTint uses conclusion when present")
+    func iconTintWithConclusion() {
         let check = CheckRun(id: "1", name: "CI", status: .completed, conclusion: .success, detailsURL: nil, isRequired: false, workflowRunID: nil, startedAt: nil)
-        #expect(check.iconColor == "green")
+        #expect(check.iconTint == .green)
     }
 
-    @Test("iconColor uses status when no conclusion")
-    func iconColorWithoutConclusion() {
+    @Test("iconTint uses status when no conclusion")
+    func iconTintWithoutConclusion() {
         let check = CheckRun(id: "1", name: "CI", status: .inProgress, conclusion: nil, detailsURL: nil, isRequired: false, workflowRunID: nil, startedAt: nil)
-        #expect(check.iconColor == "yellow")
+        #expect(check.iconTint == .yellow)
     }
 
     // MARK: - CheckRunStatus
@@ -89,14 +89,14 @@ struct CheckRunTests {
         #expect(CheckRunConclusion.skipped.iconName == "arrow.right")
     }
 
-    @Test("conclusion iconColor covers all cases")
+    @Test("conclusion iconTint covers all cases")
     func conclusionIconColors() {
-        #expect(CheckRunConclusion.success.iconColor == "green")
-        #expect(CheckRunConclusion.failure.iconColor == "red")
-        #expect(CheckRunConclusion.timedOut.iconColor == "red")
-        #expect(CheckRunConclusion.cancelled.iconColor == "gray")
-        #expect(CheckRunConclusion.skipped.iconColor == "gray")
-        #expect(CheckRunConclusion.actionRequired.iconColor == "yellow")
+        #expect(CheckRunConclusion.success.iconTint == .green)
+        #expect(CheckRunConclusion.failure.iconTint == .red)
+        #expect(CheckRunConclusion.timedOut.iconTint == .red)
+        #expect(CheckRunConclusion.cancelled.iconTint == .gray)
+        #expect(CheckRunConclusion.skipped.iconTint == .gray)
+        #expect(CheckRunConclusion.actionRequired.iconTint == .yellow)
     }
 }
 

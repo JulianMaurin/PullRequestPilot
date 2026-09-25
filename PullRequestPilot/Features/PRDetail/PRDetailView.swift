@@ -193,7 +193,7 @@ struct PRDetailView: View {
 
             Image(systemName: reviewer.state.iconName)
                 .font(.caption)
-                .foregroundStyle(iconColor(reviewer.state.iconColor))
+                .foregroundStyle(Color(reviewer.state.iconTint))
 
             Text(reviewer.state.label)
                 .font(.caption2)
@@ -261,7 +261,7 @@ struct PRDetailView: View {
         return HStack(spacing: 8) {
             Image(systemName: check.iconName)
                 .font(check.status == .inProgress && check.conclusion == nil ? .system(size: 7) : .caption)
-                .foregroundStyle(iconColor(check.iconColor))
+                .foregroundStyle(Color(check.iconTint))
                 .frame(width: 20, alignment: .center)
 
             Text(check.name)
@@ -342,7 +342,7 @@ struct PRDetailView: View {
 
                 Image(systemName: event.iconName)
                     .font(.system(size: 7, weight: .bold))
-                    .foregroundStyle(iconColor(event.iconColor))
+                    .foregroundStyle(Color(event.iconTint))
                     .padding(2)
                     .background(.background)
                     .clipShape(Circle())
@@ -375,18 +375,18 @@ struct PRDetailView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
     }
+}
 
-    // MARK: - Helpers
-
-    private func iconColor(_ name: String) -> Color {
-        switch name {
-        case "green": return .green
-        case "red": return .red
-        case "purple": return .purple
-        case "blue": return .blue
-        case "yellow": return .yellow
-        case "gray": return .gray
-        default: return .secondary
+private extension Color {
+    init(_ tint: StatusTint) {
+        switch tint {
+        case .green: self = .green
+        case .red: self = .red
+        case .purple: self = .purple
+        case .blue: self = .blue
+        case .yellow: self = .yellow
+        case .gray: self = .gray
+        case .secondary: self = .secondary
         }
     }
 }

@@ -45,14 +45,15 @@ struct TimelineEvent: Identifiable, Hashable, Sendable {
         }
     }
 
-    var iconColor: String {
+    var iconTint: StatusTint {
         switch kind {
-        case .review(.approved): return "green"
-        case .review(.changesRequested): return "red"
-        case .merged: return "purple"
-        case .closed: return "gray"
-        case .comment, .review: return "blue"
-        default: return "secondary"
+        case .review(.approved): return .green
+        case .review(.changesRequested): return .red
+        case .merged: return .purple
+        case .closed: return .gray
+        case .comment, .review: return .blue
+        case .reopened, .forcePushed, .commit, .readyForReview, .convertedToDraft, .assigned, .reviewRequested:
+            return .secondary
         }
     }
 
