@@ -15,9 +15,13 @@ import Foundation
 /// "first caller cancels, later callers get spuriously cancelled" footgun.
 actor RequestCoalescer<Key: Hashable & Sendable, Value: Sendable> {
     private var inFlight: [Key: Task<Value, Error>] = [:]
+    /// Callers currently waiting on an operation another caller started.
+    private(set) var joinedCallerCount = 0
 
     func run(key: Key, operation: @Sendable @escaping () async throws -> Value) async throws -> Value {
         if let existing = inFlight[key] {
+            joinedCallerCount += 1
+            defer { joinedCallerCount -= 1 }
             return try await existing.value
         }
         let task = Task<Value, Error> { try await operation() }

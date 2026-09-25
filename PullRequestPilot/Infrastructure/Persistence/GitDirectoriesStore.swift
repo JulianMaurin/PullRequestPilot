@@ -17,12 +17,17 @@ final class GitDirectoriesStore {
     private var cachedURLs: [URL] = []
     /// URLs for which `startAccessingSecurityScopedResource()` actually
     /// returned `true`. Apple's docs require balancing only successful starts.
-    private var startedURLs: Set<URL> = []
+    private(set) var startedURLs: Set<URL> = []
     private let logger = Logger(category: "GitDirectoriesStore")
 
-    init(defaults: UserDefaults, reporter: EventReporter = .noop) {
+    /// Where an undecodable bookmark list is copied before it's cleared; nil
+    /// when Application Support is unavailable.
+    private let backupDirectory: URL?
+
+    init(defaults: UserDefaults, reporter: EventReporter = .noop, backupDirectory: URL? = ViewsStore.applicationSupportDirectory()) {
         self.defaults = defaults
         self.reporter = reporter
+        self.backupDirectory = backupDirectory
         migrateLegacyPathsIfNeeded()
     }
 
@@ -153,7 +158,7 @@ final class GitDirectoriesStore {
     }
 
     private func backupCorruptedData(_ value: Any) -> String? {
-        guard let supportDir = ViewsStore.applicationSupportDirectory() else { return nil }
+        guard let supportDir = backupDirectory else { return nil }
         let filename = "git-directories.corrupted-\(ViewsStore.backupDateString()).plist"
         let url = supportDir.appendingPathComponent(filename)
         do {

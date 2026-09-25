@@ -3,7 +3,7 @@ import Foundation
 @testable import PullRequestPilot
 
 @MainActor
-@Suite("DashboardViewModel")
+@Suite("DashboardViewModel", .keychainCleanup)
 struct DashboardViewModelTests {
     // Swift Testing creates a fresh struct instance per @Test method, so
     // each test gets its own mockClient and localRepoService.
@@ -11,7 +11,7 @@ struct DashboardViewModelTests {
     let localRepoService = LocalRepositoryService()
 
     private func makeIdentity(suiteName: String) -> IdentityActor {
-        let keychain = KeychainService(service: "com.pullrequestpilot.dashboard.tests.\(suiteName)")
+        let keychain = KeychainService.forTesting(service: "com.pullrequestpilot.dashboard.tests.\(suiteName)")
         try? keychain.delete(key: Constants.Keychain.githubToken)
         return IdentityActor(keychain: keychain, github: mockClient)
     }
@@ -747,7 +747,7 @@ struct DashboardViewModelTests {
 
         await mockClient.setPullRequestsToReturn(prs)
         viewModel.commitQueryEdit(viewID: viewID, newQuery: "is:pr is:open author:@me")
-        try await Self.waitUntil { viewModel.viewStates[viewID]?.pullRequests.count == 3 }
+        try await TestWait.until { viewModel.viewStates[viewID]?.pullRequests.count == 3 }
 
         #expect(viewModel.viewStates[viewID]?.pullRequests.count == 3)
         #expect(viewModel.badgeCount == 0)
@@ -843,17 +843,6 @@ struct DashboardViewModelTests {
     }
 
     // MARK: - Helpers
-
-    private static func waitUntil(
-        deadlineSeconds: Double = 2.0,
-        _ predicate: () -> Bool
-    ) async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(deadlineSeconds))
-        while !predicate() {
-            if ContinuousClock.now >= deadline { return }
-            try await Task.sleep(for: .milliseconds(5))
-        }
-    }
 
     private func makePullRequest(number: Int, title: String, reviews: [UserReview] = []) throws -> PullRequest {
         PullRequest(

@@ -31,18 +31,6 @@ struct PRFetcherTests {
         PRFetcher(gitHubClient: client, filter: filter, reporter: reporter)
     }
 
-    @MainActor
-    private static func waitUntil(
-        deadlineSeconds: Double = 2.0,
-        _ predicate: () -> Bool
-    ) async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(deadlineSeconds))
-        while !predicate() {
-            if ContinuousClock.now >= deadline { return }
-            try await Task.sleep(for: .milliseconds(5))
-        }
-    }
-
     /// Drains the gated client if a test misses an interleaving: parked
     /// continuations would otherwise never resume, the body's trailing awaits
     /// would never resolve, and the run would hang past its time limit
@@ -415,7 +403,7 @@ struct PRFetcherTests {
         // new commit and must be dropped, not written over it.
         let pageNew = try Self.page(ids: ["PR_new"], cursor: "cursor-new")
         #expect(await client.releaseFetch(query: newView.query, cursor: nil, returning: pageNew))
-        try await Self.waitUntil { fetcher.states[viewID]?.pullRequests.map(\.id) == ["PR_new"] }
+        try await TestWait.until { fetcher.states[viewID]?.pullRequests.map(\.id) == ["PR_new"] }
         let pageOld = try Self.page(ids: ["PR_old"], cursor: "cursor-old")
         #expect(await client.releaseFetch(query: oldView.query, cursor: nil, returning: pageOld))
         _ = await newRefresh
@@ -425,6 +413,86 @@ struct PRFetcherTests {
         #expect(state.pullRequests.map(\.id) == ["PR_new"])
         #expect(state.nextCursor == "cursor-new")
         #expect(await client.fetchPullRequestsCallCount == 2)
+    }
+
+    @MainActor
+    @Test("a refresh under a new query supersedes an in-flight one instead of joining it", .timeLimit(.minutes(1)))
+    func newQueryRefreshSupersedesWithoutReset() async throws {
+        let client = GatedGitHubClient()
+        let watchdog = Self.gateWatchdog(for: client)
+        defer { watchdog.cancel() }
+        let fetcher = PRFetcher(gitHubClient: client, filter: Self.identityFilter)
+        let viewID = UUID()
+        let oldView = DashboardView(id: viewID, title: "Test", query: "is:pr label:old")
+        let newView = DashboardView(id: viewID, title: "Test", query: "is:pr label:new")
+
+        async let oldRefresh: Void = fetcher.refresh(for: oldView)
+        try await client.waitForFetch(query: oldView.query, cursor: nil)
+        // No resetState: a caller holding the pre-edit snapshot started the
+        // old refresh, and the new query must not join it.
+        async let newRefresh: Void = fetcher.refresh(for: newView)
+        try await client.waitForFetch(query: newView.query, cursor: nil)
+
+        // The stale result lands first and must be dropped.
+        let pageOld = try Self.page(ids: ["PR_old"], cursor: "cursor-old")
+        #expect(await client.releaseFetch(query: oldView.query, cursor: nil, returning: pageOld))
+        _ = await oldRefresh
+        #expect(fetcher.states[viewID]?.pullRequests.isEmpty == true)
+
+        let pageNew = try Self.page(ids: ["PR_new"], cursor: "cursor-new")
+        #expect(await client.releaseFetch(query: newView.query, cursor: nil, returning: pageNew))
+        _ = await newRefresh
+
+        let state = try #require(fetcher.states[viewID])
+        #expect(state.pullRequests.map(\.id) == ["PR_new"])
+        #expect(state.nextCursor == "cursor-new")
+        #expect(state.isLoading == false)
+    }
+
+    @MainActor
+    @Test("a superseded refresh that fails posts nothing", .timeLimit(.minutes(1)))
+    func supersededFailureDoesNotToast() async throws {
+        let client = GatedGitHubClient()
+        let watchdog = Self.gateWatchdog(for: client)
+        defer { watchdog.cancel() }
+        let recorder = EventRecorder()
+        let fetcher = PRFetcher(gitHubClient: client, filter: Self.identityFilter, reporter: recorder.reporter())
+        let viewID = UUID()
+        let oldView = DashboardView(id: viewID, title: "Test", query: "is:pr label:old")
+        let newView = DashboardView(id: viewID, title: "Test", query: "is:pr label:new")
+
+        async let oldRefresh: Void = fetcher.refresh(for: oldView)
+        try await client.waitForFetch(query: oldView.query, cursor: nil)
+        fetcher.resetState(for: viewID)
+        async let newRefresh: Void = fetcher.refresh(for: newView)
+        try await client.waitForFetch(query: newView.query, cursor: nil)
+
+        #expect(await client.failFetch(query: oldView.query, cursor: nil, with: GitHubClientError.serverError(statusCode: 502)))
+        _ = await oldRefresh
+        let pageNew = try Self.page(ids: ["PR_new"], cursor: nil)
+        #expect(await client.releaseFetch(query: newView.query, cursor: nil, returning: pageNew))
+        _ = await newRefresh
+
+        #expect(recorder.events.isEmpty)
+        #expect(fetcher.states[viewID]?.error == nil)
+    }
+
+    @MainActor
+    @Test("a failed load-more toasts its error")
+    func loadMoreFailureToasts() async throws {
+        let client = MockGitHubClient()
+        let recorder = EventRecorder()
+        let fetcher = Self.makeFetcher(client: client, reporter: recorder.reporter())
+        let view = Self.makeView()
+        await client.setPullRequestsToReturn([try TestPullRequestFactory.make(id: "PR_1")])
+        await client.setNextCursorToReturn("cursor-1")
+        await fetcher.refresh(for: view)
+
+        await client.setErrorToThrow(GitHubClientError.serverError(statusCode: 503))
+        await fetcher.loadMore(for: view)
+
+        #expect(recorder.unresolvedErrors == [.serverError(statusCode: 503)])
+        #expect(fetcher.states[view.id]?.pullRequests.map(\.id) == ["PR_1"])
     }
 
     // MARK: - refresh / loadMore interleave
@@ -592,6 +660,15 @@ private actor GatedGitHubClient: GitHubClientProtocol {
             if ContinuousClock.now >= deadline { return }
             try await Task.sleep(for: .milliseconds(5))
         }
+    }
+
+    /// Resumes the pending fetch matching `query`/`cursor` by throwing `error`.
+    func failFetch(query: String, cursor: String?, with error: any Error) -> Bool {
+        guard let index = pendingFetches.firstIndex(where: { $0.query == query && $0.cursor == cursor }) else {
+            return false
+        }
+        pendingFetches.remove(at: index).continuation.resume(throwing: error)
+        return true
     }
 
     /// Resumes the pending fetch matching `query`/`cursor` with `page`.

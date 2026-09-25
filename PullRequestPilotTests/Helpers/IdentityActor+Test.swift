@@ -8,17 +8,17 @@ enum IdentityActorTestFactory {
     static let servicePrefix = "com.pullrequestpilot.identity.tests."
 
     /// IdentityActor plus its backing test keychain. `swap` persists the fake
-    /// token into the real login keychain, and UUID-fresh service names are
-    /// never revisited — so tests that swap manually must call
-    /// `try deleteStoredToken()` after each successful swap. The actor serves the
-    /// token from in-memory state after swap (only `bootstrap()` reads the
-    /// keychain), so deleting immediately is behavior-neutral.
+    /// token into the real login keychain: suites with `.keychainCleanup`
+    /// delete it after each test, and tests elsewhere call
+    /// `try deleteStoredToken()` after each successful swap. The actor serves
+    /// the token from memory after a swap (the Keychain is read only at
+    /// launch), so deleting immediately is behavior-neutral.
     struct Harness {
         let identity: IdentityActor
         private let keychain: KeychainService
 
         init(github: GitHubClientProtocol, suite: String) {
-            let keychain = KeychainService(service: IdentityActorTestFactory.servicePrefix + suite)
+            let keychain = KeychainService.forTesting(service: IdentityActorTestFactory.servicePrefix + suite)
             try? keychain.delete(key: Constants.Keychain.githubToken)
             self.keychain = keychain
             self.identity = IdentityActor(keychain: keychain, github: github)
@@ -61,14 +61,14 @@ enum IdentityActorTestFactory {
 
 // MARK: - Factory keychain hygiene
 
-@Suite("IdentityActorTestFactory")
+@Suite("IdentityActorTestFactory", .keychainCleanup)
 struct IdentityActorTestFactoryTests {
     @Test("makeAuthenticated deletes the persisted token after swap")
     func makeAuthenticatedLeavesNoKeychainItem() async throws {
         let suite = UUID().uuidString
         let identity = try await IdentityActorTestFactory.makeAuthenticated(github: MockGitHubClient(), suite: suite)
 
-        let keychain = KeychainService(service: IdentityActorTestFactory.servicePrefix + suite)
+        let keychain = KeychainService.forTesting(service: IdentityActorTestFactory.servicePrefix + suite)
         #expect(try keychain.readItem(key: Constants.Keychain.githubToken) == nil)
         // In-memory identity survives the keychain cleanup.
         #expect(await identity.token() == "ghp_test")
@@ -91,7 +91,7 @@ struct IdentityActorTestFactoryTests {
         let suite = UUID().uuidString
         _ = IdentityActorTestFactory.make(github: MockGitHubClient(), suite: suite)
 
-        let keychain = KeychainService(service: IdentityActorTestFactory.servicePrefix + suite)
+        let keychain = KeychainService.forTesting(service: IdentityActorTestFactory.servicePrefix + suite)
         #expect(try keychain.readItem(key: Constants.Keychain.githubToken) == nil)
     }
 }

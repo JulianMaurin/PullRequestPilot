@@ -261,19 +261,54 @@ struct LocalRepositoryServiceTests {
 
     // MARK: - Periodic Refresh
 
-    @Test("stopPeriodicRefresh cancels running refresh")
-    func stopPeriodicRefresh() {
-        let service = LocalRepositoryService()
-        service.startPeriodicRefresh(directories: { [] }, interval: 3600)
-        service.stopPeriodicRefresh()
+    /// Counts how often a periodic refresh asked for its directories: once
+    /// per tick.
+    @MainActor
+    private final class TickCounter {
+        var count = 0
     }
 
-    @Test("startPeriodicRefresh cancels previous task before starting new one")
-    func startPeriodicRefreshReplacesExisting() {
+    @Test("startPeriodicRefresh ticks right away and then on every interval")
+    func startPeriodicRefreshTicks() async throws {
         let service = LocalRepositoryService()
-        service.startPeriodicRefresh(directories: { [] }, interval: 3600)
-        service.startPeriodicRefresh(directories: { [] }, interval: 3600)
+        let ticks = TickCounter()
+        service.startPeriodicRefresh(directories: { ticks.count += 1; return [] }, interval: 0.05)
+        defer { service.stopPeriodicRefresh() }
+
+        try await TestWait.until { ticks.count >= 2 }
+        #expect(ticks.count >= 2)
+    }
+
+    @Test("stopPeriodicRefresh ends the loop")
+    func stopPeriodicRefresh() async throws {
+        let service = LocalRepositoryService()
+        let ticks = TickCounter()
+        service.startPeriodicRefresh(directories: { ticks.count += 1; return [] }, interval: 0.05)
+        try await TestWait.until { ticks.count >= 1 }
+
         service.stopPeriodicRefresh()
+        let ticksAtStop = ticks.count
+        // Six intervals: a live loop would tick again well within them.
+        try await TestWait.until(timeout: .milliseconds(300)) { ticks.count > ticksAtStop }
+
+        #expect(ticks.count == ticksAtStop)
+    }
+
+    @Test("startPeriodicRefresh replaces the running loop")
+    func startPeriodicRefreshReplacesExisting() async throws {
+        let service = LocalRepositoryService()
+        let first = TickCounter()
+        let second = TickCounter()
+        service.startPeriodicRefresh(directories: { first.count += 1; return [] }, interval: 0.05)
+        try await TestWait.until { first.count >= 1 }
+
+        service.startPeriodicRefresh(directories: { second.count += 1; return [] }, interval: 0.05)
+        defer { service.stopPeriodicRefresh() }
+        let firstAtReplace = first.count
+        try await TestWait.until { second.count >= 3 }
+
+        #expect(second.count >= 3)
+        #expect(first.count == firstAtReplace)
     }
 
     // MARK: - Multiple worktrees

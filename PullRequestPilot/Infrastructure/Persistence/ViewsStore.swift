@@ -17,11 +17,15 @@ final class ViewsStore: ViewsStoreProtocol {
     private static let key = "dashboard_views"
     private let defaults: UserDefaults
     private let reporter: EventReporter
+    /// Where undecodable data is copied before defaults replace it; nil when
+    /// Application Support is unavailable.
+    private let backupDirectory: URL?
     private let logger = Logger(category: "ViewsStore")
 
-    init(defaults: UserDefaults, reporter: EventReporter = .noop) {
+    init(defaults: UserDefaults, reporter: EventReporter = .noop, backupDirectory: URL? = ViewsStore.applicationSupportDirectory()) {
         self.defaults = defaults
         self.reporter = reporter
+        self.backupDirectory = backupDirectory
     }
 
     func load() -> [DashboardView] {
@@ -56,7 +60,7 @@ final class ViewsStore: ViewsStoreProtocol {
     /// calendar date so repeated failures on the same day overwrite rather than
     /// fill the disk.
     private func backupCorruptedData(_ data: Data) -> String? {
-        guard let supportDir = Self.applicationSupportDirectory() else { return nil }
+        guard let supportDir = backupDirectory else { return nil }
         let filename = "dashboard-views.corrupted-\(Self.backupDateString()).json"
         let url = supportDir.appendingPathComponent(filename)
         do {

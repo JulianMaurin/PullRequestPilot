@@ -3,13 +3,13 @@ import Foundation
 import Security
 @testable import PullRequestPilot
 
-@Suite("IdentityActor")
+@Suite("IdentityActor", .keychainCleanup)
 struct IdentityActorTests {
 
     private func makeIdentity(keychainSuite: String = UUID().uuidString, github: GitHubClientProtocol = MockGitHubClient())
         -> (IdentityActor, KeychainService)
     {
-        let keychain = KeychainService(service: "com.pullrequestpilot.identity.tests.\(keychainSuite)")
+        let keychain = KeychainService.forTesting(service: "com.pullrequestpilot.identity.tests.\(keychainSuite)")
         try? keychain.delete(key: Constants.Keychain.githubToken)
         return (IdentityActor(keychain: keychain, github: github), keychain)
     }
@@ -25,7 +25,7 @@ struct IdentityActorTests {
     @Test("init with a stored token starts authenticated, viewer login not yet fetched")
     func initWithStoredToken() async {
         let identity = IdentityActor(
-            keychain: KeychainService(service: "com.pullrequestpilot.identity.tests.init-stored"),
+            keychain: KeychainService.forTesting(service: "com.pullrequestpilot.identity.tests.init-stored"),
             github: MockGitHubClient(),
             storedToken: "ghp_stored"
         )
@@ -341,7 +341,7 @@ struct IdentityActorTests {
     private func makeLaunchedIdentity(github: GitHubClientProtocol, storedToken: String = "ghp_stored")
         -> (IdentityActor, KeychainService)
     {
-        let keychain = KeychainService(service: "com.pullrequestpilot.identity.tests.launched.\(UUID().uuidString)")
+        let keychain = KeychainService.forTesting(service: "com.pullrequestpilot.identity.tests.launched.\(UUID().uuidString)")
         return (IdentityActor(keychain: keychain, github: github, storedToken: storedToken), keychain)
     }
 

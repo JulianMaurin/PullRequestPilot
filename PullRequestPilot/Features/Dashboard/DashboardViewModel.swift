@@ -451,13 +451,6 @@ final class DashboardViewModel: DashboardActionsProtocol {
         }
     }
 
-    func reloadViews() {
-        viewRegistry.reload()
-        for view in viewRegistry.views {
-            fetcher.ensureState(for: view.id)
-        }
-    }
-
     // MARK: - Sign Out
 
     func clearAllData() {

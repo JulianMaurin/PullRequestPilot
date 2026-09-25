@@ -264,6 +264,100 @@ struct GitHubClientTests {
         #expect(page.partialErrorMessages == [samlMessage])
     }
 
+    private static func timelineJSON(timelineCursor: String, checksCursor: String) -> String {
+        """
+        {"data": {"node": {
+            "timelineItems": {"nodes": [], "pageInfo": {"hasNextPage": true, "endCursor": "\(timelineCursor)"}},
+            "commits": {"nodes": [{"commit": {"statusCheckRollup": {"contexts": {
+                "nodes": [], "pageInfo": {"hasNextPage": true, "endCursor": "\(checksCursor)"}
+            }}}}]}
+        }}}
+        """
+    }
+
+    @Test("fetchTimeline returns the timeline and checks cursors GitHub sends")
+    func fetchTimelineReturnsCursors() async throws {
+        let (client, http) = makeClient()
+        http.handler = { request in
+            try TestHTTP.response(for: request, body: Data(Self.timelineJSON(timelineCursor: "timeline-2", checksCursor: "checks-2").utf8))
+        }
+
+        let page = try await client.fetchTimeline(nodeID: "PR_1", cursor: nil, eventPageOffset: 0, checksPageOffset: 0)
+
+        #expect(page.nextCursor == "timeline-2")
+        #expect(page.checksNextCursor == "checks-2")
+    }
+
+    @Test("fetchTimeline counts every timeline node, including those that map to no event")
+    func fetchTimelineCountsAllNodes() async throws {
+        let (client, http) = makeClient()
+        let body = """
+        {"data": {"node": {"timelineItems": {
+            "nodes": [
+                {"__typename": "IssueComment", "createdAt": "2024-01-15T10:00:00Z", "author": {"login": "alice", "avatarUrl": null}, "body": "hi"},
+                {"__typename": "LabeledEvent", "createdAt": "2024-01-15T10:05:00Z"}
+            ],
+            "pageInfo": {"hasNextPage": false, "endCursor": null}
+        }}}}
+        """
+        http.handler = { request in
+            try TestHTTP.response(for: request, body: Data(body.utf8))
+        }
+
+        let page = try await client.fetchTimeline(nodeID: "PR_1", cursor: nil, eventPageOffset: 0, checksPageOffset: 0)
+
+        #expect(page.events.count == 1)
+        #expect(page.eventNodeCount == 2)
+    }
+
+    @Test("an empty-string end cursor ends timeline and checks pagination")
+    func fetchTimelineEmptyCursorsAreNil() async throws {
+        let (client, http) = makeClient()
+        http.handler = { request in
+            try TestHTTP.response(for: request, body: Data(Self.timelineJSON(timelineCursor: "", checksCursor: "").utf8))
+        }
+
+        let page = try await client.fetchTimeline(nodeID: "PR_1", cursor: nil, eventPageOffset: 0, checksPageOffset: 0)
+
+        #expect(page.nextCursor == nil)
+        #expect(page.checksNextCursor == nil)
+    }
+
+    @Test("fetchChecks returns the next cursor and treats an empty one as the end", arguments: [("checks-3", "checks-3"), ("", nil)])
+    func fetchChecksCursor(endCursor: String, expected: String?) async throws {
+        let (client, http) = makeClient()
+        http.handler = { request in
+            try TestHTTP.response(for: request, body: Data(Self.timelineJSON(timelineCursor: "unused", checksCursor: endCursor).utf8))
+        }
+
+        let page = try await client.fetchChecks(nodeID: "PR_1", cursor: "checks-2", checksPageOffset: 0)
+
+        #expect(page.nextCursor == expected)
+    }
+
+    @Test("an empty-string search end cursor ends pagination")
+    func fetchPullRequestsEmptyCursorIsNil() async throws {
+        let (client, http) = makeClient()
+        let responseJSON = makeSearchResponseJSON(hasNextPage: true, endCursor: "")
+        http.handler = { request in
+            try TestHTTP.response(for: request, body: Data(responseJSON.utf8))
+        }
+
+        let page = try await client.fetchPullRequests(query: "is:pr", cursor: nil)
+
+        #expect(page.nextCursor == nil)
+    }
+
+    @Test("a cancelled URL session request surfaces as CancellationError, not a network error")
+    func urlCancellationBecomesCancellationError() async {
+        let (client, http) = makeClient()
+        http.handler = { _ in throw URLError(.cancelled) }
+
+        await #expect(throws: CancellationError.self) {
+            _ = try await client.fetchPullRequests(query: "is:pr", cursor: nil)
+        }
+    }
+
     @Test("a PR that no longer resolves throws GitHub's reason instead of an empty timeline")
     func fetchTimelineNullNodeThrows() async {
         let (client, http) = makeClient()

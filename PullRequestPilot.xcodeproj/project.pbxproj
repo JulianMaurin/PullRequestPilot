@@ -10,6 +10,7 @@
 		05BB7F05AA5CCA518854C8AE /* Logger+Category.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7956A945631A11303A53BA81 /* Logger+Category.swift */; };
 		07C2B06413998D80FCF6BE1E /* ViewRegistryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BDFCEB7310244DB5A920382 /* ViewRegistryTests.swift */; };
 		07F19EC97F6B8C43F7F622A6 /* PRGrouping.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00046F28D881E486A5927E3 /* PRGrouping.swift */; };
+		096E84D68093C6FC9E5FE4D4 /* TestKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EA7870CB415C99FF8DB64B4 /* TestKeychain.swift */; };
 		0C1F9B771607622A18B74869 /* WidgetDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C854B3DB190A89FB311DBA /* WidgetDataTests.swift */; };
 		0EB5FF630CA876E20B04822F /* SelectViewIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1BC5B3AADE18A80A9DAB42F /* SelectViewIntent.swift */; };
 		10B00C7E1FFC9F019FD5B701 /* LocalRepositoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B919383AC965AD29C544D35C /* LocalRepositoryService.swift */; };
@@ -237,6 +238,7 @@
 		9D6EDC17C7FDDD59B016359F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		9DCD9C373C64F2C4FBAB5FFA /* MockGitHubClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockGitHubClient.swift; sourceTree = "<group>"; };
 		9E5FD8EDDD1395CE2E48479A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		9EA7870CB415C99FF8DB64B4 /* TestKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestKeychain.swift; sourceTree = "<group>"; };
 		A153FB6F0950731D209C472E /* WidgetDestination+Test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WidgetDestination+Test.swift"; sourceTree = "<group>"; };
 		A1BC5B3AADE18A80A9DAB42F /* SelectViewIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectViewIntent.swift; sourceTree = "<group>"; };
 		AD46693817F4AC7B0929F1BD /* GitHubClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubClientTests.swift; sourceTree = "<group>"; };
@@ -569,6 +571,7 @@
 				271A388E76ECC617E9EECD04 /* IdentityActor+Test.swift */,
 				54AD8B8515D7E1520509F943 /* TestClock.swift */,
 				4413F26A2D4ADED62D096BED /* TestHTTP.swift */,
+				9EA7870CB415C99FF8DB64B4 /* TestKeychain.swift */,
 				764B9FE62E6225465AD80999 /* TestPullRequestFactory.swift */,
 				1916A000EE59B044DCC8ADB7 /* TestWait.swift */,
 				A153FB6F0950731D209C472E /* WidgetDestination+Test.swift */,
@@ -885,6 +888,7 @@
 				7485EF4CAF939DB4C5EBC0C5 /* SettingsViewModelTests.swift in Sources */,
 				629BB18DF107FFB68D4C95C0 /* TestClock.swift in Sources */,
 				5039B8557D5E1053950BD6E2 /* TestHTTP.swift in Sources */,
+				096E84D68093C6FC9E5FE4D4 /* TestKeychain.swift in Sources */,
 				964ADE8F02C6BD934DF5B96D /* TestPullRequestFactory.swift in Sources */,
 				B745E07DC8A8D1EAAE87BFD8 /* TestWait.swift in Sources */,
 				77C16D0F8E345235B722E6FB /* TimelineEventTests.swift in Sources */,

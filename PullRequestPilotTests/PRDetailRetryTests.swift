@@ -10,19 +10,6 @@ struct PRDetailRetryTests {
         try TestPullRequestFactory.make(id: id)
     }
 
-    /// Wait for the fire-and-forget Task to start and finish loading.
-    private func waitForLoad(_ vm: PRDetailViewModel, timeout: Duration = .milliseconds(2000)) async throws {
-        let deadline = ContinuousClock.now + timeout
-        // Phase 1: yield until the Task sets isLoading = true (task started)
-        while !vm.isLoading, ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(5))
-        }
-        // Phase 2: wait for isLoading to go back to false (task finished)
-        while vm.isLoading, ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(5))
-        }
-    }
-
     @Test("retry re-fetches timeline without deselecting")
     func retryRefetchesWithoutDeselecting() async throws {
         let client = MockGitHubClient()
@@ -31,7 +18,7 @@ struct PRDetailRetryTests {
 
         // Select PR — will error
         vm.selectPR(try makePR())
-        try await waitForLoad(vm)
+        await vm.waitForCurrentLoad()
         #expect(vm.error != nil)
         #expect(vm.selectedPR != nil)
 
@@ -43,7 +30,7 @@ struct PRDetailRetryTests {
 
         // Retry — should keep selection and re-fetch
         vm.retry()
-        try await waitForLoad(vm)
+        await vm.waitForCurrentLoad()
         #expect(vm.selectedPR != nil)
         #expect(vm.error == nil)
         #expect(vm.timelineEvents.count == 1)

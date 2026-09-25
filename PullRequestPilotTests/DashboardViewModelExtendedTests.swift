@@ -3,7 +3,7 @@ import Foundation
 @testable import PullRequestPilot
 
 @MainActor
-@Suite("DashboardViewModel Extended")
+@Suite("DashboardViewModel Extended", .keychainCleanup)
 struct DashboardViewModelExtendedTests {
     let mockClient = MockGitHubClient()
     let localRepoService = LocalRepositoryService()
@@ -140,26 +140,6 @@ struct DashboardViewModelExtendedTests {
         #expect(viewModel.selectedViewID != view1.id)
     }
 
-    // MARK: - reloadViews
-
-    @Test("reloadViews syncs state with store")
-    func reloadViewsSyncsState() throws {
-        let defaults = try #require(UserDefaults(suiteName: "DashboardViewModelExtendedTests.ReloadViews"))
-        defaults.removePersistentDomain(forName: "DashboardViewModelExtendedTests.ReloadViews")
-        let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
-
-        let newView = DashboardView(id: UUID(), title: "New View", query: "test")
-        var allViews = store.load()
-        allViews.append(newView)
-        store.save(allViews)
-
-        viewModel.reloadViews()
-
-        #expect(viewModel.views.contains(where: { $0.id == newView.id }))
-        #expect(viewModel.viewStates[newView.id] != nil)
-    }
-
     // MARK: - selectedViewState
 
     @Test("selectedViewState returns empty state when no selection")
@@ -192,15 +172,18 @@ struct DashboardViewModelExtendedTests {
         #expect(!viewModel.isNotificationEnabled(for: viewID))
     }
 
-    // MARK: - Auto-refresh idempotency
+    // MARK: - Auto-refresh
 
-    @Test("startAutoRefresh is idempotent")
-    func startAutoRefreshIdempotent() throws {
-        let (viewModel, _) = try makeViewModel(suiteName: "AutoRefreshIdem")
+    @Test("startAutoRefresh refreshes the views right away")
+    func startAutoRefreshRefreshesImmediately() async throws {
+        let (viewModel, viewID) = try makeViewModel(suiteName: "AutoRefreshStart")
+        await mockClient.setPullRequestsToReturn([try TestPullRequestFactory.make()])
+
         viewModel.startAutoRefresh()
-        viewModel.startAutoRefresh()
-        // Should not create multiple tasks — just verify no crash
-        viewModel.stopAutoRefresh()
+        defer { viewModel.stopAutoRefresh() }
+        try await TestWait.until { viewModel.viewStates[viewID]?.pullRequests.count == 1 }
+
+        #expect(viewModel.viewStates[viewID]?.pullRequests.count == 1)
     }
 
     // MARK: - CancellationError handling
@@ -338,41 +321,6 @@ struct DashboardViewModelExtendedTests {
         #expect(await mockClient.fetchPullRequestsCallCount == callsBefore)
     }
 
-    // MARK: - reloadViews with stale selection
-
-    @Test("reloadViews updates selection when current selection is stale")
-    func reloadViewsUpdatesStaleSelection() throws {
-        let defaults = try #require(UserDefaults(suiteName: "DashboardViewModelExtendedTests.ReloadViewsStale"))
-        defaults.removePersistentDomain(forName: "DashboardViewModelExtendedTests.ReloadViewsStale")
-        let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
-
-        // Set selection to a non-existent view
-        viewModel.selectedViewID = UUID()
-        viewModel.reloadViews()
-
-        // Selection should be reset to first available view
-        #expect(viewModel.selectedViewID == viewModel.views.first?.id)
-    }
-
-    @Test("reloadViews cleans up orphaned viewStates")
-    func reloadViewsCleansOrphanedStates() throws {
-        let defaults = try #require(UserDefaults(suiteName: "DashboardViewModelExtendedTests.ReloadViewsOrphaned"))
-        defaults.removePersistentDomain(forName: "DashboardViewModelExtendedTests.ReloadViewsOrphaned")
-        let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
-
-        // Store currently has the default view. Save it so reloadViews has it.
-        let statesBefore = viewModel.viewStates.count
-
-        // Delete a view from the store directly (simulating external change)
-        store.save([])
-        viewModel.reloadViews()
-
-        // viewStates should be updated to match the new (default) views
-        #expect(viewModel.viewStates.count <= statesBefore + 1)
-    }
-
     // MARK: - selectedViewState with valid selection
 
     @Test("selectedViewState returns the state for selected view")
@@ -438,13 +386,10 @@ struct DashboardViewModelExtendedTests {
         viewModel.addView(view2)
         viewModel.addView(view3)
 
-        // Move view3 before view1
         viewModel.moveView(from: view3.id, to: view1.id)
 
-        let titles = viewModel.views.map(\.title)
-        #expect(titles.contains("Third"))
-        #expect(titles.contains("First"))
-        #expect(titles.contains("Second"))
+        #expect(viewModel.views.map(\.title) == ["Third", "First", "Second"])
+        #expect(store.load().map(\.title) == ["Third", "First", "Second"], "the new order is saved")
     }
 
     @Test("moveView is no-op when source equals target")
@@ -662,58 +607,66 @@ struct DashboardViewModelExtendedTests {
 
     // MARK: - fetchViewerLoginIfNeeded
 
-    @Test("refreshAll fetches viewer login before refreshing views")
+    @Test("refreshAll hides the viewer's reviewed PRs in hide-reviewed views")
     func refreshAllFetchesViewerLogin() async throws {
         let defaults = try #require(UserDefaults(suiteName: "DashboardViewModelExtendedTests.RefreshAllLogin"))
         defaults.removePersistentDomain(forName: "DashboardViewModelExtendedTests.RefreshAllLogin")
         let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
+        await mockClient.setViewerLogin("mylogin")
+        let identity = try await IdentityActorTestFactory.makeAuthenticated(github: mockClient)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: identity, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
         let testView = DashboardView(id: UUID(), title: "Test", query: "is:pr", hideReviewed: true)
         viewModel.addView(testView)
 
-        await mockClient.setViewerLogin("mylogin")
-        await mockClient.setPullRequestsToReturn([])
+        await mockClient.setPullRequestsToReturn([
+            try TestPullRequestFactory.make(id: "PR_reviewed", latestReviews: [UserReview(login: "mylogin", state: .approved)]),
+            try TestPullRequestFactory.make(id: "PR_waiting"),
+        ])
         await viewModel.refreshAll()
 
-        // The viewer login should have been fetched (no error)
-        #expect(viewModel.viewStates[testView.id] != nil)
+        #expect(viewModel.viewStates[testView.id]?.pullRequests.map(\.id) == ["PR_waiting"])
     }
 
-    // MARK: - stopAutoRefresh cleans up observer
+    // MARK: - stopAutoRefresh
 
-    @Test("stopAutoRefresh removes notification observer")
-    func stopAutoRefreshCleansUp() throws {
-        let (viewModel, _) = try makeViewModel(suiteName: "StopAutoRefresh")
+    @Test("stopAutoRefresh ends the refresh loop")
+    func stopAutoRefreshEndsLoop() async throws {
+        let suiteName = "DashboardViewModelExtendedTests.StopAutoRefresh"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set(0.05, forKey: Constants.UserDefaultsKeys.prRefreshInterval)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: ViewsStore(defaults: defaults), localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
+        viewModel.addView(DashboardView(id: UUID(), title: "Loop", query: "is:pr"))
+        await mockClient.setPullRequestsToReturn([try TestPullRequestFactory.make()])
+
         viewModel.startAutoRefresh()
+        try await TestWait.until { await mockClient.fetchPullRequestsCallCount >= 2 }
+        #expect(await mockClient.fetchPullRequestsCallCount >= 2, "the loop should tick every 50 ms while running")
         viewModel.stopAutoRefresh()
-        // Calling stop twice should be safe
-        viewModel.stopAutoRefresh()
+        let fetchesAtStop = await mockClient.fetchPullRequestsCallCount
+
+        // Six intervals: a live loop would fetch again well within them.
+        try await TestWait.until(timeout: .milliseconds(300)) { await mockClient.fetchPullRequestsCallCount > fetchesAtStop }
+        #expect(await mockClient.fetchPullRequestsCallCount == fetchesAtStop)
     }
 
     // MARK: - openInEditor / openInTerminal / openInCmux with no match
 
-    @Test("openInEditor is no-op when no local match")
-    func openInEditorNoMatch() throws {
-        let (viewModel, _) = try makeViewModel(suiteName: "OpenEditorNoMatch")
+    @Test("open-in actions do nothing and report nothing without a local checkout")
+    func openInActionsNeedLocalMatch() throws {
+        let suiteName = "DashboardViewModelExtendedTests.OpenNoMatch"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        let recorder = EventRecorder()
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: ViewsStore(defaults: defaults), localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary(), reporter: recorder.reporter())
         let pr = try TestPullRequestFactory.make()
-        // Should not crash
+        #expect(viewModel.localMatch(for: pr) == nil)
+
         viewModel.openInEditor(pr)
-    }
-
-    @Test("openInTerminal is no-op when no local match")
-    func openInTerminalNoMatch() throws {
-        let (viewModel, _) = try makeViewModel(suiteName: "OpenTerminalNoMatch")
-        let pr = try TestPullRequestFactory.make()
-        // Should not crash
         viewModel.openInTerminal(pr)
-    }
-
-    @Test("openInCmux is no-op when no local match")
-    func openInCmuxNoMatch() throws {
-        let (viewModel, _) = try makeViewModel(suiteName: "OpenCmuxNoMatch")
-        let pr = try TestPullRequestFactory.make()
-        // Should not crash
         viewModel.openInCmux(pr)
+
+        #expect(recorder.events.isEmpty)
     }
 
     // MARK: - notifiedViewIDs persistence
@@ -738,7 +691,7 @@ struct DashboardViewModelExtendedTests {
 
     // MARK: - hideReviewed with dismissed reviews
 
-    @Test("hideReviewed keeps PRs with CHANGES_REQUESTED review from viewer")
+    @Test("hideReviewed hides PRs the viewer requested changes on")
     func hideReviewedChangesRequested() async throws {
         let defaults = try #require(UserDefaults(suiteName: "DashboardViewModelExtendedTests.HideReviewedCR"))
         defaults.removePersistentDomain(forName: "DashboardViewModelExtendedTests.HideReviewedCR")
@@ -760,7 +713,7 @@ struct DashboardViewModelExtendedTests {
         #expect(!titles.contains("Changes Requested"))
     }
 
-    @Test("hideReviewed keeps PRs with COMMENTED review from viewer")
+    @Test("hideReviewed hides PRs the viewer commented on")
     func hideReviewedCommented() async throws {
         let defaults = try #require(UserDefaults(suiteName: "DashboardViewModelExtendedTests.HideReviewedComment"))
         defaults.removePersistentDomain(forName: "DashboardViewModelExtendedTests.HideReviewedComment")

@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import PullRequestPilot
 
-@Suite("GitHubClient HTTP Error Handling", .serialized)
+@Suite("GitHubClient HTTP Error Handling", .serialized, .keychainCleanup)
 struct GitHubClientHTTPErrorTests {
 
     private func makeClient(token: String = "valid-token") -> (client: GitHubClient, http: MockHTTPSession) {

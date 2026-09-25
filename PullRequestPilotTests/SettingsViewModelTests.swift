@@ -3,7 +3,7 @@ import Foundation
 @testable import PullRequestPilot
 
 @MainActor
-@Suite("SettingsViewModel")
+@Suite("SettingsViewModel", .keychainCleanup)
 struct SettingsViewModelTests {
     private let mockClient = MockGitHubClient()
     private let localRepoService = LocalRepositoryService()
@@ -14,7 +14,7 @@ struct SettingsViewModelTests {
         reporter: EventReporter = .noop
     ) throws -> (SettingsViewModel, KeychainService, IdentityActor, GitDirectoriesStore, UserDefaults) {
         let keychainService = "com.pullrequestpilot.settings.tests.\(suiteName)"
-        let keychain = KeychainService(service: keychainService)
+        let keychain = KeychainService.forTesting(service: keychainService)
         if let storedToken {
             try? keychain.save(key: Constants.Keychain.githubToken, value: storedToken)
         } else {
@@ -292,16 +292,16 @@ struct SettingsViewModelTests {
 
     // MARK: - rescan
 
-    @Test("rescan triggers a scan on localRepositoryService")
+    @Test("rescan runs a repository scan")
     func rescanTriggersScan() async throws {
         let (vm, _, _, _, _) = try makeViewModel(suiteName: "Rescan")
+        #expect(localRepoService.lastScanDate == nil)
+
         vm.rescan()
-        // Wait for the async Task inside triggerRescan to complete (poll with deadline)
-        let deadline = ContinuousClock.now + .seconds(2)
-        while localRepoService.isScanning, ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(5))
-        }
-        // No crash, scan was triggered
+
+        try await TestWait.until { localRepoService.lastScanDate != nil }
+        #expect(localRepoService.lastScanDate != nil)
+        #expect(!localRepoService.isScanning)
     }
 
     // MARK: - Interval setters
@@ -460,7 +460,7 @@ struct SettingsViewModelTests {
     func initLoadsPRInterval() throws {
         let suiteName = "InitPRInterval"
         let keychainService = "com.pullrequestpilot.settings.tests.\(suiteName)"
-        let keychain = KeychainService(service: keychainService)
+        let keychain = KeychainService.forTesting(service: keychainService)
         try? keychain.delete(key: Constants.Keychain.githubToken)
         let identity = IdentityActor(keychain: keychain, github: mockClient)
         let defaults = try #require(UserDefaults(suiteName: suiteName))
@@ -491,7 +491,7 @@ struct SettingsViewModelTests {
     func initLoadsRepoInterval() throws {
         let suiteName = "InitRepoInterval"
         let keychainService = "com.pullrequestpilot.settings.tests.\(suiteName)"
-        let keychain = KeychainService(service: keychainService)
+        let keychain = KeychainService.forTesting(service: keychainService)
         try? keychain.delete(key: Constants.Keychain.githubToken)
         let identity = IdentityActor(keychain: keychain, github: mockClient)
         let defaults = try #require(UserDefaults(suiteName: suiteName))
@@ -562,7 +562,7 @@ struct SettingsViewModelTests {
 
         await mockClient.setValidateTokenError(GitHubClientError.unauthorized)
         await identity.handleUnauthorized(staleToken: "ghp_valid")
-        try await Self.waitUntil { !vm.hasSavedToken }
+        try await TestWait.until { !vm.hasSavedToken }
 
         #expect(!vm.hasSavedToken)
         #expect(vm.viewerLogin == nil)
@@ -656,7 +656,7 @@ struct SettingsViewModelTests {
     @Test("an unreadable Keychain at launch explains itself instead of looking like a first run")
     func keychainReadFailureIsExplained() throws {
         let suiteName = "KeychainReadFailure"
-        let keychain = KeychainService(service: "com.pullrequestpilot.settings.tests.\(suiteName)")
+        let keychain = KeychainService.forTesting(service: "com.pullrequestpilot.settings.tests.\(suiteName)")
         let identity = IdentityActor(keychain: keychain, github: mockClient)
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
@@ -678,17 +678,6 @@ struct SettingsViewModelTests {
     }
 
     // MARK: - Helpers
-
-    private static func waitUntil(
-        deadlineSeconds: Double = 2.0,
-        _ predicate: () -> Bool
-    ) async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(deadlineSeconds))
-        while !predicate() {
-            if ContinuousClock.now >= deadline { return }
-            try await Task.sleep(for: .milliseconds(5))
-        }
-    }
 
     // MARK: - prRefreshInterval persists to UserDefaults
 

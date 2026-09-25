@@ -3,9 +3,9 @@ import Foundation
 import Security
 @testable import PullRequestPilot
 
-@Suite("KeychainService")
+@Suite("KeychainService", .keychainCleanup)
 struct KeychainServiceTests {
-    private let keychain = KeychainService(service: "com.pullrequestpilot.tests.\(UUID().uuidString)")
+    private let keychain = KeychainService.forTesting(service: "com.pullrequestpilot.tests.\(UUID().uuidString)")
 
     @Test("save overwrites existing value")
     func saveOverwrites() throws {

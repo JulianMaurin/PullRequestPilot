@@ -44,21 +44,6 @@ struct WidgetSyncTests {
         }
     }
 
-    /// Polls until `predicate()` becomes true or the deadline expires.
-    /// Avoids Task.sleep-as-sync: yields between checks and sleeps briefly
-    /// so the MainActor can run the throttled write task.
-    @MainActor
-    private static func waitUntil(
-        deadlineSeconds: Double = 2.0,
-        _ predicate: () -> Bool
-    ) async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(deadlineSeconds))
-        while !predicate() {
-            if ContinuousClock.now >= deadline { return }
-            try await Task.sleep(for: .milliseconds(5))
-        }
-    }
-
     // MARK: - First sync: immediate write
 
     @MainActor
@@ -89,7 +74,7 @@ struct WidgetSyncTests {
         // Immediately after those, nothing new has written yet.
         #expect(counter.count == 1)
         // Wait for the deferred write to land.
-        try await Self.waitUntil { counter.count >= 2 }
+        try await TestWait.until { counter.count >= 2 }
         #expect(counter.count == 2)
     }
 
@@ -163,7 +148,7 @@ struct WidgetSyncTests {
         sync.writeNow() // (count = 2)
         // Give the scheduled timer the chance to fire; it must have been
         // cancelled, so the count should stay at 2.
-        try await Self.waitUntil(deadlineSeconds: 0.5) { false }
+        try await TestWait.until(timeout: .milliseconds(500)) { false }
         #expect(counter.count == 2)
     }
 
@@ -193,7 +178,7 @@ struct WidgetSyncTests {
         // handler returns — builder must not be called again.
         syncOptional = nil
         // Wait past the throttle window; no further writes should land.
-        try await Self.waitUntil(deadlineSeconds: 0.5) { false }
+        try await TestWait.until(timeout: .milliseconds(500)) { false }
         #expect(counter.count == 1)
     }
 }

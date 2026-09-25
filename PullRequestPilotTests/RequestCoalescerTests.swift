@@ -11,85 +11,100 @@ struct RequestCoalescerTests {
         func increment() { value += 1 }
     }
 
-    @Test("two concurrent calls with the same key coalesce to a single execution")
+    /// Holds operations in flight until the test opens it, so callers can
+    /// join while an operation is provably still running.
+    private actor Gate {
+        private var isOpen = false
+        private var waiters: [CheckedContinuation<Void, Never>] = []
+
+        func wait() async {
+            if isOpen { return }
+            await withCheckedContinuation { waiters.append($0) }
+        }
+
+        func open() {
+            isOpen = true
+            waiters.forEach { $0.resume() }
+            waiters.removeAll()
+        }
+    }
+
+    @Test("a caller that arrives while an operation runs joins it instead of running its own")
     func twoConcurrentCallsCoalesce() async throws {
         let coalescer = RequestCoalescer<String, Int>()
-        let counter = Counter()
+        let started = Counter()
+        let gate = Gate()
 
-        async let a: Int = coalescer.run(key: "k") {
-            await counter.increment()
-            try await Task.sleep(for: .milliseconds(20))
+        async let first: Int = coalescer.run(key: "k") {
+            await started.increment()
+            await gate.wait()
             return 42
         }
-        async let b: Int = coalescer.run(key: "k") {
-            await counter.increment()
-            try await Task.sleep(for: .milliseconds(20))
-            return 42
+        try await TestWait.until { await started.value == 1 }
+        async let second: Int = coalescer.run(key: "k") {
+            await started.increment()
+            return -1
         }
+        try await TestWait.until { await coalescer.joinedCallerCount == 1 }
+        await gate.open()
 
-        let results = try await (a, b)
-        #expect(results.0 == 42)
-        #expect(results.1 == 42)
-        let executions = await counter.value
-        #expect(executions == 1)
+        let results = try await (first, second)
+        #expect(results == (42, 42))
+        #expect(await started.value == 1)
     }
 
-    @Test("distinct keys run in parallel")
+    @Test("distinct keys run at the same time")
     func distinctKeysRunInParallel() async throws {
         let coalescer = RequestCoalescer<String, Int>()
-        let counter = Counter()
+        let started = Counter()
+        let gate = Gate()
 
-        async let a: Int = coalescer.run(key: "a") {
-            await counter.increment()
-            try await Task.sleep(for: .milliseconds(10))
+        async let first: Int = coalescer.run(key: "a") {
+            await started.increment()
+            await gate.wait()
             return 1
         }
-        async let b: Int = coalescer.run(key: "b") {
-            await counter.increment()
-            try await Task.sleep(for: .milliseconds(10))
+        async let second: Int = coalescer.run(key: "b") {
+            await started.increment()
+            await gate.wait()
             return 2
         }
+        // Both operations are in flight at once; a serialized coalescer would
+        // leave the second waiting behind the gated first.
+        try await TestWait.until { await started.value == 2 }
+        let startedTogether = await started.value
+        await gate.open()
 
-        let results = try await (a, b)
-        #expect(results.0 == 1)
-        #expect(results.1 == 2)
-        let executions = await counter.value
-        #expect(executions == 2)
+        let results = try await (first, second)
+        #expect(startedTogether == 2)
+        #expect(results == (1, 2))
     }
 
-    @Test("error from operation propagates to all coalesced callers")
-    func errorPropagatesToAllCallers() async {
+    @Test("an error reaches every caller that joined the operation")
+    func errorPropagatesToAllCallers() async throws {
         let coalescer = RequestCoalescer<String, Int>()
+        let started = Counter()
+        let gate = Gate()
+        struct Boom: Error {}
 
-        struct Boom: Error, Equatable {}
-
-        async let a: Int = coalescer.run(key: "k") {
-            try await Task.sleep(for: .milliseconds(10))
+        async let first: Int = coalescer.run(key: "k") {
+            await started.increment()
+            await gate.wait()
             throw Boom()
         }
-        async let b: Int = coalescer.run(key: "k") {
-            try await Task.sleep(for: .milliseconds(10))
-            throw Boom()
+        try await TestWait.until { await started.value == 1 }
+        async let second: Int = coalescer.run(key: "k") {
+            await started.increment()
+            return -1
         }
+        try await TestWait.until { await coalescer.joinedCallerCount == 1 }
+        await gate.open()
 
-        var firstErrored = false
-        var secondErrored = false
-        do {
-            _ = try await a
-        } catch is Boom {
-            firstErrored = true
-        } catch {
-            Issue.record("unexpected error from first caller: \(error)")
-        }
-        do {
-            _ = try await b
-        } catch is Boom {
-            secondErrored = true
-        } catch {
-            Issue.record("unexpected error from second caller: \(error)")
-        }
-        #expect(firstErrored)
-        #expect(secondErrored)
+        var callersThatSawBoom = 0
+        do { _ = try await first } catch is Boom { callersThatSawBoom += 1 }
+        do { _ = try await second } catch is Boom { callersThatSawBoom += 1 }
+        #expect(callersThatSawBoom == 2)
+        #expect(await started.value == 1, "the joined caller must not run its own operation")
     }
 
     @Test("sequential calls run separately — completed tasks don't linger")
@@ -115,31 +130,27 @@ struct RequestCoalescerTests {
     @Test("canceling one caller does not affect the other")
     func oneCallerCancelDoesNotAffectOther() async throws {
         let coalescer = RequestCoalescer<String, Int>()
-
-        // Deterministic start-signal: the inner closure yields on the stream
-        // as soon as it enters, so the outer test can wait on that instead of
-        // a wall-clock sleep. Parallel test runners don't affect correctness.
-        let (startedStream, startedContinuation) = AsyncStream.makeStream(of: Void.self)
+        let started = Counter()
+        let gate = Gate()
 
         let cancellableTask = Task {
             try await coalescer.run(key: "k") {
-                startedContinuation.yield()
-                try await Task.sleep(for: .milliseconds(50))
+                await started.increment()
+                await gate.wait()
                 return 7
             }
         }
-
-        var iter = startedStream.makeAsyncIterator()
-        _ = await iter.next()
+        try await TestWait.until { await started.value == 1 }
         cancellableTask.cancel()
 
-        // A second caller joining while the task is in flight should still
-        // receive the underlying result (coalescer intentionally does not
-        // propagate cancellation to the shared task).
-        let joined = try await coalescer.run(key: "k") {
+        // The shared operation keeps running for callers that join it.
+        async let joined: Int = coalescer.run(key: "k") {
             Issue.record("operation re-invoked after cancellation of first caller")
             return -1
         }
-        #expect(joined == 7)
+        try await TestWait.until { await coalescer.joinedCallerCount >= 1 }
+        await gate.open()
+
+        #expect(try await joined == 7)
     }
 }

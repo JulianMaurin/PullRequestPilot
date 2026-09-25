@@ -54,6 +54,12 @@ final class PRDetailViewModel {
         selectedPR = pr
     }
 
+    /// Returns once the load started by the latest selection or retry has
+    /// finished.
+    func waitForCurrentLoad() async {
+        await fetchTask?.value
+    }
+
     func deselect() {
         selectedPR = nil
         fetchTask?.cancel()
@@ -101,7 +107,7 @@ final class PRDetailViewModel {
                         checksPageOffset: checksPageOffset
                     )
                     allEvents.append(contentsOf: page.events)
-                    eventPageOffset += page.events.count
+                    eventPageOffset += page.eventNodeCount
                     allCheckRuns.append(contentsOf: page.checkRuns)
                     checksPageOffset += page.checkRuns.count
                     // Always capture the latest checksNextCursor — the first page may not have one

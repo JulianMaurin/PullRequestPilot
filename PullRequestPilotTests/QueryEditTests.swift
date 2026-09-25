@@ -18,13 +18,28 @@ struct QueryEditTests {
         return (vm, view.id)
     }
 
+    /// Shows the old query's rows, then serves `newRows` to the next fetch.
+    private func loadOldRows(_ vm: DashboardViewModel, viewID: UUID, thenServe newRows: [PullRequest]) async throws {
+        await mockClient.setPullRequestsToReturn([try TestPullRequestFactory.make(id: "PR_old")])
+        await vm.refresh(viewID: viewID)
+        #expect(vm.viewStates[viewID]?.pullRequests.map(\.id) == ["PR_old"])
+        await mockClient.setPullRequestsToReturn(newRows)
+    }
+
     // MARK: - commitQueryEdit
 
-    @Test("commitQueryEdit updates query when trimmed value differs")
-    func commitQueryEditUpdates() throws {
+    @Test("commitQueryEdit drops the old rows and refetches with the new query")
+    func commitQueryEditUpdates() async throws {
         let (vm, viewID) = try makeViewModel(suiteName: "QEditUpdates")
+        try await loadOldRows(vm, viewID: viewID, thenServe: [try TestPullRequestFactory.make(id: "PR_new")])
+
         vm.commitQueryEdit(viewID: viewID, newQuery: "is:pr author:@me")
+
         #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr author:@me")
+        #expect(vm.viewStates[viewID]?.pullRequests.isEmpty == true, "the old query's rows must not linger")
+        try await TestWait.until { vm.viewStates[viewID]?.pullRequests.map(\.id) == ["PR_new"] }
+        #expect(vm.viewStates[viewID]?.pullRequests.map(\.id) == ["PR_new"])
+        #expect(await mockClient.receivedQueries.last == "is:pr author:@me")
     }
 
     @Test("commitQueryEdit trims whitespace")
@@ -42,13 +57,20 @@ struct QueryEditTests {
         #expect(vm.views.first(where: { $0.id == viewID })?.query == original)
     }
 
-    @Test("commitQueryEdit is no-op when query unchanged")
+    @Test("commitQueryEdit with the unchanged query neither resets nor refetches")
     func commitQueryEditIgnoresSame() async throws {
         let (vm, viewID) = try makeViewModel(suiteName: "QEditSame")
-        let original = vm.views.first(where: { $0.id == viewID })?.query ?? ""
-        await mockClient.setFetchPullRequestsCallCount(0)
+        try await loadOldRows(vm, viewID: viewID, thenServe: [try TestPullRequestFactory.make(id: "PR_new")])
+        let original = try #require(vm.views.first(where: { $0.id == viewID })?.query)
+
         vm.commitQueryEdit(viewID: viewID, newQuery: original)
-        #expect(vm.views.first(where: { $0.id == viewID })?.query == original)
+        #expect(vm.viewStates[viewID]?.pullRequests.map(\.id) == ["PR_old"])
+
+        // A real edit afterwards is the barrier: any refetch the no-op had
+        // scheduled would show up before it.
+        vm.commitQueryEdit(viewID: viewID, newQuery: "is:pr is:merged")
+        try await TestWait.until { vm.viewStates[viewID]?.pullRequests.map(\.id) == ["PR_new"] }
+        #expect(await mockClient.receivedQueries == [original, "is:pr is:merged"])
     }
 
     @Test("commitQueryEdit is no-op for invalid viewID")
@@ -60,11 +82,30 @@ struct QueryEditTests {
 
     // MARK: - appendFilter
 
-    @Test("appendFilter appends qualifier to query")
-    func appendFilterAppends() throws {
+    @Test("appendFilter appends the qualifier, drops the old rows and refetches")
+    func appendFilterAppends() async throws {
         let (vm, viewID) = try makeViewModel(suiteName: "FilterAppend")
+        try await loadOldRows(vm, viewID: viewID, thenServe: [try TestPullRequestFactory.make(id: "PR_new")])
+
         vm.appendFilter(viewID: viewID, qualifier: "org:acme")
+
         #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr is:open org:acme")
+        #expect(vm.viewStates[viewID]?.pullRequests.isEmpty == true)
+        try await TestWait.until { vm.viewStates[viewID]?.pullRequests.map(\.id) == ["PR_new"] }
+        #expect(await mockClient.receivedQueries.last == "is:pr is:open org:acme")
+    }
+
+    @Test("toggleHideReviewed drops the old rows and refetches")
+    func toggleHideReviewedRefetches() async throws {
+        let (vm, viewID) = try makeViewModel(suiteName: "ToggleHideReviewedRefetch")
+        try await loadOldRows(vm, viewID: viewID, thenServe: [try TestPullRequestFactory.make(id: "PR_new")])
+
+        vm.toggleHideReviewed(for: viewID)
+
+        #expect(vm.views.first(where: { $0.id == viewID })?.hideReviewed == true)
+        #expect(vm.viewStates[viewID]?.pullRequests.isEmpty == true)
+        try await TestWait.until { await mockClient.fetchPullRequestsCallCount == 2 }
+        #expect(await mockClient.fetchPullRequestsCallCount == 2)
     }
 
     @Test("appendFilter skips if qualifier already present")

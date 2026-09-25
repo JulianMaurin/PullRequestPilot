@@ -30,12 +30,21 @@ final class TestClock: Clock, @unchecked Sendable {
     var now: Instant { lock.withLock { _now } }
     var minimumResolution: Duration { .zero }
 
+    /// Sleepers currently parked. Tests wait for a sleeper before advancing,
+    /// so its deadline is computed from the time they expect.
+    var sleeperCount: Int { lock.withLock { waiters.count } }
+
     func sleep(until deadline: Instant, tolerance: Duration?) async throws {
         let id = UUID()
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, any Error>) in
                 lock.lock()
-                if deadline <= _now {
+                // A cancellation that landed before this point ran its
+                // handler with no waiter to remove; honour it here.
+                if Task.isCancelled {
+                    lock.unlock()
+                    cont.resume(throwing: CancellationError())
+                } else if deadline <= _now {
                     lock.unlock()
                     cont.resume()
                 } else {

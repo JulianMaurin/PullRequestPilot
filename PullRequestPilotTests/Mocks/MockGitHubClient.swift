@@ -45,6 +45,9 @@ actor MockGitHubClient: GitHubClientProtocol {
     var receivedPageSizes: [Int] = []
     var receivedValidateTokens: [String] = []
     var receivedDraftStateRequests: [DraftStateRequest] = []
+    var receivedTimelineNodeIDs: [String] = []
+    var receivedEventPageOffsets: [Int] = []
+    var timelineEventNodeCountToReturn: Int?
 
     // MARK: - Setters
     //
@@ -58,6 +61,7 @@ actor MockGitHubClient: GitHubClientProtocol {
     func setViewerAvatarURL(_ value: URL?) { viewerAvatarURLToReturn = value }
     func setTimelineEventsToReturn(_ value: [TimelineEvent]) { timelineEventsToReturn = value }
     func setTimelineNextCursorToReturn(_ value: String?) { timelineNextCursorToReturn = value }
+    func setTimelineEventNodeCount(_ value: Int?) { timelineEventNodeCountToReturn = value }
     func setReviewersToReturn(_ value: [Reviewer]) { reviewersToReturn = value }
     func setChecksNextCursorToReturn(_ value: String?) { checksNextCursorToReturn = value }
     func setChecksPageToReturn(_ value: ChecksPage?) { checksPageToReturn = value }
@@ -90,13 +94,16 @@ actor MockGitHubClient: GitHubClientProtocol {
         checksPageOffset: Int
     ) async throws -> TimelinePage {
         fetchTimelineCallCount += 1
+        receivedTimelineNodeIDs.append(nodeID)
+        receivedEventPageOffsets.append(eventPageOffset)
         if let errorToThrow { throw errorToThrow }
         return TimelinePage(
             events: timelineEventsToReturn,
             checkRuns: checkRunsToReturn,
             reviewers: reviewersToReturn,
             nextCursor: timelineNextCursorToReturn,
-            checksNextCursor: checksNextCursorToReturn
+            checksNextCursor: checksNextCursorToReturn,
+            eventNodeCount: timelineEventNodeCountToReturn
         )
     }
 

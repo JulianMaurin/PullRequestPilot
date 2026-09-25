@@ -37,6 +37,19 @@ struct TimelinePage: Sendable {
     let reviewers: [Reviewer]
     let nextCursor: String?
     let checksNextCursor: String?
+    /// Timeline nodes on the page, including those that map to no event.
+    /// Event IDs embed the node's index, so the next page's indexes start
+    /// after all of them.
+    let eventNodeCount: Int
+
+    init(events: [TimelineEvent], checkRuns: [CheckRun], reviewers: [Reviewer], nextCursor: String?, checksNextCursor: String?, eventNodeCount: Int? = nil) {
+        self.events = events
+        self.checkRuns = checkRuns
+        self.reviewers = reviewers
+        self.nextCursor = nextCursor
+        self.checksNextCursor = checksNextCursor
+        self.eventNodeCount = eventNodeCount ?? events.count
+    }
 }
 
 struct ChecksPage: Sendable {
@@ -268,7 +281,14 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         let checksPageInfo = prNode.commits?.nodes.first?.commit.statusCheckRollup?.contexts.pageInfo
         let rawChecksCursor = checksPageInfo?.hasNextPage == true ? checksPageInfo?.endCursor : nil
         let checksNextCursor = rawChecksCursor?.isEmpty == false ? rawChecksCursor : nil
-        return TimelinePage(events: events, checkRuns: checkRuns, reviewers: reviewers, nextCursor: nextCursor, checksNextCursor: checksNextCursor)
+        return TimelinePage(
+            events: events,
+            checkRuns: checkRuns,
+            reviewers: reviewers,
+            nextCursor: nextCursor,
+            checksNextCursor: checksNextCursor,
+            eventNodeCount: prNode.timelineItems?.nodes.count ?? 0
+        )
     }
 
     func fetchChecks(nodeID: String, cursor: String, checksPageOffset: Int = 0) async throws -> ChecksPage {

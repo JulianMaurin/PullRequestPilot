@@ -130,10 +130,11 @@ This has shipped one production crash: `Dictionary(uniqueKeysWithValues:)` on PR
 - Protocol-based mocking: mock implementations of protocols (e.g., `MockGitHubClient`).
 - Test files live flat in `PullRequestPilotTests/`, named `<TypeUnderTest>Tests.swift`.
 - Mock files go in `PullRequestPilotTests/Mocks/`.
-- Use isolated `UserDefaults(suiteName:)` in tests — never touch real user defaults.
+- Use isolated `UserDefaults(suiteName:)` in tests — never touch real user defaults. Suites that write the Keychain create it with `KeychainService.forTesting(service:)` and carry the `.keychainCleanup` trait; stores that back up corrupted data take a temporary `backupDirectory`.
+- `DashboardViewModel` takes its system endpoints (`notificationCenter`, `widgetDestination`); tests pass `MockUserNotificationCenter()` and `.temporary()`, so no run touches real notifications or widgets.
 - **Empty stores in tests**: `ViewsStore` with fresh `UserDefaults` returns `[]` (`defaultViews` is empty). Tests must call `viewModel.addView(...)` before accessing `views.first`. Use `try #require(...)` for unwrapping, never `!`.
 - Test both success and error paths. Test edge cases (empty state, invalid input).
-- **No `Task.sleep` as synchronization in tests.** Use `waitForLoad()`-style helpers that check for the target state. Sleep-based waits are flaky under Swift Testing's parallel runner.
+- **No `Task.sleep` as synchronization in tests.** Wait for the target state with `TestWait.until { … }`, or await the work itself (`PRDetailViewModel.waitForCurrentLoad()`). Sleep-based waits are flaky under Swift Testing's parallel runner. To prove something does *not* happen, wait for the bad state with a short timeout, then assert it didn't arrive.
 - **`MockGitHubClient` must be actor-backed, not `@unchecked Sendable`.** Mock state is read/written concurrently by parallel tests; shared mutable state without isolation produces intermittent failures.
 
 ## Key Technical Decisions

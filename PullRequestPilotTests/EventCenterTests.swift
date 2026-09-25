@@ -25,14 +25,12 @@ struct EventCenterTests {
     }
 
     @Test("reporter posts through to the center")
-    func reporterPostsThrough() async {
+    func reporterPostsThrough() async throws {
         let center = EventCenter()
         let reporter = center.reporter()
         reporter.postError(.viewerIdentityUnavailable)
-        // Reporter hops through Task { @MainActor } — yield until the post lands.
-        for _ in 0..<20 where center.events.isEmpty {
-            await Task.yield()
-        }
+        // Reporter hops through Task { @MainActor }.
+        try await TestWait.until { !center.events.isEmpty }
         #expect(center.events.first?.appError == .viewerIdentityUnavailable)
     }
 
@@ -65,13 +63,13 @@ struct EventCenterTests {
     }
 
     @Test("same-payload re-post past the old 3s window still coalesces while visible")
-    func samePayloadRePost_pastOldDedupeWindow_stillCoalescesWhileVisible() async {
+    func samePayloadRePost_pastOldDedupeWindow_stillCoalescesWhileVisible() async throws {
         let clock = TestClock()
         let center = EventCenter(clock: clock)
 
         center.post(AppEvent(payload: .info("ongoing"), autoDismissAfter: .seconds(8)))
+        try await waitForSleeper(on: clock)
         clock.advance(by: .seconds(4)) // past the legacy 3s suppression window
-        await yieldRepeatedly()
 
         center.post(AppEvent(payload: .info("ongoing"), autoDismissAfter: .seconds(8)))
         #expect(center.events.count == 1, "second post must not insert a new event while the first is still visible")
@@ -84,25 +82,21 @@ struct EventCenterTests {
         let center = EventCenter(clock: clock)
 
         center.post(AppEvent(payload: .info("ongoing"), autoDismissAfter: .seconds(8)))
+        try await waitForSleeper(on: clock)
         clock.advance(by: .seconds(4))
-        await yieldRepeatedly()
 
         center.post(AppEvent(payload: .info("ongoing"), autoDismissAfter: .seconds(8)))
-        // Yield so the refreshed dismiss task computes its deadline
-        // (clock.now + 8s) before any further advance — TestClock reads `now`
-        // lazily inside the task body, so an advance before the body runs
-        // would shift the deadline forward.
-        await yieldRepeatedly()
+        try await waitForSleeper(on: clock)
 
         // T = 4s post-second-post = 8s post-first-post (the original timer
-        // would have fired now had it not been cancelled by the refresh).
+        // would fire now had the re-post not replaced it).
         clock.advance(by: .seconds(4))
-        await yieldRepeatedly()
+        try await TestWait.until(timeout: .milliseconds(200)) { center.activeEvents.isEmpty }
         #expect(!center.activeEvents.isEmpty, "timer must be reset on the second post — toast still visible past the original 8s")
 
         // T = 9s post-second-post = beyond the refreshed 8s window
         clock.advance(by: .seconds(5))
-        try await waitUntil { center.activeEvents.isEmpty }
+        try await TestWait.until { center.activeEvents.isEmpty }
         #expect(center.activeEvents.isEmpty)
     }
 
@@ -124,7 +118,7 @@ struct EventCenterTests {
         let center = EventCenter()
         center.post(AppEvent(payload: .info("hi"), autoDismissAfter: .milliseconds(50)))
         let firstID = try #require(center.events.first?.id)
-        try await waitUntil { center.activeEvents.isEmpty }
+        try await TestWait.until { center.activeEvents.isEmpty }
 
         // The event is still standing (only the toast timed out), so a
         // recurrence re-shows the same toast instead of inserting a copy.
@@ -238,7 +232,7 @@ struct EventCenterTests {
     func toastExpiryKeepsStanding() async throws {
         let center = EventCenter()
         center.post(AppEvent(payload: .error(.gitDirectoriesUnavailable(count: 1)), autoDismissAfter: .milliseconds(50)))
-        try await waitUntil { center.activeEvents.isEmpty }
+        try await TestWait.until { center.activeEvents.isEmpty }
 
         #expect(center.activeEvents.isEmpty)
         #expect(center.standingEvents.count == 1)
@@ -259,7 +253,7 @@ struct EventCenterTests {
     func dismissAllClearsStanding() async throws {
         let center = EventCenter()
         center.post(AppEvent(payload: .error(.viewerIdentityUnavailable), autoDismissAfter: .milliseconds(50)))
-        try await waitUntil { center.activeEvents.isEmpty }
+        try await TestWait.until { center.activeEvents.isEmpty }
         #expect(center.standingEvents.count == 1)
 
         center.dismissAll { error in
@@ -286,7 +280,7 @@ struct EventCenterTests {
         center.post(.error(.decodeCorruption(subsystem: "views", backupPath: nil)))
 
         center.reporter().resolve { $0 == .viewerIdentityUnavailable }
-        try await waitUntil { center.standingEvents.count == 1 }
+        try await TestWait.until { center.standingEvents.count == 1 }
 
         #expect(center.standingEvents.first?.appError == .decodeCorruption(subsystem: "views", backupPath: nil))
         #expect(center.activeEvents.count == 1)
@@ -316,7 +310,7 @@ struct EventCenterTests {
         center.post(AppEvent(payload: .info("hi"), autoDismissAfter: .milliseconds(50)))
         #expect(center.activeEvents.count == 1)
 
-        try await waitUntil { center.activeEvents.isEmpty }
+        try await TestWait.until { center.activeEvents.isEmpty }
         #expect(center.activeEvents.isEmpty)
     }
 
@@ -326,11 +320,11 @@ struct EventCenterTests {
         let center = EventCenter(clock: clock)
         center.post(AppEvent(payload: .info("hi"), autoDismissAfter: .milliseconds(50)))
         let id = try #require(center.events.first?.id)
+        try await waitForSleeper(on: clock)
         center.pauseAutoDismiss(id)
 
-        // Advance well past the original duration — toast must still be active.
         clock.advance(by: .milliseconds(200))
-        await yieldRepeatedly()
+        try await TestWait.until(timeout: .milliseconds(200)) { center.activeEvents.isEmpty }
         #expect(!center.activeEvents.isEmpty)
     }
 
@@ -340,58 +334,89 @@ struct EventCenterTests {
         let center = EventCenter(clock: clock)
         center.post(AppEvent(payload: .info("hi"), autoDismissAfter: .milliseconds(50)))
         let id = try #require(center.events.first?.id)
+        try await waitForSleeper(on: clock)
         center.pauseAutoDismiss(id)
         clock.advance(by: .milliseconds(100))
-        await yieldRepeatedly()
+        try await TestWait.until(timeout: .milliseconds(200)) { center.activeEvents.isEmpty }
         #expect(!center.activeEvents.isEmpty, "pause should hold the toast")
 
         center.resumeAutoDismiss(id)
+        try await waitForSleeper(on: clock)
         clock.advance(by: .milliseconds(50))
-        try await waitUntil { center.activeEvents.isEmpty }
+        try await TestWait.until { center.activeEvents.isEmpty }
         #expect(center.activeEvents.isEmpty)
     }
 
-    @Test("resumeAutoDismiss called twice does not leave a second stale task")
+    @Test("resumeAutoDismiss replaces the running timer instead of adding one")
     func resumeDoesNotLeak() async throws {
         let clock = TestClock()
         let center = EventCenter(clock: clock)
         center.post(AppEvent(payload: .info("hi"), autoDismissAfter: .milliseconds(80)))
         let id = try #require(center.events.first?.id)
+        try await waitForSleeper(on: clock)
 
-        // Two resumes in quick succession — the first scheduled task must be
-        // cancelled before the second one takes over, otherwise the first fires
-        // earlier than the second's fresh window.
+        clock.advance(by: .milliseconds(60))
         center.resumeAutoDismiss(id)
-        clock.advance(by: .milliseconds(20))
-        await yieldRepeatedly()
-        center.resumeAutoDismiss(id)
+        try await waitForSleeper(on: clock)
+        #expect(clock.sleeperCount == 1, "the first timer must be cancelled")
 
-        // 40ms after the 2nd resume: first-scheduled task would have fired by now
-        // (80ms from post). If we're still active, replacement worked.
+        // T = 100ms: past the first timer's 80ms, short of the new 140ms.
         clock.advance(by: .milliseconds(40))
-        await yieldRepeatedly()
-        #expect(!center.activeEvents.isEmpty, "2nd resume must cancel the 1st task")
+        try await TestWait.until(timeout: .milliseconds(200)) { center.activeEvents.isEmpty }
+        #expect(!center.activeEvents.isEmpty)
+
+        clock.advance(by: .milliseconds(50))
+        try await TestWait.until { center.activeEvents.isEmpty }
+        #expect(center.activeEvents.isEmpty)
+    }
+
+    // MARK: - History bounding
+
+    @Test("overflow drops expired and dismissed IDs along with their events")
+    func overflowPrunesHiddenIDs() async throws {
+        let clock = TestClock()
+        let center = EventCenter(maxHistory: 2, clock: clock)
+        center.post(AppEvent(payload: .info("expires"), autoDismissAfter: .milliseconds(50)))
+        let expiredID = try #require(center.events.first?.id)
+        try await waitForSleeper(on: clock)
+        clock.advance(by: .milliseconds(50))
+        try await TestWait.until { center.autoDismissed.contains(expiredID) }
+        center.post(.info("dismissed"))
+        let dismissedID = try #require(center.events.first?.id)
+        center.dismiss(dismissedID)
+        #expect(center.dismissed == [dismissedID])
+
+        center.post(.info("third"))
+        center.post(.info("fourth"))
+
+        #expect(center.events.map(\.message) == ["fourth", "third"])
+        #expect(center.autoDismissed.isEmpty)
+        #expect(center.dismissed.isEmpty)
+    }
+
+    @Test("a timer for an event dropped from history doesn't resurrect its ID")
+    func droppedEventTimerIsCancelled() async throws {
+        let clock = TestClock()
+        let center = EventCenter(maxHistory: 1, clock: clock)
+        center.post(AppEvent(payload: .info("dropped"), autoDismissAfter: .milliseconds(50)))
+        let droppedID = try #require(center.events.first?.id)
+        try await waitForSleeper(on: clock)
+
+        center.post(.info("newer"))
+        #expect(clock.sleeperCount == 0, "dropping the event cancels its timer")
+        center.dismiss(droppedID)
+
+        #expect(center.autoDismissed.isEmpty)
+        #expect(center.dismissed.isEmpty)
     }
 
     // MARK: - Helpers
 
-    @MainActor
-    private func waitUntil(
-        deadlineSeconds: Double = 2.0,
-        _ predicate: () -> Bool
-    ) async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(deadlineSeconds))
-        while !predicate() {
-            if ContinuousClock.now >= deadline { return }
-            try await Task.sleep(for: .milliseconds(5))
-        }
-    }
-
-    /// Yield the current task repeatedly so any other scheduled task (e.g., the
-    /// event-center auto-dismiss task that just resumed from a TestClock
-    /// advance) gets a chance to observe the resumption before the assertion.
-    private func yieldRepeatedly(count: Int = 10) async {
-        for _ in 0..<count { await Task.yield() }
+    /// Waits until an auto-dismiss timer is parked on `clock`, so the next
+    /// advance counts from the time the test expects.
+    private func waitForSleeper(on clock: TestClock) async throws {
+        try await TestWait.until { clock.sleeperCount == 1 }
+        #expect(clock.sleeperCount == 1)
     }
 
 }

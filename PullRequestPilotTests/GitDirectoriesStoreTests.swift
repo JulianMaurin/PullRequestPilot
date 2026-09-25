@@ -70,22 +70,29 @@ struct GitDirectoriesStoreTests {
 
     // MARK: - Security-Scoped Access
 
-    @Test("startAccessing and stopAccessing don't crash")
-    func accessingDoesNotCrash() throws {
+    @Test("load starts access once per directory and stopAccessing balances it")
+    func accessIsStartedOnceAndBalanced() throws {
         let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent("gds-access-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tmpDir) }
-
         let (store, _) = try makeStore(suiteName: "GDSAccess")
-        store.startAccessing([tmpDir])
-        store.stopAccessing([tmpDir])
+        store.save([tmpDir])
+
+        let urls = store.load()
+        #expect(urls.count == 1)
+        #expect(store.startedURLs == Set(urls))
+        store.startAccessing(urls)
+        #expect(store.startedURLs == Set(urls), "a second start must not stack another access count")
+
+        store.stopAccessing(urls)
+        #expect(store.startedURLs.isEmpty)
     }
 
-    @Test("startAccessing with empty array is safe")
-    func accessingEmptyArray() throws {
+    @Test("stopAccessing ignores directories it never started")
+    func stopWithoutStartIsIgnored() throws {
         let (store, _) = try makeStore(suiteName: "GDSAccessEmpty")
-        store.startAccessing([])
-        store.stopAccessing([])
+        store.stopAccessing([FileManager.default.temporaryDirectory])
+        #expect(store.startedURLs.isEmpty)
     }
 
     // MARK: - Legacy Migration
@@ -232,6 +239,35 @@ struct GitDirectoriesStoreTests {
         #expect(store.unavailableDirectoryPaths.isEmpty)
         #expect(recorder.unresolvedErrors.isEmpty)
         #expect(store.load().map(\.lastPathComponent) == [present.lastPathComponent])
+    }
+
+    // MARK: - Corruption
+
+    @Test("a stored value of the wrong type is backed up, reported and cleared")
+    func corruptedBookmarksAreBackedUp() async throws {
+        let suiteName = "GDSCorrupted"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set("not a bookmark list", forKey: "git_directory_bookmarks")
+        let backupDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("gds-backups-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: backupDirectory) }
+        let recorder = EventRecorder()
+        let store = GitDirectoriesStore(defaults: defaults, reporter: recorder.reporter(), backupDirectory: backupDirectory)
+
+        #expect(store.load().isEmpty)
+
+        guard case .decodeCorruption(let subsystem, let backupPath)? = recorder.unresolvedErrors.first else {
+            Issue.record("Expected decodeCorruption, got \(recorder.unresolvedErrors)")
+            return
+        }
+        #expect(subsystem == "git directories")
+        let path = try #require(backupPath)
+        #expect(path.hasPrefix(backupDirectory.path))
+        #expect(FileManager.default.fileExists(atPath: path))
+        #expect(defaults.object(forKey: "git_directory_bookmarks") == nil)
+
+        _ = store.load()
+        #expect(recorder.events.count == 1, "a cleared value isn't reported again")
     }
 
     // MARK: - Save overwrite

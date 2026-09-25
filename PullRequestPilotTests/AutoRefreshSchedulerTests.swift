@@ -46,18 +46,6 @@ struct AutoRefreshSchedulerTests {
         return (scheduler, defaults, recorder, center)
     }
 
-    @MainActor
-    private static func waitUntil(
-        deadlineSeconds: Double = 2.0,
-        _ predicate: () -> Bool
-    ) async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(deadlineSeconds))
-        while !predicate() {
-            if ContinuousClock.now >= deadline { return }
-            try await Task.sleep(for: .milliseconds(5))
-        }
-    }
-
     /// Standard tick result — "have views, no error, no rate limit" — so the
     /// scheduler sleeps the configured interval between ticks.
     private static func haveViewsResult() -> AutoRefreshTickResult {
@@ -83,7 +71,7 @@ struct AutoRefreshSchedulerTests {
             recorder.record()
             return Self.haveViewsResult()
         }
-        try await Self.waitUntil { recorder.count >= 1 }
+        try await TestWait.until { recorder.count >= 1 }
         scheduler.stop()
         #expect(recorder.count >= 1)
     }
@@ -94,22 +82,25 @@ struct AutoRefreshSchedulerTests {
     @Test("a second start() while already running does not spawn a parallel loop")
     func idempotentStart() async throws {
         let (scheduler, _, recorder, _) = try Self.makeScheduler(suiteName: "Idempotent", intervalSeconds: 0.1)
+        // Each loop ticks as soon as it starts, then parks in the tick until
+        // stop() cancels it: every loop records exactly once.
         let tick: AutoRefreshScheduler.Tick = { @MainActor in
             recorder.record()
+            do {
+                try await Task.sleep(for: .seconds(60))
+            } catch {
+                // stop() cancelled the loop.
+            }
             return Self.haveViewsResult()
         }
         scheduler.start(tick: tick)
-        // Call start() again immediately; the scheduler should ignore the
-        // second call because a loop is already running.
         scheduler.start(tick: tick)
-        // Wait for at least 3 ticks. With two parallel loops ticking every
-        // 100 ms we would see ~6 ticks in 300 ms; with one loop we see ~3.
-        // We assert the rate matches a single loop (i.e. not more than ~5
-        // ticks in the same window — generous upper bound to dodge flakes).
-        try await Self.waitUntil(deadlineSeconds: 0.4) { recorder.count >= 3 }
+        // A second loop's task is queued on the main actor right behind the
+        // first, so it has ticked by the time the first tick is observed.
+        try await TestWait.until { recorder.count >= 1 }
         scheduler.stop()
-        #expect(recorder.count >= 3)
-        #expect(recorder.count <= 5, "Rate implies two parallel loops — start() is not idempotent (\(recorder.count) ticks)")
+
+        #expect(recorder.count == 1)
     }
 
     // MARK: - stop cancels in-flight
@@ -122,11 +113,11 @@ struct AutoRefreshSchedulerTests {
             recorder.record()
             return Self.haveViewsResult()
         }
-        try await Self.waitUntil { recorder.count >= 1 }
+        try await TestWait.until { recorder.count >= 1 }
         scheduler.stop()
         let countAfterStop = recorder.count
         // Wait past a couple of would-be tick intervals; counter must not grow.
-        try await Self.waitUntil(deadlineSeconds: 0.3) { false }
+        try await TestWait.until(timeout: .milliseconds(300)) { false }
         #expect(recorder.count == countAfterStop)
     }
 
@@ -145,7 +136,7 @@ struct AutoRefreshSchedulerTests {
             recorder.record()
             return Self.emptyViewsResult()
         }
-        try await Self.waitUntil(deadlineSeconds: 0.4) { recorder.count >= 3 }
+        try await TestWait.until(timeout: .milliseconds(400)) { recorder.count >= 3 }
         scheduler.stop()
         #expect(recorder.count >= 3, "empty-views path should tick at the configured interval, not sleep indefinitely")
         #expect(recorder.count <= 12, "empty-views path is ticking faster than the configured interval")
@@ -253,12 +244,12 @@ struct AutoRefreshSchedulerTests {
             recorder.record()
             return Self.haveViewsResult()
         }
-        try await Self.waitUntil { recorder.count >= 1 }
+        try await TestWait.until { recorder.count >= 1 }
 
         events.yield(.networkReachabilityChanged(isReachable: false))
         await Self.deliverEvents()
         events.yield(.networkReachabilityChanged(isReachable: true))
-        try await Self.waitUntil { recorder.count >= 2 }
+        try await TestWait.until { recorder.count >= 2 }
 
         #expect(recorder.count == 2)
     }
@@ -279,7 +270,7 @@ struct AutoRefreshSchedulerTests {
         #expect(recorder.count == 0)
 
         events.yield(.networkReachabilityChanged(isReachable: true))
-        try await Self.waitUntil { recorder.count >= 1 }
+        try await TestWait.until { recorder.count >= 1 }
         #expect(recorder.count == 1)
     }
 
@@ -292,7 +283,7 @@ struct AutoRefreshSchedulerTests {
             recorder.record()
             return Self.haveViewsResult()
         }
-        try await Self.waitUntil { recorder.count >= 1 }
+        try await TestWait.until { recorder.count >= 1 }
 
         // Reachability reported while awake and online is not a transition.
         events.yield(.networkReachabilityChanged(isReachable: true))
@@ -301,7 +292,7 @@ struct AutoRefreshSchedulerTests {
         #expect(recorder.count == 1)
 
         events.yield(.sleepEnded)
-        try await Self.waitUntil { recorder.count >= 2 }
+        try await TestWait.until { recorder.count >= 2 }
         #expect(recorder.count == 2)
     }
 
@@ -314,7 +305,7 @@ struct AutoRefreshSchedulerTests {
             recorder.record()
             return Self.haveViewsResult()
         }
-        try await Self.waitUntil { recorder.count >= 1 }
+        try await TestWait.until { recorder.count >= 1 }
 
         events.yield(.sleepStarted)
         events.yield(.networkReachabilityChanged(isReachable: false))
@@ -323,7 +314,7 @@ struct AutoRefreshSchedulerTests {
         #expect(recorder.count == 1)
 
         events.yield(.networkReachabilityChanged(isReachable: true))
-        try await Self.waitUntil { recorder.count >= 2 }
+        try await TestWait.until { recorder.count >= 2 }
         #expect(recorder.count == 2)
     }
 
@@ -404,13 +395,13 @@ struct AutoRefreshSchedulerTests {
             return Self.haveViewsResult()
         }
         // Wait for the first tick.
-        try await Self.waitUntil { recorder.count >= 1 }
+        try await TestWait.until { recorder.count >= 1 }
         let countBeforeRestart = recorder.count
         // Post the notification — the observer should cancel the sleeping
         // loop and spawn a fresh one. Because the new loop runs the tick
         // immediately, we'll see a new tick even though the interval was 1 s.
         center.post(name: Constants.Notifications.prRefreshIntervalChanged, object: nil)
-        try await Self.waitUntil { recorder.count > countBeforeRestart }
+        try await TestWait.until { recorder.count > countBeforeRestart }
         scheduler.stop()
         #expect(recorder.count > countBeforeRestart)
     }
@@ -428,11 +419,11 @@ struct AutoRefreshSchedulerTests {
             recorderB.record()
             return Self.haveViewsResult()
         }
-        try await Self.waitUntil { recorderA.count >= 1 && recorderB.count >= 1 }
+        try await TestWait.until { recorderA.count >= 1 && recorderB.count >= 1 }
         let countABefore = recorderA.count
         let countBBefore = recorderB.count
         centerA.post(name: Constants.Notifications.prRefreshIntervalChanged, object: nil)
-        try await Self.waitUntil { recorderA.count > countABefore }
+        try await TestWait.until { recorderA.count > countABefore }
         schedulerA.stop()
         schedulerB.stop()
         #expect(recorderA.count > countABefore)
@@ -459,13 +450,13 @@ struct AutoRefreshSchedulerTests {
             recorder.record()
             return Self.haveViewsResult()
         }
-        try await Self.waitUntil { recorder.count >= 1 }
+        try await TestWait.until { recorder.count >= 1 }
         optional = nil
         let countAfterDrop = recorder.count
         // Allow one straggler tick that may have already been in flight
         // between the `await tick()` and the `if self == nil { return }`
         // check in the refresh loop. Beyond that, the counter must stop.
-        try await Self.waitUntil(deadlineSeconds: 0.3) { false }
+        try await TestWait.until(timeout: .milliseconds(300)) { false }
         #expect(recorder.count <= countAfterDrop + 1, "counter kept growing after deinit: \(recorder.count) vs \(countAfterDrop)")
     }
 }

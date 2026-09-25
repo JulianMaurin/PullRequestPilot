@@ -235,6 +235,35 @@ struct TimelineResponseMappingTests {
         #expect(events[1].kind == .merged)
     }
 
+    // MARK: - Page offsets
+
+    @Test("event IDs carry the node's index offset by the page, gaps included")
+    func eventIDsUsePageOffset() {
+        let connection = makeConnection([
+            makeNode(typename: "IssueComment", createdAt: "2024-01-15T10:00:00Z"),
+            makeNode(typename: "LabeledEvent", createdAt: "2024-01-15T10:30:00Z"),
+            makeNode(typename: "MergedEvent", createdAt: "2024-01-15T11:00:00Z", authorLogin: nil, actorLogin: "bob"),
+        ])
+
+        let events = connection.toDomain(pageOffset: 100)
+
+        #expect(events.map { $0.id.split(separator: "-").first.map(String.init) } == ["100", "102"])
+    }
+
+    @Test("identical events on consecutive pages keep distinct IDs")
+    func identicalEventsAcrossPagesStayDistinct() {
+        let sameEvent = makeNode(typename: "IssueComment", createdAt: validDate)
+        let firstPage = makeConnection([makeNode(typename: "LabeledEvent", createdAt: validDate), sameEvent])
+        let secondPage = makeConnection([sameEvent])
+
+        let firstEvents = firstPage.toDomain(pageOffset: 0)
+        let secondEvents = secondPage.toDomain(pageOffset: firstPage.nodes.count)
+
+        #expect(Set((firstEvents + secondEvents).map(\.id)).count == 2)
+        // Advancing by the events produced instead would reuse index 1.
+        #expect(secondPage.toDomain(pageOffset: firstEvents.count).map(\.id) == firstEvents.map(\.id))
+    }
+
     // MARK: - PageInfo
 
     @Test("pageInfo with next page preserves cursor")

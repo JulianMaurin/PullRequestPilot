@@ -60,16 +60,16 @@ struct ViewsStoreTests {
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         let center = EventCenter()
-        let store = ViewsStore(defaults: defaults, reporter: center.reporter())
+        let backupDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("views-store-backups-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: backupDirectory) }
+        let store = ViewsStore(defaults: defaults, reporter: center.reporter(), backupDirectory: backupDirectory)
 
         defaults.set(Data("not valid json".utf8), forKey: "dashboard_views")
 
         let views = store.load()
         #expect(views.isEmpty)
 
-        for _ in 0..<20 where center.events.isEmpty {
-            await Task.yield()
-        }
+        try await TestWait.until { !center.events.isEmpty }
 
         guard case .error(let error) = center.events.first?.payload,
               case .decodeCorruption(let subsystem, _) = error
@@ -86,17 +86,17 @@ struct ViewsStoreTests {
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         let center = EventCenter()
-        let store = ViewsStore(defaults: defaults, reporter: center.reporter())
+        let backupDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("views-store-backups-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: backupDirectory) }
+        let store = ViewsStore(defaults: defaults, reporter: center.reporter(), backupDirectory: backupDirectory)
 
         defaults.set(Data("{garbage".utf8), forKey: "dashboard_views")
 
         let views = store.load()
         #expect(views.isEmpty)
 
-        // Reporter hops through Task { @MainActor } — yield until the post lands.
-        for _ in 0..<20 where center.events.isEmpty {
-            await Task.yield()
-        }
+        // Reporter hops through Task { @MainActor }.
+        try await TestWait.until { !center.events.isEmpty }
 
         guard case .error(let error) = center.events.first?.payload,
               case .decodeCorruption(let subsystem, let backupPath) = error
@@ -106,8 +106,8 @@ struct ViewsStoreTests {
         }
         #expect(subsystem == "dashboard views")
         let path = try #require(backupPath)
-        #expect(FileManager.default.fileExists(atPath: path))
-        try? FileManager.default.removeItem(atPath: path)
+        #expect(path.hasPrefix(backupDirectory.path), "backups in tests stay out of the real container")
+        #expect(FileManager.default.contents(atPath: path) == Data("{garbage".utf8))
     }
 
     @Test("successful load after a corrupted load does not post a second decodeCorruption event")
@@ -116,13 +116,13 @@ struct ViewsStoreTests {
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         let center = EventCenter()
-        let store = ViewsStore(defaults: defaults, reporter: center.reporter())
+        let backupDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("views-store-backups-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: backupDirectory) }
+        let store = ViewsStore(defaults: defaults, reporter: center.reporter(), backupDirectory: backupDirectory)
 
         defaults.set(Data("bad".utf8), forKey: "dashboard_views")
         _ = store.load()
-        for _ in 0..<20 where center.events.isEmpty {
-            await Task.yield()
-        }
+        try await TestWait.until { !center.events.isEmpty }
         let firstEventCount = center.events.count
         #expect(firstEventCount == 1)
 
@@ -130,7 +130,8 @@ struct ViewsStoreTests {
         let views = store.load()
         #expect(views.count == 1)
 
-        for _ in 0..<20 { await Task.yield() }
+        // Another post would land within the wait.
+        try await TestWait.until(timeout: .milliseconds(200)) { center.events.count > firstEventCount }
         #expect(center.events.count == firstEventCount)
     }
 }

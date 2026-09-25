@@ -25,19 +25,6 @@ struct PRDetailViewModelTests {
         )
     }
 
-    /// Wait for the fire-and-forget Task to start and finish loading.
-    private func waitForLoad(_ vm: PRDetailViewModel, timeout: Duration = .milliseconds(2000)) async throws {
-        let deadline = ContinuousClock.now + timeout
-        // Phase 1: yield until the Task sets isLoading = true (task started)
-        while !vm.isLoading, ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(5))
-        }
-        // Phase 2: wait for isLoading to go back to false (task finished)
-        while vm.isLoading, ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(5))
-        }
-    }
-
     // MARK: - Selection
 
     @Test("selectPR sets selectedPR")
@@ -65,7 +52,7 @@ struct PRDetailViewModelTests {
 
         let pr = try makePR()
         vm.selectPR(pr)
-        try await waitForLoad(vm)
+        await vm.waitForCurrentLoad()
 
         vm.deselect()
         #expect(vm.selectedPR == nil)
@@ -87,7 +74,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(try makePR())
-        try await waitForLoad(vm)
+        await vm.waitForCurrentLoad()
 
         #expect(vm.timelineEvents.count == 2)
         #expect(vm.isLoading == false)
@@ -100,7 +87,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(try makePR())
-        try await waitForLoad(vm)
+        await vm.waitForCurrentLoad()
 
         #expect(vm.error != nil)
         #expect(vm.timelineEvents.isEmpty)
@@ -114,14 +101,14 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(try makePR())
-        try await waitForLoad(vm)
+        await vm.waitForCurrentLoad()
 
         #expect(vm.timelineEvents.isEmpty)
         #expect(vm.error == nil)
         #expect(vm.isLoading == false)
     }
 
-    @Test("selecting different PR cancels previous fetch")
+    @Test("selecting a different PR cancels the previous PR's fetch")
     func selectDifferentPRCancelsPrevious() async throws {
         let client = MockGitHubClient()
         await client.setTimelineEventsToReturn([makeTimelineEvent()])
@@ -129,9 +116,106 @@ struct PRDetailViewModelTests {
 
         vm.selectPR(try makePR(id: "PR_1"))
         vm.selectPR(try makePR(id: "PR_2"))
-        try await waitForLoad(vm)
+        await vm.waitForCurrentLoad()
 
         #expect(vm.selectedPR?.id == "PR_2")
+        #expect(await client.receivedTimelineNodeIDs == ["PR_2"])
+        #expect(vm.timelineEvents.count == 1)
+        #expect(vm.isLoading == false)
+    }
+
+    @Test("a failed load toasts its error")
+    func failedLoadToasts() async throws {
+        let client = MockGitHubClient()
+        await client.setErrorToThrow(GitHubClientError.serverError(statusCode: 502))
+        let recorder = EventRecorder()
+        let vm = PRDetailViewModel(gitHubClient: client, reporter: recorder.reporter())
+
+        vm.selectPR(try makePR())
+        await vm.waitForCurrentLoad()
+
+        #expect(recorder.unresolvedErrors == [.serverError(statusCode: 502)])
+    }
+
+    @Test("a superseded load that fails posts nothing")
+    func supersededFailureDoesNotToast() async throws {
+        let client = PaginatingMockGitHubClient(gatedCall: .firstTimelineCall)
+        let recorder = EventRecorder()
+        let vm = PRDetailViewModel(gitHubClient: client, reporter: recorder.reporter())
+
+        vm.selectPR(try makePR(id: "PR_1"))
+        try await waitForGateSuspension(client)
+        vm.deselect()
+        await client.failGatedCall()
+        vm.selectPR(try makePR(id: "PR_2"))
+        await vm.waitForCurrentLoad()
+
+        #expect(recorder.events.isEmpty)
+    }
+
+    // MARK: - Pagination bounds
+
+    @Test("timeline pagination stops at 20 pages when cursors never end", .timeLimit(.minutes(1)))
+    func timelinePaginationIsCapped() async throws {
+        let client = EndlessPaginationClient()
+        let vm = PRDetailViewModel(gitHubClient: client)
+
+        vm.selectPR(try makePR())
+        await vm.waitForCurrentLoad()
+
+        #expect(await client.timelineCallCount == 20)
+        #expect(vm.isLoading == false)
+    }
+
+    @Test("checks pagination stops at 20 pages when cursors never end", .timeLimit(.minutes(1)))
+    func checksPaginationIsCapped() async throws {
+        let client = EndlessPaginationClient(endlessChecks: true)
+        let vm = PRDetailViewModel(gitHubClient: client)
+
+        vm.selectPR(try makePR())
+        await vm.waitForCurrentLoad()
+
+        #expect(await client.checksCallCount == 20)
+    }
+
+    @Test("the next page's event offset counts every node the previous page held")
+    func eventOffsetAdvancesByNodeCount() async throws {
+        let client = MockGitHubClient()
+        await client.setTimelineEventsToReturn([makeTimelineEvent()])
+        // Three nodes, one of which mapped to an event.
+        await client.setTimelineEventNodeCount(3)
+        await client.setTimelineNextCursorToReturn("page-2")
+        let (vm, _) = makeViewModel(client: client)
+
+        vm.selectPR(try makePR())
+        await vm.waitForCurrentLoad()
+
+        #expect(await client.receivedEventPageOffsets == [0, 3])
+    }
+
+    @Test("a repeated timeline cursor ends pagination")
+    func repeatedTimelineCursorStops() async throws {
+        let client = MockGitHubClient()
+        await client.setTimelineNextCursorToReturn("same-cursor")
+        let (vm, _) = makeViewModel(client: client)
+
+        vm.selectPR(try makePR())
+        await vm.waitForCurrentLoad()
+
+        #expect(await client.fetchTimelineCallCount == 2)
+    }
+
+    @Test("a repeated checks cursor ends pagination")
+    func repeatedChecksCursorStops() async throws {
+        let client = MockGitHubClient()
+        await client.setChecksNextCursorToReturn("same-cursor")
+        await client.setChecksPageToReturn(ChecksPage(checkRuns: [], nextCursor: "same-cursor"))
+        let (vm, _) = makeViewModel(client: client)
+
+        vm.selectPR(try makePR())
+        await vm.waitForCurrentLoad()
+
+        #expect(await client.fetchChecksCallCount == 1)
     }
 
     // MARK: - Network Error State
@@ -143,7 +227,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(try makePR())
-        try await waitForLoad(vm)
+        await vm.waitForCurrentLoad()
 
         #expect(vm.isNetworkError)
         #expect(vm.error != nil)
@@ -156,7 +240,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(try makePR())
-        try await waitForLoad(vm)
+        await vm.waitForCurrentLoad()
 
         #expect(!vm.isNetworkError)
         #expect(vm.error != nil)
@@ -169,7 +253,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(try makePR())
-        try await waitForLoad(vm)
+        await vm.waitForCurrentLoad()
         #expect(vm.isNetworkError)
 
         vm.deselect()
@@ -189,7 +273,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(try makePR())
-        try await waitForLoad(vm)
+        await vm.waitForCurrentLoad()
 
         #expect(vm.reviewers.count == 2)
         guard vm.reviewers.count == 2 else { return }
@@ -217,7 +301,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel(client: client)
 
         vm.selectPR(try makePR())
-        try await waitForLoad(vm)
+        await vm.waitForCurrentLoad()
 
         #expect(vm.checkRuns.count == 3)
         guard vm.checkRuns.count == 3 else { return }
@@ -255,7 +339,7 @@ struct PRDetailViewModelTests {
         // The second fetch's normal completion is the barrier proving the
         // cancelled task had every opportunity to keep paginating.
         vm.selectPR(try makePR(id: "PR_2"))
-        try await waitForLoad(vm)
+        await vm.waitForCurrentLoad()
 
         #expect(await client.timelineCallCount(nodeID: "PR_1") <= 2)
     }
@@ -272,7 +356,7 @@ struct PRDetailViewModelTests {
         try #require(await client.resumeGate())
 
         vm.selectPR(try makePR(id: "PR_2"))
-        try await waitForLoad(vm)
+        await vm.waitForCurrentLoad()
 
         #expect(await client.checksCallCount(nodeID: "PR_1") <= 2)
     }
@@ -284,7 +368,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel()
         let pr = try makePR(id: "PR_1")
         vm.selectPR(pr)
-        try await waitForLoad(vm)
+        await vm.waitForCurrentLoad()
 
         let updatedPR = try TestPullRequestFactory.make(id: "PR_1", title: "Updated Title")
         vm.updateSelectedPR(updatedPR)
@@ -297,7 +381,7 @@ struct PRDetailViewModelTests {
         let (vm, _) = makeViewModel()
         let pr = try makePR(id: "PR_1")
         vm.selectPR(pr)
-        try await waitForLoad(vm)
+        await vm.waitForCurrentLoad()
 
         let otherPR = try TestPullRequestFactory.make(id: "PR_OTHER", title: "Other")
         vm.updateSelectedPR(otherPR)
@@ -346,6 +430,14 @@ private actor PaginatingMockGitHubClient: GitHubClientProtocol {
 
     func checksCallCount(nodeID: String) -> Int { checksCallCounts[nodeID, default: 0] }
 
+    private var failsGatedCall = false
+
+    /// Resumes the gated call and makes it throw.
+    func failGatedCall() {
+        failsGatedCall = true
+        _ = resumeGate()
+    }
+
     /// Returns false if no call was suspended at the gate.
     func resumeGate() -> Bool {
         guard let continuation = gateContinuation else { return false }
@@ -364,6 +456,7 @@ private actor PaginatingMockGitHubClient: GitHubClientProtocol {
         timelineCallCounts[nodeID, default: 0] += 1
         if gatedCall == .firstTimelineCall, totalTimelineCalls == 1 {
             await withCheckedContinuation { gateContinuation = $0 }
+            if failsGatedCall { throw GitHubClientError.serverError(statusCode: 502) }
         }
         switch gatedCall {
         case .firstTimelineCall:
@@ -393,6 +486,48 @@ private actor PaginatingMockGitHubClient: GitHubClientProtocol {
             await withCheckedContinuation { gateContinuation = $0 }
         }
         return ChecksPage(checkRuns: [], nextCursor: "checks-cursor-\(totalChecksCalls)")
+    }
+
+    func fetchPullRequests(query: String, cursor: String?, pageSize: Int) async throws -> PullRequestPage {
+        PullRequestPage(pullRequests: [], nextCursor: nil)
+    }
+
+    func fetchViewer() async throws -> (login: String, avatarURL: URL?) {
+        (login: "testuser", avatarURL: nil)
+    }
+
+    func validateToken(_ token: String) async throws -> TokenValidation {
+        TokenValidation(login: "testuser", avatarURL: nil)
+    }
+
+    func setDraft(pullRequestID: String, isDraft: Bool) async throws {}
+}
+
+/// Every page points at a fresh cursor, so only the view model's page cap
+/// ends the loops.
+private actor EndlessPaginationClient: GitHubClientProtocol {
+    private let endlessChecks: Bool
+    private(set) var timelineCallCount = 0
+    private(set) var checksCallCount = 0
+
+    init(endlessChecks: Bool = false) {
+        self.endlessChecks = endlessChecks
+    }
+
+    func fetchTimeline(nodeID: String, cursor: String?, eventPageOffset: Int, checksPageOffset: Int) async throws -> TimelinePage {
+        timelineCallCount += 1
+        return TimelinePage(
+            events: [],
+            checkRuns: [],
+            reviewers: [],
+            nextCursor: endlessChecks ? nil : "timeline-cursor-\(timelineCallCount)",
+            checksNextCursor: endlessChecks ? "checks-cursor-0" : nil
+        )
+    }
+
+    func fetchChecks(nodeID: String, cursor: String, checksPageOffset: Int) async throws -> ChecksPage {
+        checksCallCount += 1
+        return ChecksPage(checkRuns: [], nextCursor: "checks-cursor-\(checksCallCount)")
     }
 
     func fetchPullRequests(query: String, cursor: String?, pageSize: Int) async throws -> PullRequestPage {
