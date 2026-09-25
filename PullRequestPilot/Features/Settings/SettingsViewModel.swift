@@ -335,6 +335,8 @@ final class SettingsViewModel {
     private func userMessage(for authError: AuthError) -> String {
         if let clientError = authError.underlying as? GitHubClientError {
             switch clientError {
+            case .missingToken:
+                return "Paste a GitHub token first."
             case .unauthorized:
                 return "Token is invalid or expired. Generate a new one at github.com/settings/tokens."
             case .rateLimited:

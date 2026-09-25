@@ -101,6 +101,8 @@ extension GitHubClientProtocol {
 // MARK: - Errors
 
 enum GitHubClientError: LocalizedError {
+    /// No token is stored: nothing was sent.
+    case missingToken
     case unauthorized
     case rateLimited(retryAfter: TimeInterval?)
     case permissionDenied(detail: String?)
@@ -119,6 +121,8 @@ enum GitHubClientError: LocalizedError {
     /// Map this typed error to the app-wide `AppError` surface.
     var asAppError: AppError {
         switch self {
+        case .missingToken:
+            return .missingToken
         case .unauthorized:
             return .unauthorized
         case .rateLimited(let retryAfter):
@@ -366,7 +370,7 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
 
     private func execute<T: Decodable>(_ request: GraphQLRequest) async throws -> GraphQLResponse<T> {
         guard let token = await tokenProvider(), !token.isEmpty else {
-            throw GitHubClientError.unauthorized
+            throw GitHubClientError.missingToken
         }
         let raw = try await fetchRawResponse(request, token: token)
         return try decode(raw.body)

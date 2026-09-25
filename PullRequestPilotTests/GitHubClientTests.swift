@@ -12,29 +12,37 @@ struct GitHubClientTests {
 
     // MARK: - Token Validation
 
-    @Test("throws unauthorized when token is nil")
-    func nilTokenThrowsUnauthorized() async {
+    @Test("throws missingToken without sending a request when the token is nil")
+    func nilTokenThrowsMissingToken() async {
         let (client, http) = makeClient(token: nil)
         http.handler = { _ in
             Issue.record("Should not reach network")
             throw URLError(.badServerResponse)
         }
 
-        await #expect(throws: GitHubClientError.self) {
+        let error = await #expect(throws: GitHubClientError.self) {
             _ = try await client.fetchPullRequests(query: "is:pr", cursor: nil)
+        }
+        guard case .missingToken? = error else {
+            Issue.record("Expected missingToken, got \(String(describing: error))")
+            return
         }
     }
 
-    @Test("throws unauthorized when token is empty")
-    func emptyTokenThrowsUnauthorized() async {
+    @Test("throws missingToken without sending a request when the token is empty")
+    func emptyTokenThrowsMissingToken() async {
         let (client, http) = makeClient(token: "")
         http.handler = { _ in
             Issue.record("Should not reach network")
             throw URLError(.badServerResponse)
         }
 
-        await #expect(throws: GitHubClientError.self) {
+        let error = await #expect(throws: GitHubClientError.self) {
             _ = try await client.fetchPullRequests(query: "is:pr", cursor: nil)
+        }
+        guard case .missingToken? = error else {
+            Issue.record("Expected missingToken, got \(String(describing: error))")
+            return
         }
     }
 

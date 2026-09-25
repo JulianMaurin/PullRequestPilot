@@ -253,6 +253,12 @@ final class PRFetcher {
                 states[view.id]?.isLoading = false
             }
             return
+        } catch GitHubClientError.missingToken {
+            // Signed out: the view says why it is empty, without a toast.
+            // Signing in refreshes every view.
+            guard !Task.isCancelled else { return }
+            logger.info("Skipped fetching PRs for '\(view.title, privacy: .public)': no token")
+            states[view.id]?.error = AppError.missingToken.errorDescription
         } catch {
             // A superseded task must not write the old query's error into the
             // successor's fresh state, nor toast for a query that no longer

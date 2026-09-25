@@ -134,6 +134,22 @@ struct PRFetcherTests {
         #expect(recorder.unresolvedErrors.isEmpty)
     }
 
+    @MainActor
+    @Test("without a token, a refresh says so in the view and posts no toast")
+    func missingTokenStaysInTheView() async throws {
+        let client = MockGitHubClient()
+        let recorder = EventRecorder()
+        let fetcher = Self.makeFetcher(client: client, reporter: recorder.reporter())
+        let view = Self.makeView()
+        await client.setErrorToThrow(GitHubClientError.missingToken)
+
+        await fetcher.refresh(for: view)
+
+        #expect(fetcher.state(for: view.id).error == AppError.missingToken.errorDescription)
+        #expect(!fetcher.state(for: view.id).isLoading)
+        #expect(recorder.events.isEmpty)
+    }
+
     // MARK: - state access
 
     @MainActor

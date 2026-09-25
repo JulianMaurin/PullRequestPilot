@@ -93,6 +93,7 @@ struct AppEvent: Sendable, Identifiable, Equatable {
 /// Canonical user-visible error type. Every subsystem failure that should
 /// surface to the user maps to one of these cases.
 enum AppError: LocalizedError, Sendable, Hashable {
+    case missingToken
     case unauthorized
     case rateLimited(resetAt: Date?)
     case permissionDenied(detail: String?)
@@ -115,6 +116,8 @@ enum AppError: LocalizedError, Sendable, Hashable {
 
     var errorDescription: String? {
         switch self {
+        case .missingToken:
+            return "Add your GitHub token in Settings to load this view."
         case .unauthorized:
             return "Your GitHub token is invalid or expired. Update it in Settings."
         case .rateLimited(let resetAt):
@@ -196,7 +199,8 @@ enum AppError: LocalizedError, Sendable, Hashable {
              .decodeCorruption,
              .gitDirectoriesUnavailable:
             return true
-        case .rateLimited,
+        case .missingToken,
+             .rateLimited,
              .network,
              .serverError,
              .requestRejected,
