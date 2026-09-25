@@ -7,26 +7,11 @@ import Security
 struct KeychainServiceTests {
     private let keychain = KeychainService(service: "com.pullrequestpilot.tests.\(UUID().uuidString)")
 
-    @Test("save and read round-trips a value")
-    func saveAndRead() throws {
-        try keychain.save(key: "test-key", value: "test-value")
-        let result = keychain.read(key: "test-key")
-        #expect(result == "test-value")
-        try keychain.delete(key: "test-key")
-    }
-
-    @Test("read returns nil for missing key")
-    func readMissing() {
-        let result = keychain.read(key: "nonexistent-key-\(UUID().uuidString)")
-        #expect(result == nil)
-    }
-
     @Test("save overwrites existing value")
     func saveOverwrites() throws {
         try keychain.save(key: "overwrite-key", value: "first")
         try keychain.save(key: "overwrite-key", value: "second")
-        let result = keychain.read(key: "overwrite-key")
-        #expect(result == "second")
+        #expect(try keychain.readItem(key: "overwrite-key") == "second")
         try keychain.delete(key: "overwrite-key")
     }
 
@@ -34,8 +19,7 @@ struct KeychainServiceTests {
     func deleteRemoves() throws {
         try keychain.save(key: "delete-key", value: "data")
         try keychain.delete(key: "delete-key")
-        let result = keychain.read(key: "delete-key")
-        #expect(result == nil)
+        #expect(try keychain.readItem(key: "delete-key") == nil)
     }
 
     @Test("delete does not throw for missing key")
@@ -78,15 +62,6 @@ struct KeychainServiceTests {
         #expect(throws: KeychainError.invalidData) {
             try corrupt.readItem(key: "any-key")
         }
-    }
-
-    @Test("read maps keychain failure to nil (logged fallback)")
-    func readFallsBackToNilOnKeychainFailure() {
-        let failing = KeychainService(
-            service: "com.pullrequestpilot.tests.authfail",
-            secItemCopyMatching: { _, _ in errSecAuthFailed }
-        )
-        #expect(failing.read(key: "any-key") == nil)
     }
 
     @Test("KeychainError descriptions are user-facing")

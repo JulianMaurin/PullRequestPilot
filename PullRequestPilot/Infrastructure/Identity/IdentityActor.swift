@@ -27,9 +27,39 @@ actor IdentityActor {
     /// one 401 per view, and only one confirmation round-trip should run.
     private var pendingRevalidationTask: Task<Void, Never>?
 
-    init(keychain: KeychainService, github: GitHubClientProtocol) {
+    /// Every invalidation's reason, including ones no UI initiated (a confirmed
+    /// 401). Single consumer: SettingsViewModel.
+    nonisolated let invalidations: AsyncStream<AuthInvalidReason>
+    private let invalidationContinuation: AsyncStream<AuthInvalidReason>.Continuation
+
+    /// `storedToken` is the launch-time value from `readStoredToken(from:)`;
+    /// nil starts unauthenticated.
+    init(keychain: KeychainService, github: GitHubClientProtocol, storedToken: String? = nil) {
         self.keychain = keychain
         self.github = github
+        if let storedToken {
+            state = .authenticated(token: storedToken, viewerLogin: nil)
+        }
+        (invalidations, invalidationContinuation) = AsyncStream.makeStream(
+            of: AuthInvalidReason.self,
+            bufferingPolicy: .bufferingNewest(1)
+        )
+    }
+
+    deinit {
+        invalidationContinuation.finish()
+    }
+
+    /// The launch-time token: the DEBUG `GITHUB_TOKEN` override, else the
+    /// Keychain. Throws when the Keychain is unreadable (locked, denied ACL),
+    /// which callers must not treat as "no token saved".
+    static func readStoredToken(from keychain: KeychainService) throws -> String? {
+        #if DEBUG
+        if let envToken = ProcessInfo.processInfo.environment["GITHUB_TOKEN"], !envToken.isEmpty {
+            return envToken
+        }
+        #endif
+        return try keychain.readItem(key: Constants.Keychain.githubToken)
     }
 
     // MARK: - Read
@@ -89,24 +119,11 @@ actor IdentityActor {
 
     // MARK: - Write
 
-    /// Loads any existing token from Keychain (or the DEBUG env var override) and
-    /// transitions state accordingly. Called once at app launch. An unreadable
-    /// keychain logs at `.error` and falls back to unauthenticated — the stored
-    /// token is left in place for the next launch.
-    func bootstrap() {
-        if let token = initialStoredToken() {
-            state = .authenticated(token: token, viewerLogin: nil)
-        } else {
-            state = .unauthenticated
-        }
-        generation &+= 1
-    }
-
     /// Validates `newToken` against the GitHub API, writes it to the Keychain
     /// atomically, and commits state. On any failure, throws and leaves prior
     /// state untouched. `CancellationError` is rethrown as-is.
     @discardableResult
-    func swap(to newToken: String) async throws -> String {
+    func swap(to newToken: String) async throws -> (login: String, avatarURL: URL?) {
         let trimmed = newToken.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw AuthError(reason: .invalidToken)
@@ -143,7 +160,7 @@ actor IdentityActor {
         pendingViewerLoginTask = nil
         state = .authenticated(token: trimmed, viewerLogin: viewer.login)
         generation &+= 1
-        return viewer.login
+        return viewer
     }
 
     /// Unconditionally clears in-memory state and the Keychain. Used on explicit
@@ -159,6 +176,7 @@ actor IdentityActor {
         } catch {
             logger.error("Keychain delete during invalidate failed: \(error, privacy: .public)")
         }
+        invalidationContinuation.yield(reason)
     }
 
     /// Clears state and Keychain only if the currently authenticated token still
@@ -206,22 +224,6 @@ actor IdentityActor {
             invalidateIfMatchingToken(staleToken, reason: .unauthorized)
         } catch {
             logger.warning("401 revalidation inconclusive; keeping token: \(error, privacy: .public)")
-        }
-    }
-
-    // MARK: - Private
-
-    private func initialStoredToken() -> String? {
-        #if DEBUG
-        if let envToken = ProcessInfo.processInfo.environment["GITHUB_TOKEN"], !envToken.isEmpty {
-            return envToken
-        }
-        #endif
-        do {
-            return try keychain.readItem(key: Constants.Keychain.githubToken)
-        } catch {
-            logger.error("Keychain read failed during bootstrap; starting unauthenticated: \(error, privacy: .public)")
-            return nil
         }
     }
 }

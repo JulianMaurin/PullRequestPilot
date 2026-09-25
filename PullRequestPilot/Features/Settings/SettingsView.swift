@@ -12,10 +12,15 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
     var body: some View {
         Form {
             Section {
-                if let login = viewModel.viewerLogin {
+                if let login = viewModel.viewerLogin, !viewModel.isChangingToken {
                     LabeledContent {
-                        Button("Sign Out", role: .destructive) {
-                            showSignOutConfirmation = true
+                        HStack {
+                            Button("Change Token…") {
+                                viewModel.beginChangingToken()
+                            }
+                            Button("Sign Out", role: .destructive) {
+                                showSignOutConfirmation = true
+                            }
                         }
                     } label: {
                         HStack(spacing: 8) {
@@ -54,6 +59,13 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
                         }
                         .disabled(!viewModel.hasToken || viewModel.validationState == .validating)
 
+                        if viewModel.isChangingToken {
+                            Button("Cancel") {
+                                viewModel.cancelChangingToken()
+                            }
+                            .disabled(viewModel.validationState == .validating)
+                        }
+
                         Spacer()
 
                         validationStatus
@@ -83,7 +95,7 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
             } header: {
                 Text("GitHub Token")
             } footer: {
-                if viewModel.viewerLogin == nil {
+                if viewModel.viewerLogin == nil || viewModel.isChangingToken {
                     Text("Create a token at github.com/settings/tokens with the `repo` scope.")
                         .font(.caption)
                         .foregroundStyle(.secondary)

@@ -15,14 +15,16 @@ final class SettingsViewModel {
     private(set) var staleDirectoryWarning: String?
     private(set) var launchAtLoginEnabled: Bool
     private(set) var launchAtLoginError: String?
+    /// True while a signed-in user is entering a replacement token.
+    private(set) var isChangingToken = false
 
     private let identity: IdentityActor
-    private let gitHubClient: GitHubClientProtocol
     private let gitDirectoriesStore: GitDirectoriesStore
     private let localRepositoryService: LocalRepositoryService
     private let defaults: UserDefaults
     private let reporter: EventReporter
     private let rescanTaskStorage = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+    private let invalidationObservationStorage = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Settings")
 
     enum ValidationState: Equatable {
@@ -36,15 +38,19 @@ final class SettingsViewModel {
     /// Used by RootContentView to decide whether to show settings or the dashboard.
     private(set) var hasSavedToken: Bool = false
 
-    init(identity: IdentityActor, gitHubClient: GitHubClientProtocol, gitDirectoriesStore: GitDirectoriesStore, localRepositoryService: LocalRepositoryService, defaults: UserDefaults, reporter: EventReporter = .noop, initialToken: String? = nil) {
+    /// `tokenReadFailure` describes a Keychain that couldn't be read at launch;
+    /// the token field then explains that instead of looking like a first run.
+    init(identity: IdentityActor, gitDirectoriesStore: GitDirectoriesStore, localRepositoryService: LocalRepositoryService, defaults: UserDefaults, reporter: EventReporter = .noop, initialToken: String? = nil, tokenReadFailure: String? = nil) {
         self.identity = identity
-        self.gitHubClient = gitHubClient
         self.gitDirectoriesStore = gitDirectoriesStore
         self.localRepositoryService = localRepositoryService
         self.defaults = defaults
         self.reporter = reporter
         self.token = initialToken ?? ""
         self.hasSavedToken = (initialToken?.isEmpty == false)
+        if let tokenReadFailure {
+            self.validationState = .invalid("Couldn't read your saved token from the Keychain (\(tokenReadFailure)). Unlock the Keychain and relaunch, or paste the token again.")
+        }
         self.gitDirectories = gitDirectoriesStore.load()
         if gitDirectoriesStore.lastPrunedStaleCount > 0 {
             let count = gitDirectoriesStore.lastPrunedStaleCount
@@ -56,10 +62,22 @@ final class SettingsViewModel {
         let repoInterval = defaults.double(forKey: Constants.UserDefaultsKeys.repoScanInterval)
         self.repoScanInterval = repoInterval > 0 ? repoInterval : Constants.App.defaultRepoScanInterval
         self.launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+
+        let invalidations = identity.invalidations
+        let observation = Task { [weak self] in
+            for await reason in invalidations where reason == .unauthorized {
+                self?.handleTokenRejected()
+            }
+        }
+        invalidationObservationStorage.withLock { $0 = observation }
     }
 
     deinit {
         rescanTaskStorage.withLock { task in
+            task?.cancel()
+            task = nil
+        }
+        invalidationObservationStorage.withLock { task in
             task?.cancel()
             task = nil
         }
@@ -83,23 +101,15 @@ final class SettingsViewModel {
         logger.info("Validating token against GitHub API...")
 
         do {
-            let login = try await identity.swap(to: trimmedToken)
-            viewerLogin = login
-            // Pull avatar in a follow-up call — swap only returns the login.
-            // Avatar failure is non-fatal; token is already saved. Cancellation
-            // must propagate so the outer handler resets `validationState`.
-            do {
-                viewerAvatarURL = try await gitHubClient.validateToken(trimmedToken).avatarURL
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch let urlError as URLError where urlError.code == .cancelled {
-                throw CancellationError()
-            } catch {
-                logger.warning("Avatar fetch failed after successful token swap: \(error, privacy: .public)")
-            }
+            let viewer = try await identity.swap(to: trimmedToken)
+            // Committed without another suspension point, so a Sign Out
+            // confirmed mid-save can't be overwritten by a late resume.
+            viewerLogin = viewer.login
+            viewerAvatarURL = viewer.avatarURL
+            isChangingToken = false
             hasSavedToken = true
             validationState = .valid
-            logger.info("Token validated — authenticated as \(login, privacy: .private)")
+            logger.info("Token validated — authenticated as \(viewer.login, privacy: .private)")
         } catch is CancellationError {
             validationState = .idle
             return
@@ -124,9 +134,38 @@ final class SettingsViewModel {
         token = ""
         viewerLogin = nil
         viewerAvatarURL = nil
+        isChangingToken = false
         validationState = .idle
         hasSavedToken = false
         logger.info("Token cleared")
+    }
+
+    /// Shows the token field while signed in; the current token stays active
+    /// until a replacement validates.
+    func beginChangingToken() {
+        token = ""
+        saveError = nil
+        validationState = .idle
+        isChangingToken = true
+    }
+
+    func cancelChangingToken() {
+        token = ""
+        saveError = nil
+        validationState = .idle
+        isChangingToken = false
+    }
+
+    /// GitHub confirmed the saved token is revoked or expired. Views stay; the
+    /// token field comes back with an explanation.
+    private func handleTokenRejected() {
+        logger.info("Saved token rejected by GitHub; asking for a new one")
+        token = ""
+        viewerLogin = nil
+        viewerAvatarURL = nil
+        isChangingToken = false
+        hasSavedToken = false
+        validationState = .invalid("GitHub rejected the saved token — it may have expired or been revoked. Paste a new one to continue; your views are kept.")
     }
 
     // MARK: - Launch at Login

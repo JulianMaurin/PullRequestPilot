@@ -1,5 +1,4 @@
 import Foundation
-import os
 import Security
 
 enum KeychainError: LocalizedError, Equatable {
@@ -29,7 +28,6 @@ final class KeychainService: Sendable {
 
     private let service: String
     private let secItemCopyMatching: SecItemCopy
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Keychain")
 
     init(
         service: String = Bundle.main.bundleIdentifier ?? "com.pullrequestpilot",
@@ -102,17 +100,6 @@ final class KeychainService: Sendable {
             return nil
         default:
             throw KeychainError.unexpectedStatus(status)
-        }
-    }
-
-    /// Non-throwing variant for callers that treat an unreadable keychain as
-    /// absence; failures other than "not found" are logged at `.error`.
-    func read(key: String) -> String? {
-        do {
-            return try readItem(key: key)
-        } catch {
-            logger.error("Keychain read failed for key \(key, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            return nil
         }
     }
 

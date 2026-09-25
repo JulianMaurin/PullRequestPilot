@@ -23,6 +23,20 @@ final class AppState {
         let events = EventCenter()
         let reporter = events.reporter()
 
+        // One launch-time read feeds both IdentityActor and SettingsViewModel,
+        // so the fetch layer and the UI can't disagree about the token.
+        let storedToken: String?
+        let tokenReadFailure: String?
+        do {
+            storedToken = try IdentityActor.readStoredToken(from: keychain)
+            tokenReadFailure = nil
+        } catch {
+            Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "AppState")
+                .error("Keychain read failed at launch: \(error, privacy: .public)")
+            storedToken = nil
+            tokenReadFailure = error.localizedDescription
+        }
+
         // Two-phase init: GitHubClient needs an identity-backed token provider,
         // but IdentityActor needs a GitHubClient for validation. Resolve by
         // holding a weak-ish reference via a mutable box assigned after both
@@ -35,7 +49,7 @@ final class AppState {
                 Task { await identityHolder.identity?.handleUnauthorized(staleToken: staleToken) }
             }
         )
-        let identity = IdentityActor(keychain: keychain, github: gitHubClient)
+        let identity = IdentityActor(keychain: keychain, github: gitHubClient, storedToken: storedToken)
         identityHolder.set(identity)
         let viewsStore = ViewsStore(defaults: defaults, reporter: reporter)
         let gitDirectoriesStore = GitDirectoriesStore(defaults: defaults, reporter: reporter)
@@ -78,30 +92,26 @@ final class AppState {
             defaults: defaults,
             reporter: reporter
         )
-        // Synchronously read the stored token once at startup so the initial UI
-        // can show "signed in" without awaiting the actor. Writes always go
-        // through IdentityActor.
-        let initialToken = Self.initialToken(keychain: keychain)
         self.settingsViewModel = SettingsViewModel(
             identity: identity,
-            gitHubClient: gitHubClient,
             gitDirectoriesStore: gitDirectoriesStore,
             localRepositoryService: localRepositoryService,
             defaults: defaults,
             reporter: reporter,
-            initialToken: initialToken
+            initialToken: storedToken,
+            tokenReadFailure: tokenReadFailure
         )
-
-        // Populate IdentityActor from Keychain (or DEBUG env var) before any fetch.
-        Task { await identity.bootstrap() }
 
         // Start security-scoped access for bookmarked directories
         let initialDirectories = gitDirectoriesStore.load()
         gitDirectoriesStore.startAccessing(initialDirectories)
 
         // Start auto-refresh independently of window visibility so notifications work
-        // even when the window is hidden (menu bar app).
-        dashboardViewModel.startAutoRefresh()
+        // even when the window is hidden (menu bar app). Without a token every tick
+        // would fail; signing in starts it instead.
+        if storedToken != nil {
+            dashboardViewModel.startAutoRefresh()
+        }
 
         // Periodic refresh of local repo index (first tick scans immediately)
         let store = gitDirectoriesStore
@@ -116,17 +126,6 @@ final class AppState {
             },
             interval: scanInterval > 0 ? scanInterval : Constants.App.defaultRepoScanInterval
         )
-    }
-
-    // MARK: - Private
-
-    private static func initialToken(keychain: KeychainService) -> String? {
-        #if DEBUG
-        if let envToken = ProcessInfo.processInfo.environment["GITHUB_TOKEN"], !envToken.isEmpty {
-            return envToken
-        }
-        #endif
-        return keychain.read(key: Constants.Keychain.githubToken)
     }
 
     // MARK: - Lifecycle

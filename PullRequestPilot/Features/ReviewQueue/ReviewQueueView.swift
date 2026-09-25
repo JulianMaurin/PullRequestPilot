@@ -79,7 +79,9 @@ struct ReviewQueueView: View {
                     availableWidth = newWidth
                 }
         }
-        .onChange(of: viewModel.selectedViewState.pullRequests) {
+        // `initial` reconciles a selection that outlived this view (Settings
+        // was shown, then another view was picked before returning).
+        .onChange(of: viewModel.selectedViewState.pullRequests, initial: true) {
             if let selected = prDetailViewModel.selectedPR {
                 if let updated = viewModel.selectedViewState.pullRequests.first(where: { $0.id == selected.id }) {
                     prDetailViewModel.updateSelectedPR(updated)

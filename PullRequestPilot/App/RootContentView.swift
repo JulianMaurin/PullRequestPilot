@@ -60,9 +60,13 @@ struct RootContentView: View {
             }
         }
         .onChange(of: settingsViewModel.hasSavedToken) { _, hasSaved in
+            // Sign-out or a revoked token: nothing can fetch until a new token
+            // validates, and the open PR may belong to the previous account.
             if !hasSaved {
                 needsInitialSetup = true
                 dashboardViewModel.showingSettings = false
+                dashboardViewModel.stopAutoRefresh()
+                prDetailViewModel.deselect()
             }
             // When `hasSaved` flips to true, IdentityActor.swap has already
             // refreshed the viewer login atomically — nothing else to do here.

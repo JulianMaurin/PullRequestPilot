@@ -26,7 +26,6 @@ struct SettingsViewModelTests {
 
         let vm = SettingsViewModel(
             identity: identity,
-            gitHubClient: mockClient,
             gitDirectoriesStore: gitDirStore,
             localRepositoryService: localRepoService,
             defaults: defaults,
@@ -58,7 +57,7 @@ struct SettingsViewModelTests {
     }
 
     @Test("save stores token and validates against GitHub API")
-    func saveTokenSuccess() async {
+    func saveTokenSuccess() async throws {
         let (vm, keychain, _, _, _) = makeViewModel(suiteName: "SaveSuccess")
         await mockClient.setViewerLogin("octocat")
 
@@ -66,7 +65,7 @@ struct SettingsViewModelTests {
         await vm.save()
 
         #expect(vm.validationState == .valid)
-        #expect(keychain.read(key: Constants.Keychain.githubToken) == "ghp_valid_token")
+        #expect(try keychain.readItem(key: Constants.Keychain.githubToken) == "ghp_valid_token")
     }
 
     @Test("save transitions through validating state")
@@ -144,7 +143,7 @@ struct SettingsViewModelTests {
     }
 
     @Test("clearToken removes from keychain and resets state")
-    func clearToken() async {
+    func clearToken() async throws {
         let (vm, keychain, identity, _, _) = makeViewModel(storedToken: "ghp_existing", suiteName: "ClearToken")
         vm.token = "ghp_existing"
 
@@ -152,7 +151,7 @@ struct SettingsViewModelTests {
 
         #expect(vm.token == "")
         #expect(vm.validationState == .idle)
-        #expect(keychain.read(key: Constants.Keychain.githubToken) == nil)
+        #expect(try keychain.readItem(key: Constants.Keychain.githubToken) == nil)
         #expect(await identity.token() == nil)
     }
 
@@ -292,14 +291,14 @@ struct SettingsViewModelTests {
     // MARK: - Token trimming on save
 
     @Test("save trims whitespace from token before saving")
-    func saveTrimsWhitespace() async {
+    func saveTrimsWhitespace() async throws {
         let (vm, keychain, _, _, _) = makeViewModel(suiteName: "SaveTrim")
         await mockClient.setViewerLogin("user")
 
         vm.token = "  ghp_token_with_spaces  \n"
         await vm.save()
 
-        #expect(keychain.read(key: Constants.Keychain.githubToken) == "ghp_token_with_spaces")
+        #expect(try keychain.readItem(key: Constants.Keychain.githubToken) == "ghp_token_with_spaces")
     }
 
     // MARK: - Init loads token from cache
@@ -404,7 +403,7 @@ struct SettingsViewModelTests {
         defaults.removePersistentDomain(forName: suiteName)
         defaults.set(300.0, forKey: Constants.UserDefaultsKeys.prRefreshInterval)
         let gitDirStore = GitDirectoriesStore(defaults: defaults)
-        let vm = SettingsViewModel(identity: identity, gitHubClient: mockClient, gitDirectoriesStore: gitDirStore, localRepositoryService: localRepoService, defaults: defaults)
+        let vm = SettingsViewModel(identity: identity, gitDirectoriesStore: gitDirStore, localRepositoryService: localRepoService, defaults: defaults)
         #expect(vm.prRefreshInterval == 300.0)
     }
 
@@ -435,7 +434,7 @@ struct SettingsViewModelTests {
         defaults.removePersistentDomain(forName: suiteName)
         defaults.set(600.0, forKey: Constants.UserDefaultsKeys.repoScanInterval)
         let gitDirStore = GitDirectoriesStore(defaults: defaults)
-        let vm = SettingsViewModel(identity: identity, gitHubClient: mockClient, gitDirectoriesStore: gitDirStore, localRepositoryService: localRepoService, defaults: defaults)
+        let vm = SettingsViewModel(identity: identity, gitDirectoriesStore: gitDirStore, localRepositoryService: localRepoService, defaults: defaults)
         #expect(vm.repoScanInterval == 600.0)
     }
 
@@ -484,6 +483,147 @@ struct SettingsViewModelTests {
 
         #expect(vm.viewerAvatarURL == nil)
         #expect(vm.viewerLogin == nil)
+    }
+
+    // MARK: - Token revoked mid-session
+
+    @Test("a confirmed revocation signs the UI out and asks for a new token")
+    func revokedTokenReturnsToTokenField() async throws {
+        let (vm, keychain, identity, _, _) = makeViewModel(suiteName: "RevokedToken")
+        defer { try? keychain.delete(key: Constants.Keychain.githubToken) }
+        await mockClient.setViewerLogin("octocat")
+        vm.token = "ghp_valid"
+        await vm.save()
+        #expect(vm.viewerLogin == "octocat")
+
+        await mockClient.setValidateTokenError(GitHubClientError.unauthorized)
+        await identity.handleUnauthorized(staleToken: "ghp_valid")
+        try await Self.waitUntil { !vm.hasSavedToken }
+
+        #expect(!vm.hasSavedToken)
+        #expect(vm.viewerLogin == nil)
+        #expect(vm.viewerAvatarURL == nil)
+        #expect(vm.token.isEmpty)
+        guard case .invalid(let message) = vm.validationState else {
+            Issue.record("Expected an invalid state explaining the rejection, got \(vm.validationState)")
+            return
+        }
+        #expect(message.contains("rejected the saved token"))
+        #expect(try keychain.readItem(key: Constants.Keychain.githubToken) == nil)
+    }
+
+    @Test("signing out does not show the rejected-token message")
+    func signOutIsNotReportedAsRejection() async throws {
+        let (vm, _, _, _, _) = makeViewModel(storedToken: "ghp_token", suiteName: "SignOutNotRejected")
+
+        await vm.clearToken()
+        for _ in 0..<50 { await Task.yield() }
+
+        #expect(vm.validationState == .idle)
+    }
+
+    // MARK: - Save commits in one step
+
+    @Test("save validates once and commits login and avatar together")
+    func saveMakesOneValidationCall() async throws {
+        let (vm, keychain, _, _, _) = makeViewModel(suiteName: "SaveOneCall")
+        defer { try? keychain.delete(key: Constants.Keychain.githubToken) }
+        await mockClient.setViewerLogin("octocat")
+        await mockClient.setViewerAvatarURL(URL(string: "https://example.com/avatar"))
+
+        vm.token = "ghp_valid"
+        await vm.save()
+
+        #expect(await mockClient.validateTokenCallCount == 1)
+        #expect(vm.viewerLogin == "octocat")
+        #expect(vm.viewerAvatarURL != nil)
+    }
+
+    // MARK: - Change token
+
+    @Test("a rejected replacement token keeps the current session")
+    func changeTokenFailureKeepsSession() async throws {
+        let (vm, keychain, identity, _, _) = makeViewModel(suiteName: "ChangeTokenFailure")
+        defer { try? keychain.delete(key: Constants.Keychain.githubToken) }
+        await mockClient.setViewerLogin("octocat")
+        vm.token = "ghp_current"
+        await vm.save()
+
+        vm.beginChangingToken()
+        #expect(vm.isChangingToken)
+        #expect(vm.token.isEmpty)
+        #expect(vm.validationState == .idle)
+
+        await mockClient.setValidateTokenError(GitHubClientError.unauthorized)
+        vm.token = "ghp_bad"
+        await vm.save()
+
+        #expect(vm.isChangingToken)
+        #expect(vm.viewerLogin == "octocat")
+        #expect(vm.hasSavedToken)
+        #expect(await identity.token() == "ghp_current")
+
+        vm.cancelChangingToken()
+        #expect(!vm.isChangingToken)
+        #expect(vm.validationState == .idle)
+    }
+
+    @Test("a valid replacement token ends change mode with the new account")
+    func changeTokenSuccessSwitchesAccount() async throws {
+        let (vm, keychain, identity, _, _) = makeViewModel(suiteName: "ChangeTokenSuccess")
+        defer { try? keychain.delete(key: Constants.Keychain.githubToken) }
+        await mockClient.setViewerLogin("octocat")
+        vm.token = "ghp_current"
+        await vm.save()
+
+        vm.beginChangingToken()
+        await mockClient.setViewerLogin("hubot")
+        vm.token = "ghp_new"
+        await vm.save()
+
+        #expect(!vm.isChangingToken)
+        #expect(vm.viewerLogin == "hubot")
+        #expect(vm.validationState == .valid)
+        #expect(await identity.token() == "ghp_new")
+    }
+
+    // MARK: - Keychain unreadable at launch
+
+    @Test("an unreadable Keychain at launch explains itself instead of looking like a first run")
+    func keychainReadFailureIsExplained() throws {
+        let suiteName = "KeychainReadFailure"
+        let keychain = KeychainService(service: "com.pullrequestpilot.settings.tests.\(suiteName)")
+        let identity = IdentityActor(keychain: keychain, github: mockClient)
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        let vm = SettingsViewModel(
+            identity: identity,
+            gitDirectoriesStore: GitDirectoriesStore(defaults: defaults),
+            localRepositoryService: localRepoService,
+            defaults: defaults,
+            tokenReadFailure: "User interaction is not allowed."
+        )
+
+        #expect(!vm.hasSavedToken)
+        guard case .invalid(let message) = vm.validationState else {
+            Issue.record("Expected an invalid state explaining the Keychain failure, got \(vm.validationState)")
+            return
+        }
+        #expect(message.contains("Keychain"))
+        #expect(message.contains("User interaction is not allowed."))
+    }
+
+    // MARK: - Helpers
+
+    private static func waitUntil(
+        deadlineSeconds: Double = 2.0,
+        _ predicate: () -> Bool
+    ) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(deadlineSeconds))
+        while !predicate() {
+            if ContinuousClock.now >= deadline { return }
+            try await Task.sleep(for: .milliseconds(5))
+        }
     }
 
     // MARK: - prRefreshInterval persists to UserDefaults
