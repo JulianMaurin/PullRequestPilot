@@ -197,6 +197,55 @@ struct GitHubClientTests {
         #expect(capturedRequest?.httpMethod == "POST")
     }
 
+    // MARK: - Draft State Mutation
+
+    @Test("setDraft sends the convert mutation and accepts the draft result")
+    func setDraftSendsMutation() async throws {
+        let (client, http) = makeClient()
+        var capturedBody = ""
+        http.handler = { request in
+            capturedBody = Self.bodyString(of: request)
+            let responseJSON = #"{"data": {"payload": {"pullRequest": {"isDraft": true}}}}"#
+            return try TestHTTP.response(for: request, body: Data(responseJSON.utf8))
+        }
+
+        try await client.setDraft(pullRequestID: "PR_42", isDraft: true)
+
+        #expect(capturedBody.contains("convertPullRequestToDraft"))
+        #expect(capturedBody.contains("PR_42"))
+    }
+
+    @Test("setDraft surfaces GitHub's refusal message")
+    func setDraftRefused() async {
+        let (client, http) = makeClient()
+        let responseJSON = #"{"data": {"payload": null}, "errors": [{"type": "FORBIDDEN", "message": "Resource not accessible by personal access token"}]}"#
+        http.handler = { request in
+            try TestHTTP.response(for: request, body: Data(responseJSON.utf8))
+        }
+
+        do {
+            try await client.setDraft(pullRequestID: "PR_42", isDraft: false)
+            Issue.record("Should have thrown")
+        } catch GitHubClientError.graphQLErrors(let messages) {
+            #expect(messages == ["Resource not accessible by personal access token"])
+        } catch {
+            Issue.record("Expected graphQLErrors, got \(error)")
+        }
+    }
+
+    @Test("setDraft throws when GitHub reports a different draft state")
+    func setDraftStateMismatch() async {
+        let (client, http) = makeClient()
+        let responseJSON = #"{"data": {"payload": {"pullRequest": {"isDraft": false}}}}"#
+        http.handler = { request in
+            try TestHTTP.response(for: request, body: Data(responseJSON.utf8))
+        }
+
+        await #expect(throws: GitHubClientError.self) {
+            try await client.setDraft(pullRequestID: "PR_42", isDraft: true)
+        }
+    }
+
     // MARK: - GitHubClientError descriptions
 
     @Test("error descriptions are user-friendly")
@@ -208,6 +257,22 @@ struct GitHubClientTests {
     }
 
     // MARK: - Helpers
+
+    /// URLProtocol receives POST bodies as a stream, not `httpBody`.
+    private static func bodyString(of request: URLRequest) -> String {
+        if let body = request.httpBody { return String(bytes: body, encoding: .utf8) ?? "" }
+        guard let stream = request.httpBodyStream else { return "" }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            guard count > 0 else { break }
+            data.append(buffer, count: count)
+        }
+        return String(bytes: data, encoding: .utf8) ?? ""
+    }
 
     private func makeSearchResponseJSON(hasNextPage: Bool = false, endCursor: String? = nil) -> String {
         let endCursorVal = endCursor.map { #""\#($0)""# } ?? "null"

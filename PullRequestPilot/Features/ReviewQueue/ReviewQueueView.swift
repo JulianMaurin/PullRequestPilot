@@ -849,6 +849,12 @@ struct ReviewQueueView: View {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(pr.headRefName, forType: .string)
                 }
+                if pr.state == .open {
+                    Divider()
+                    Button(pr.isDraft ? "Mark as Ready for Review" : "Convert to Draft") {
+                        Task { await viewModel.setDraft(pr, isDraft: !pr.isDraft) }
+                    }
+                }
             }
         }
         .padding(.horizontal, 12)

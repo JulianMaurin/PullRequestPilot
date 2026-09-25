@@ -201,6 +201,20 @@ struct ViewerNode: Decodable {
     let avatarUrl: String?
 }
 
+// MARK: - Draft State Mutation Response
+
+struct DraftStateMutationData: Decodable {
+    let payload: DraftStateMutationPayload?
+}
+
+struct DraftStateMutationPayload: Decodable {
+    let pullRequest: DraftStatePullRequest?
+}
+
+struct DraftStatePullRequest: Decodable {
+    let isDraft: Bool
+}
+
 // MARK: - Timeline Response
 
 struct TimelineNodeData: Decodable {

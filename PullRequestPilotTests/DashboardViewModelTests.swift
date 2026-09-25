@@ -16,12 +16,15 @@ struct DashboardViewModelTests {
         return IdentityActor(keychain: keychain, github: mockClient)
     }
 
-    private func makeViewModel(suiteName: String = "DashboardViewModelTests") -> (viewModel: DashboardViewModel, viewID: UUID) {
+    private func makeViewModel(
+        suiteName: String = "DashboardViewModelTests",
+        reporter: EventReporter = .noop
+    ) -> (viewModel: DashboardViewModel, viewID: UUID) {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         let store = ViewsStore(defaults: defaults)
         let identity = makeIdentity(suiteName: suiteName)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: identity, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: identity, viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, reporter: reporter)
         let testView = DashboardView(id: UUID(), title: "Test View", query: "is:pr is:open")
         viewModel.addView(testView)
         return (viewModel, testView.id)
@@ -696,6 +699,68 @@ struct DashboardViewModelTests {
 
         #expect(viewModel.collapsedOrgs.isEmpty)
         #expect(viewModel.collapsedRepos.isEmpty)
+    }
+
+    // MARK: - Draft State
+
+    @Test("setDraft sends the change, confirms it, and refreshes the views")
+    func setDraftSuccess() async throws {
+        let recorder = EventRecorder()
+        let (viewModel, viewID) = makeViewModel(suiteName: "SetDraftSuccess", reporter: recorder.reporter())
+        let pr = makePullRequest(number: 42, title: "Work in progress")
+        await mockClient.setPullRequestsToReturn([pr])
+
+        await viewModel.setDraft(pr, isDraft: true)
+
+        #expect(await mockClient.receivedDraftStateRequests == [.init(pullRequestID: "PR_42", isDraft: true)])
+        #expect(await mockClient.fetchPullRequestsCallCount == 1)
+        #expect(recorder.events.map(\.message) == ["#42 converted to draft."])
+        let state = try #require(viewModel.viewStates[viewID])
+        #expect(state.pullRequests.map(\.id) == ["PR_42"])
+    }
+
+    @Test("setDraft refused by GitHub reports the reason and skips the refresh")
+    func setDraftRefused() async throws {
+        let recorder = EventRecorder()
+        let (viewModel, _) = makeViewModel(suiteName: "SetDraftRefused", reporter: recorder.reporter())
+        let pr = makePullRequest(number: 42, title: "Draft")
+        await mockClient.setSetDraftError(GitHubClientError.graphQLErrors(["Resource not accessible by personal access token"]))
+
+        await viewModel.setDraft(pr, isDraft: false)
+
+        #expect(await mockClient.fetchPullRequestsCallCount == 0)
+        #expect(recorder.events.count == 1)
+        let event = try #require(recorder.events.first)
+        #expect(event.appError == .draftStateChangeFailed(
+            pullRequestNumber: 42,
+            isDraft: false,
+            detail: "Resource not accessible by personal access token"
+        ))
+        #expect(event.message == "Couldn't mark #42 as ready for review: Resource not accessible by personal access token")
+    }
+
+    @Test("setDraft with an invalid token posts the token error")
+    func setDraftUnauthorized() async throws {
+        let recorder = EventRecorder()
+        let (viewModel, _) = makeViewModel(suiteName: "SetDraftUnauthorized", reporter: recorder.reporter())
+        await mockClient.setSetDraftError(GitHubClientError.unauthorized)
+
+        await viewModel.setDraft(makePullRequest(number: 7, title: "Feature"), isDraft: true)
+
+        #expect(recorder.events.map(\.appError) == [.unauthorized])
+        #expect(await mockClient.fetchPullRequestsCallCount == 0)
+    }
+
+    @Test("setDraft cancelled posts nothing and skips the refresh")
+    func setDraftCancelled() async throws {
+        let recorder = EventRecorder()
+        let (viewModel, _) = makeViewModel(suiteName: "SetDraftCancelled", reporter: recorder.reporter())
+        await mockClient.setSetDraftError(CancellationError())
+
+        await viewModel.setDraft(makePullRequest(number: 7, title: "Feature"), isDraft: true)
+
+        #expect(recorder.events.isEmpty)
+        #expect(await mockClient.fetchPullRequestsCallCount == 0)
     }
 
     // MARK: - Helpers

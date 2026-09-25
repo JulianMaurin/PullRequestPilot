@@ -97,6 +97,7 @@ enum AppError: LocalizedError, Sendable, Hashable {
     case externalAppLaunchFailed(appName: String)
     case notificationSystemError(detail: String)
     case logExportFailed(underlying: String)
+    case draftStateChangeFailed(pullRequestNumber: Int, isDraft: Bool, detail: String)
 
     var errorDescription: String? {
         switch self {
@@ -152,6 +153,9 @@ enum AppError: LocalizedError, Sendable, Hashable {
             return "Notifications unavailable: \(detail)"
         case .logExportFailed(let underlying):
             return "Couldn't export logs: \(underlying)"
+        case .draftStateChangeFailed(let pullRequestNumber, let isDraft, let detail):
+            let action = isDraft ? "convert #\(pullRequestNumber) to draft" : "mark #\(pullRequestNumber) as ready for review"
+            return "Couldn't \(action): \(detail)"
         }
     }
 
@@ -187,7 +191,8 @@ enum AppError: LocalizedError, Sendable, Hashable {
              .widgetSaveFailed,
              .externalAppLaunchFailed,
              .notificationSystemError,
-             .logExportFailed:
+             .logExportFailed,
+             .draftStateChangeFailed:
             return false
         }
     }

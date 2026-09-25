@@ -5,6 +5,27 @@ import Foundation
 @Suite("GitHubGraphQL")
 struct GitHubGraphQLTests {
 
+    @Test("setDraftMutation converts to draft under the payload alias")
+    func setDraftMutationToDraft() {
+        let mutation = GitHubGraphQL.setDraftMutation(pullRequestID: "PR_kwDO42", isDraft: true)
+        #expect(mutation.contains(#"payload: convertPullRequestToDraft(input: {pullRequestId: "PR_kwDO42"})"#))
+        #expect(!mutation.contains("markPullRequestReadyForReview"))
+        #expect(mutation.contains("isDraft"))
+    }
+
+    @Test("setDraftMutation marks ready for review under the payload alias")
+    func setDraftMutationReadyForReview() {
+        let mutation = GitHubGraphQL.setDraftMutation(pullRequestID: "PR_kwDO42", isDraft: false)
+        #expect(mutation.contains(#"payload: markPullRequestReadyForReview(input: {pullRequestId: "PR_kwDO42"})"#))
+        #expect(!mutation.contains("convertPullRequestToDraft"))
+    }
+
+    @Test("setDraftMutation escapes the pull request ID")
+    func setDraftMutationEscapesID() {
+        let mutation = GitHubGraphQL.setDraftMutation(pullRequestID: "PR_\"x\"", isDraft: true)
+        #expect(mutation.contains(#"pullRequestId: "PR_\"x\"""#))
+    }
+
     @Test("searchQuery without cursor omits after parameter")
     func searchQueryNoCursor() {
         let query = GitHubGraphQL.searchQuery(query: "is:pr is:open")

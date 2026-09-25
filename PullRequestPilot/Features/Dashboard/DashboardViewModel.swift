@@ -453,6 +453,30 @@ final class DashboardViewModel: DashboardActionsProtocol {
         localRepositoryService.openInCmux(path: match.path)
     }
 
+    // MARK: - Draft State
+
+    /// Refreshes every view afterwards: the change can move the PR into or out
+    /// of views filtered on `draft:` or `is:draft`.
+    func setDraft(_ pr: PullRequest, isDraft: Bool) async {
+        do {
+            try await gitHubClient.setDraft(pullRequestID: pr.id, isDraft: isDraft)
+        } catch is CancellationError {
+            return
+        } catch GitHubClientError.graphQLErrors(let messages) {
+            reporter.postError(.draftStateChangeFailed(
+                pullRequestNumber: pr.number,
+                isDraft: isDraft,
+                detail: messages.joined(separator: "; ")
+            ))
+            return
+        } catch {
+            reporter.postError(appError(from: error))
+            return
+        }
+        reporter.postInfo(isDraft ? "#\(pr.number) converted to draft." : "#\(pr.number) marked as ready for review.")
+        await refreshAll()
+    }
+
     // MARK: - Query Editing
 
     func commitQueryEdit(viewID: UUID, newQuery: String) {

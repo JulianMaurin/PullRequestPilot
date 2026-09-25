@@ -322,4 +322,18 @@ enum GitHubGraphQL {
       }
     }
     """
+
+    /// Both mutations are aliased to `payload` so one response type decodes either.
+    static func setDraftMutation(pullRequestID: String, isDraft: Bool) -> String {
+        let mutationName = isDraft ? "convertPullRequestToDraft" : "markPullRequestReadyForReview"
+        return """
+        mutation {
+          payload: \(mutationName)(input: {pullRequestId: "\(escapeGraphQL(pullRequestID))"}) {
+            pullRequest {
+              isDraft
+            }
+          }
+        }
+        """
+    }
 }

@@ -26,8 +26,14 @@ actor MockGitHubClient: GitHubClientProtocol {
     var fetchViewerError: Error?
     var validateTokenError: Error?
     var checkRunsToReturn: [CheckRun] = []
+    var setDraftError: Error?
 
     // MARK: - Call counters & recordings
+
+    struct DraftStateRequest: Equatable, Sendable {
+        let pullRequestID: String
+        let isDraft: Bool
+    }
 
     var fetchPullRequestsCallCount = 0
     var fetchTimelineCallCount = 0
@@ -36,6 +42,7 @@ actor MockGitHubClient: GitHubClientProtocol {
     var receivedQueries: [String] = []
     var receivedCursors: [String?] = []
     var receivedValidateTokens: [String] = []
+    var receivedDraftStateRequests: [DraftStateRequest] = []
 
     // MARK: - Setters
     //
@@ -57,6 +64,7 @@ actor MockGitHubClient: GitHubClientProtocol {
     func setValidateTokenError(_ value: Error?) { validateTokenError = value }
     func setCheckRunsToReturn(_ value: [CheckRun]) { checkRunsToReturn = value }
     func setFetchPullRequestsCallCount(_ value: Int) { fetchPullRequestsCallCount = value }
+    func setSetDraftError(_ value: Error?) { setDraftError = value }
 
     // MARK: - Protocol
 
@@ -108,5 +116,10 @@ actor MockGitHubClient: GitHubClientProtocol {
         if let fetchViewerError { throw fetchViewerError }
         if let errorToThrow { throw errorToThrow }
         return (login: viewerLoginToReturn, avatarURL: viewerAvatarURLToReturn)
+    }
+
+    func setDraft(pullRequestID: String, isDraft: Bool) async throws {
+        receivedDraftStateRequests.append(DraftStateRequest(pullRequestID: pullRequestID, isDraft: isDraft))
+        if let setDraftError { throw setDraftError }
     }
 }

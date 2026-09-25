@@ -30,6 +30,9 @@ protocol GitHubClientProtocol: Sendable {
     /// Validates an explicit token against the GitHub API, bypassing the
     /// ambient token provider. Used by IdentityActor.swap before committing.
     func validateToken(_ token: String) async throws -> (login: String, avatarURL: URL?)
+    /// Converts an open pull request to draft, or marks a draft ready for review.
+    /// Throws unless GitHub reports the requested state afterwards.
+    func setDraft(pullRequestID: String, isDraft: Bool) async throws
 }
 
 // MARK: - Errors
@@ -237,6 +240,19 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
     func validateToken(_ token: String) async throws -> (login: String, avatarURL: URL?) {
         let response: GraphQLResponse<ViewerData> = try await execute(query: GitHubGraphQL.viewerQuery, overrideToken: token)
         return try viewerResult(from: response)
+    }
+
+    func setDraft(pullRequestID: String, isDraft: Bool) async throws {
+        // Both mutations are idempotent, so sharing the coalesced request path is safe.
+        let mutation = GitHubGraphQL.setDraftMutation(pullRequestID: pullRequestID, isDraft: isDraft)
+        let response: GraphQLResponse<DraftStateMutationData> = try await execute(query: mutation)
+
+        if let errors = response.errors, !errors.isEmpty {
+            throw GitHubClientError.graphQLErrors(errors.map(\.message))
+        }
+        guard response.data?.payload?.pullRequest?.isDraft == isDraft else {
+            throw GitHubClientError.graphQLErrors(["GitHub didn't apply the draft-state change."])
+        }
     }
 
     // MARK: - Private
