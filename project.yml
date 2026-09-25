@@ -13,6 +13,10 @@ settings:
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: FNR3B372S8
     ENABLE_HARDENED_RUNTIME: YES
+    # Single source for both targets: App Store Connect rejects an appex
+    # whose versions differ from its containing app.
+    MARKETING_VERSION: "1.3.0"
+    CURRENT_PROJECT_VERSION: "6"
 
 targets:
   PullRequestPilot:
@@ -24,8 +28,6 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pullrequestpilot.app
-        MARKETING_VERSION: "1.2.1"
-        CURRENT_PROJECT_VERSION: "6"
         CODE_SIGN_ENTITLEMENTS: PullRequestPilot/Resources/PullRequestPilot.entitlements
         SWIFT_STRICT_CONCURRENCY: complete
     info:
@@ -71,8 +73,6 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pullrequestpilot.app.widget
         CODE_SIGN_ENTITLEMENTS: PullRequestPilotWidget/PullRequestPilotWidget.entitlements
-        CURRENT_PROJECT_VERSION: "6"
-        MARKETING_VERSION: "1.2.1"
         SWIFT_STRICT_CONCURRENCY: complete
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

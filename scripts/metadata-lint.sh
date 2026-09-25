@@ -2,7 +2,9 @@
 # App Store metadata lint.
 #
 # Checks:
-#   1. MARKETING_VERSION in project.yml is semver (X.Y.Z)
+#   1. MARKETING_VERSION and CURRENT_PROJECT_VERSION are each declared once
+#      in project.yml; MARKETING_VERSION is semver (X.Y.Z) and higher than
+#      the last tag (App Store Connect closes a version once it is approved)
 #   2. CURRENT_PROJECT_VERSION >= last tag's build number (warn if equal,
 #      fail if lower)
 #   3. metadata/appstore.yml subtitle — MUST be populated with the live
@@ -59,14 +61,34 @@ check_forbidden_terms() {
   return $hit
 }
 
-# --- MARKETING_VERSION semver
+# --- Version keys declared once, so the widget can't drift from the app
+for key in MARKETING_VERSION CURRENT_PROJECT_VERSION; do
+  count=$(grep -cE "^[[:space:]]*$key:" project.yml || true)
+  if [[ "$count" != "1" ]]; then
+    fail "$key is declared $count times in project.yml — declare it once in the top-level settings.base"
+  fi
+done
+
+LAST_TAG=$(git tag --sort=-v:refname 2>/dev/null | head -1 || true)
+
+# --- MARKETING_VERSION semver, above the last released tag
 MARKETING_VERSION=$(sed -nE 's/.*MARKETING_VERSION: "([^"]*)".*/\1/p' project.yml | head -1)
 if [[ -z "$MARKETING_VERSION" ]]; then
   fail "MARKETING_VERSION not found in project.yml"
 elif [[ ! "$MARKETING_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   fail "MARKETING_VERSION \"$MARKETING_VERSION\" is not semver (expected X.Y.Z)"
+elif [[ -z "$LAST_TAG" ]]; then
+  ok "MARKETING_VERSION $MARKETING_VERSION (semver; no tags yet)"
+elif git tag --points-at HEAD | grep -qx "$LAST_TAG"; then
+  ok "MARKETING_VERSION $MARKETING_VERSION at release commit $LAST_TAG"
 else
-  ok "MARKETING_VERSION $MARKETING_VERSION (semver)"
+  LAST_RELEASED="${LAST_TAG#v}"
+  HIGHEST=$(printf '%s\n%s\n' "$LAST_RELEASED" "$MARKETING_VERSION" | sort -V | tail -1)
+  if [[ "$MARKETING_VERSION" == "$LAST_RELEASED" || "$HIGHEST" != "$MARKETING_VERSION" ]]; then
+    fail "MARKETING_VERSION $MARKETING_VERSION must be higher than released $LAST_TAG — App Store Connect rejects uploads to an approved version (ITMS-90062)"
+  else
+    ok "MARKETING_VERSION $MARKETING_VERSION > $LAST_TAG"
+  fi
 fi
 
 # --- CURRENT_PROJECT_VERSION monotonic
@@ -76,7 +98,6 @@ if [[ -z "$CURRENT_VERSION" ]]; then
 elif [[ ! "$CURRENT_VERSION" =~ ^[0-9]+$ ]]; then
   fail "CURRENT_PROJECT_VERSION \"$CURRENT_VERSION\" is not an integer"
 else
-  LAST_TAG=$(git tag --sort=-v:refname 2>/dev/null | head -1 || true)
   if [[ -n "$LAST_TAG" ]]; then
     LAST_BUILD=$(git show "$LAST_TAG:project.yml" 2>/dev/null | sed -nE 's/.*CURRENT_PROJECT_VERSION: "([^"]*)".*/\1/p' | head -1 || true)
     if [[ -n "$LAST_BUILD" && "$LAST_BUILD" =~ ^[0-9]+$ ]]; then

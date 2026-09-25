@@ -56,8 +56,8 @@ Manual steps before submitting to App Store Connect:
 
   [ ] Smoke-test core flows (auth, PR list, refresh, settings, widget)
       with a fresh Keychain (make nuke).
-  [ ] Bump CURRENT_PROJECT_VERSION in project.yml if releasing the same
-      MARKETING_VERSION as the last tag.
+  [ ] Bump MARKETING_VERSION above the last tag and CURRENT_PROJECT_VERSION
+      above the last uploaded build (project.yml top-level settings.base).
   [ ] Update metadata/appstore.yml if the App Store Connect subtitle or
       promotional text changed.
   [ ] Capture or refresh screenshots (assets/*.png) if UI changed.
