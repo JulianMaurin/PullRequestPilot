@@ -44,6 +44,77 @@ struct PRFetcherTests {
         }
     }
 
+    // MARK: - What the list shows about itself
+
+    @MainActor
+    @Test("a failed page is marked as a load-more failure; the next refresh clears it")
+    func loadMoreFailureIsMarked() async throws {
+        let client = MockGitHubClient()
+        let fetcher = Self.makeFetcher(client: client)
+        let view = Self.makeView()
+        await client.setPullRequestsToReturn([try TestPullRequestFactory.make(id: "PR_1")])
+        await client.setNextCursorToReturn("cursor-1")
+        await fetcher.refresh(for: view)
+
+        await client.setErrorToThrow(GitHubClientError.serverError(statusCode: 502))
+        await fetcher.loadMore(for: view)
+        #expect(fetcher.state(for: view.id).loadMoreFailed)
+        #expect(fetcher.state(for: view.id).error != nil)
+
+        await fetcher.refresh(for: view)
+        #expect(!fetcher.state(for: view.id).loadMoreFailed)
+    }
+
+    @MainActor
+    @Test("a failed refresh is not a load-more failure")
+    func refreshFailureIsNotLoadMore() async throws {
+        let client = MockGitHubClient()
+        let fetcher = Self.makeFetcher(client: client)
+        let view = Self.makeView()
+        await client.setErrorToThrow(GitHubClientError.serverError(statusCode: 502))
+
+        await fetcher.refresh(for: view)
+
+        #expect(fetcher.state(for: view.id).error != nil)
+        #expect(!fetcher.state(for: view.id).loadMoreFailed)
+    }
+
+    @MainActor
+    @Test("pull requests the filter removes are counted, across pages")
+    func filteredOutCount() async throws {
+        let client = MockGitHubClient()
+        let fetcher = Self.makeFetcher(client: client, filter: { prs, _ in prs.filter { $0.id.hasSuffix("keep") } })
+        let view = Self.makeView()
+        await client.setPullRequestsToReturn([try TestPullRequestFactory.make(id: "PR_1_keep"), try TestPullRequestFactory.make(id: "PR_2_drop")])
+        await client.setNextCursorToReturn("cursor-1")
+        await fetcher.refresh(for: view)
+        #expect(fetcher.state(for: view.id).filteredOutCount == 1)
+
+        await client.setPullRequestsToReturn([try TestPullRequestFactory.make(id: "PR_3_drop"), try TestPullRequestFactory.make(id: "PR_4_drop")])
+        await client.setNextCursorToReturn(nil)
+        await fetcher.loadMore(for: view)
+        #expect(fetcher.state(for: view.id).filteredOutCount == 3)
+        #expect(fetcher.state(for: view.id).pullRequests.map(\.id) == ["PR_1_keep"])
+    }
+
+    @MainActor
+    @Test("the list says it's truncated only when GitHub has more past the cap")
+    func truncation() async throws {
+        let client = MockGitHubClient()
+        let fetcher = Self.makeFetcher(client: client)
+        let view = Self.makeView()
+        let full = try (0..<Constants.App.maxPullRequests).map { try TestPullRequestFactory.make(id: "PR_\($0)") }
+        await client.setPullRequestsToReturn(full)
+
+        await client.setNextCursorToReturn(nil)
+        await fetcher.refresh(for: view)
+        #expect(!fetcher.state(for: view.id).isTruncated)
+
+        await client.setNextCursorToReturn("more")
+        await fetcher.refresh(for: view)
+        #expect(fetcher.state(for: view.id).isTruncated)
+    }
+
     // MARK: - Reporting
 
     @MainActor

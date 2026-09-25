@@ -408,98 +408,6 @@ struct DashboardViewModelExtendedTests {
         #expect(viewModel.views.count == countBefore)
     }
 
-    // MARK: - presetConflicts
-
-    @Test("presetConflicts returns empty when no conflicts")
-    func presetConflictsNone() throws {
-        let defaults = try #require(UserDefaults(suiteName: "DashboardViewModelExtendedTests.PresetNoConflict"))
-        defaults.removePersistentDomain(forName: "DashboardViewModelExtendedTests.PresetNoConflict")
-        let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
-        // No preset titles exist, so there should be no conflicts
-        let conflicts = viewModel.presetConflicts()
-        #expect(conflicts.isEmpty)
-    }
-
-    @Test("presetConflicts detects matching titles")
-    func presetConflictsDetected() throws {
-        let defaults = try #require(UserDefaults(suiteName: "DashboardViewModelExtendedTests.PresetConflict"))
-        defaults.removePersistentDomain(forName: "DashboardViewModelExtendedTests.PresetConflict")
-        let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
-
-        // Add a view with a preset title
-        let conflicting = DashboardView(id: UUID(), title: "My PRs", query: "custom query")
-        viewModel.addView(conflicting)
-
-        let conflicts = viewModel.presetConflicts()
-        #expect(conflicts.contains("My PRs"))
-    }
-
-    // MARK: - createPresetViews
-
-    @Test("createPresetViews adds all presets when no conflicts")
-    func createPresetViewsNoConflicts() throws {
-        let defaults = try #require(UserDefaults(suiteName: "DashboardViewModelExtendedTests.CreatePresets"))
-        defaults.removePersistentDomain(forName: "DashboardViewModelExtendedTests.CreatePresets")
-        let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
-
-        let countBefore = viewModel.views.count
-        viewModel.createPresetViews(replacingConflicts: false)
-
-        #expect(viewModel.views.count == countBefore + DashboardView.presetViews.count)
-    }
-
-    @Test("createPresetViews skips conflicts when not replacing")
-    func createPresetViewsSkipConflicts() throws {
-        let defaults = try #require(UserDefaults(suiteName: "DashboardViewModelExtendedTests.CreatePresetsSkip"))
-        defaults.removePersistentDomain(forName: "DashboardViewModelExtendedTests.CreatePresetsSkip")
-        let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
-
-        let conflicting = DashboardView(id: UUID(), title: "My PRs", query: "old query")
-        viewModel.addView(conflicting)
-
-        viewModel.createPresetViews(replacingConflicts: false)
-
-        // The conflicting view should still have the old query
-        let myPRsView = viewModel.views.first(where: { $0.title == "My PRs" })
-        #expect(myPRsView?.query == "old query")
-    }
-
-    @Test("createPresetViews replaces conflicts when replacing")
-    func createPresetViewsReplaceConflicts() throws {
-        let defaults = try #require(UserDefaults(suiteName: "DashboardViewModelExtendedTests.CreatePresetsReplace"))
-        defaults.removePersistentDomain(forName: "DashboardViewModelExtendedTests.CreatePresetsReplace")
-        let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
-
-        let conflictingID = UUID()
-        let conflicting = DashboardView(id: conflictingID, title: "My PRs", query: "old query")
-        viewModel.addView(conflicting)
-
-        viewModel.createPresetViews(replacingConflicts: true)
-
-        // The conflicting view should have the preset query but keep the same ID
-        let myPRsView = viewModel.views.first(where: { $0.title == "My PRs" })
-        #expect(myPRsView?.id == conflictingID)
-        #expect(myPRsView?.query != "old query")
-    }
-
-    @Test("createPresetViews sets selection when nil")
-    func createPresetViewsSetsSelection() throws {
-        let defaults = try #require(UserDefaults(suiteName: "DashboardViewModelExtendedTests.CreatePresetsSelect"))
-        defaults.removePersistentDomain(forName: "DashboardViewModelExtendedTests.CreatePresetsSelect")
-        let store = ViewsStore(defaults: defaults)
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
-        viewModel.selectedViewID = nil
-
-        viewModel.createPresetViews(replacingConflicts: false)
-
-        #expect(viewModel.selectedViewID != nil)
-    }
-
     // MARK: - refresh deduplication
 
     @Test("refresh deduplicates PRs with same ID")
@@ -648,25 +556,6 @@ struct DashboardViewModelExtendedTests {
         // Six intervals: a live loop would fetch again well within them.
         try await TestWait.until(timeout: .milliseconds(300)) { await mockClient.fetchPullRequestsCallCount > fetchesAtStop }
         #expect(await mockClient.fetchPullRequestsCallCount == fetchesAtStop)
-    }
-
-    // MARK: - openInEditor / openInTerminal / openInCmux with no match
-
-    @Test("open-in actions do nothing and report nothing without a local checkout")
-    func openInActionsNeedLocalMatch() throws {
-        let suiteName = "DashboardViewModelExtendedTests.OpenNoMatch"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
-        let recorder = EventRecorder()
-        let viewModel = DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: ViewsStore(defaults: defaults), localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary(), reporter: recorder.reporter())
-        let pr = try TestPullRequestFactory.make()
-        #expect(viewModel.localMatch(for: pr) == nil)
-
-        viewModel.openInEditor(pr)
-        viewModel.openInTerminal(pr)
-        viewModel.openInCmux(pr)
-
-        #expect(recorder.events.isEmpty)
     }
 
     // MARK: - notifiedViewIDs persistence
@@ -1028,25 +917,4 @@ struct DashboardViewModelExtendedTests {
             "+1 more",
         ])
     }
-
-    // MARK: - isVSCodeAvailable / isITermAvailable / isCmuxAvailable delegation
-
-    @Test("isVSCodeAvailable delegates to localRepositoryService")
-    func isVSCodeAvailableDelegation() throws {
-        let (viewModel, _) = try makeViewModel(suiteName: "VSCodeAvail")
-        #expect(viewModel.isVSCodeAvailable == localRepoService.isVSCodeAvailable)
-    }
-
-    @Test("isITermAvailable delegates to localRepositoryService")
-    func isITermAvailableDelegation() throws {
-        let (viewModel, _) = try makeViewModel(suiteName: "ITermAvail")
-        #expect(viewModel.isITermAvailable == localRepoService.isITermAvailable)
-    }
-
-    @Test("isCmuxAvailable delegates to localRepositoryService")
-    func isCmuxAvailableDelegation() throws {
-        let (viewModel, _) = try makeViewModel(suiteName: "CmuxAvail")
-        #expect(viewModel.isCmuxAvailable == localRepoService.isCmuxAvailable)
-    }
-
 }

@@ -208,6 +208,7 @@ final class PRFetcher {
         states[view.id]?.isLoading = true
         states[view.id]?.error = nil
         states[view.id]?.isNetworkError = false
+        states[view.id]?.loadMoreFailed = false
         states[view.id]?.rateLimitRetryAfter = nil
         // Re-fetch as deep as the user has paged: a one-page refresh would cut
         // the list back to 50 rows every interval and close a detail pane
@@ -236,6 +237,7 @@ final class PRFetcher {
             states[view.id]?.rawFetchedCount = uniquePRs.count
             states[view.id]?.reachedLimit = uniquePRs.count >= Constants.App.maxPullRequests
             states[view.id]?.nonPullRequestCount = page.nonPullRequestCount
+            states[view.id]?.filteredOutCount = uniquePRs.count - filteredPRs.count
             states[view.id]?.hiddenResultsNotice = Self.hiddenResultsNotice(for: page)
             states[view.id]?.lastRefreshedAt = .now
             logger.info("Fetched \(uniquePRs.count, privacy: .public) PR(s) for '\(view.title, privacy: .public)'")
@@ -277,6 +279,7 @@ final class PRFetcher {
         states[view.id]?.isLoadingMore = true
         states[view.id]?.error = nil
         states[view.id]?.isNetworkError = false
+        states[view.id]?.loadMoreFailed = false
         states[view.id]?.rateLimitRetryAfter = nil
 
         do {
@@ -306,6 +309,7 @@ final class PRFetcher {
             }
 
             states[view.id]?.pullRequests.append(contentsOf: filteredNewPRs)
+            states[view.id]?.filteredOutCount += newPRs.count - filteredNewPRs.count
             states[view.id]?.nextCursor = page.nextCursor
             if states[view.id]?.hiddenResultsNotice == nil {
                 states[view.id]?.hiddenResultsNotice = Self.hiddenResultsNotice(for: page)
@@ -325,6 +329,7 @@ final class PRFetcher {
                 return
             }
             logger.error("Failed to load more PRs for '\(view.title, privacy: .public)': \(error, privacy: .public)")
+            states[view.id]?.loadMoreFailed = true
             states[view.id]?.isNetworkError = error.isNetworkError
             states[view.id]?.error = error.asAppError.errorDescription
             if let clientError = error as? GitHubClientError, case .rateLimited(let retryAfter) = clientError {

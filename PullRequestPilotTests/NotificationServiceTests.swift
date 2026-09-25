@@ -139,6 +139,39 @@ struct NotificationServiceAuthorizationTests {
         #expect(recorder.events.isEmpty)
     }
 
+    @Test("a notification groups under its view and leads to the pull request it announced")
+    func deliveredNotificationRoutesToPullRequest() async throws {
+        let center = MockUserNotificationCenter(status: .authorized)
+        let (service, _) = try makeService(center: center)
+        let viewID = UUID()
+        let pr = try TestPullRequestFactory.make(id: "PR_7")
+
+        await service.deliver(viewTitle: "View", viewID: viewID, addedPRs: [pr])
+
+        let content = try #require(center.delivered.first)
+        #expect(content.threadIdentifier == viewID.uuidString)
+        #expect(NotificationRoute(userInfo: content.userInfo) == NotificationRoute(viewID: viewID, pullRequestID: "PR_7"))
+    }
+
+    @Test("a notification for several pull requests leads to their view")
+    func deliveredNotificationRoutesToView() async throws {
+        let center = MockUserNotificationCenter(status: .authorized)
+        let (service, _) = try makeService(center: center)
+        let viewID = UUID()
+        let prs = [try TestPullRequestFactory.make(id: "PR_1"), try TestPullRequestFactory.make(id: "PR_2")]
+
+        await service.deliver(viewTitle: "View", viewID: viewID, addedPRs: prs)
+
+        let content = try #require(center.delivered.first)
+        #expect(NotificationRoute(userInfo: content.userInfo) == NotificationRoute(viewID: viewID))
+    }
+
+    @Test("userInfo without a view ID routes nowhere")
+    func malformedRoute() {
+        #expect(NotificationRoute(userInfo: [:]) == nil)
+        #expect(NotificationRoute(userInfo: ["viewID": "not-a-uuid"]) == nil)
+    }
+
     @Test("nothing is delivered while notifications are denied")
     func deliverSkipsWhenDenied() async throws {
         let center = MockUserNotificationCenter(status: .denied)

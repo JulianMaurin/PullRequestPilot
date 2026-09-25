@@ -17,6 +17,7 @@ final class AppState {
 
     let dashboardViewModel: DashboardViewModel
     let prDetailViewModel: PRDetailViewModel
+    let reviewQueueViewModel: ReviewQueueViewModel
     let settingsViewModel: SettingsViewModel
 
     init(defaults: UserDefaults = .standard) {
@@ -54,7 +55,7 @@ final class AppState {
         identityHolder.set(identity)
         let viewsStore = ViewsStore(defaults: defaults, reporter: reporter)
         let gitDirectoriesStore = GitDirectoriesStore(defaults: defaults, reporter: reporter)
-        let localRepositoryService = LocalRepositoryService(reporter: reporter)
+        let localRepositoryService = LocalRepositoryService()
 
         let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–"
         let appBuild = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "–"
@@ -85,8 +86,8 @@ final class AppState {
         let systemAvailabilityMonitor = SystemAvailabilityMonitor()
         self.systemAvailabilityMonitor = systemAvailabilityMonitor
         self.userDefaults = defaults
-        self.prDetailViewModel = PRDetailViewModel(gitHubClient: gitHubClient, reporter: reporter)
-        self.dashboardViewModel = DashboardViewModel(
+        let prDetailViewModel = PRDetailViewModel(gitHubClient: gitHubClient, reporter: reporter)
+        let dashboardViewModel = DashboardViewModel(
             gitHubClient: gitHubClient,
             identity: identity,
             viewsStore: viewsStore,
@@ -97,6 +98,14 @@ final class AppState {
             reporter: reporter,
             availabilityEvents: systemAvailabilityMonitor.events
         )
+        self.prDetailViewModel = prDetailViewModel
+        self.dashboardViewModel = dashboardViewModel
+        self.reviewQueueViewModel = ReviewQueueViewModel(
+            dashboard: dashboardViewModel,
+            detail: prDetailViewModel,
+            editorLauncher: ExternalEditorLauncher(reporter: reporter),
+            defaults: defaults
+        )
         self.settingsViewModel = SettingsViewModel(
             identity: identity,
             gitDirectoriesStore: gitDirectoriesStore,
@@ -104,7 +113,14 @@ final class AppState {
             defaults: defaults,
             reporter: reporter,
             initialToken: storedToken,
-            tokenReadFailure: tokenReadFailure
+            tokenReadFailure: tokenReadFailure,
+            onSignedIn: {
+                dashboardViewModel.startAutoRefresh()
+                await dashboardViewModel.refreshAll()
+            },
+            onSigningOut: {
+                dashboardViewModel.clearAllData()
+            }
         )
 
         // Start auto-refresh independently of window visibility so notifications work

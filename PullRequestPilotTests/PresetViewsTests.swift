@@ -22,72 +22,50 @@ struct PresetViewsTests {
         }
     }
 
-    // MARK: - presetConflicts
+    // MARK: - Adding and resetting
 
-    @Test("presetConflicts returns titles that match existing views")
-    func conflictsDetected() throws {
-        let viewModel = try makeViewModel(suiteName: "PresetConflicts")
-        let preset = DashboardView.presetViews[0]
-        viewModel.addView(DashboardView(id: UUID(), title: preset.title, query: "custom query"))
+    @Test("adding a preset copies it under a new ID, selects it and loads it")
+    func addPresetViewLoads() async throws {
+        let viewModel = try makeViewModel(suiteName: "AddPreset")
+        let preset = DashboardView.presetViews[1]
+        await mockClient.setPullRequestsToReturn([try TestPullRequestFactory.make(id: "PR_preset")])
 
-        let conflicts = viewModel.presetConflicts()
-        #expect(conflicts.contains(preset.title))
-        #expect(conflicts.count == 1)
+        viewModel.addPresetView(preset)
+
+        let added = try #require(viewModel.views.first)
+        #expect(added.title == preset.title)
+        #expect(added.query == preset.query)
+        #expect(added.hideReviewed == preset.hideReviewed)
+        #expect(added.id != preset.id)
+        #expect(viewModel.selectedViewID == added.id)
+        try await TestWait.until { viewModel.viewStates[added.id]?.pullRequests.map(\.id) == ["PR_preset"] }
+        #expect(viewModel.viewStates[added.id]?.pullRequests.map(\.id) == ["PR_preset"])
     }
 
-    @Test("presetConflicts returns empty when no conflicts")
-    func conflictsEmpty() throws {
-        let viewModel = try makeViewModel(suiteName: "PresetNoConflicts")
-        let conflicts = viewModel.presetConflicts()
-        #expect(conflicts.isEmpty)
+    @Test("resetting a preset restores its query and filter, keeps the view's ID and reloads it")
+    func resetPresetView() async throws {
+        let viewModel = try makeViewModel(suiteName: "ResetPreset")
+        let preset = DashboardView.presetViews[1]
+        let viewID = UUID()
+        viewModel.addView(DashboardView(id: viewID, title: preset.title, query: "is:pr author:someone", hideReviewed: !preset.hideReviewed))
+        await mockClient.setPullRequestsToReturn([try TestPullRequestFactory.make(id: "PR_old")])
+        await viewModel.refresh(viewID: viewID)
+        await mockClient.setPullRequestsToReturn([try TestPullRequestFactory.make(id: "PR_reset")])
+
+        viewModel.resetPresetView(preset)
+
+        let reset = try #require(viewModel.views.first { $0.id == viewID })
+        #expect(reset.query == preset.query)
+        #expect(reset.hideReviewed == preset.hideReviewed)
+        try await TestWait.until { viewModel.viewStates[viewID]?.pullRequests.map(\.id) == ["PR_reset"] }
+        #expect(viewModel.viewStates[viewID]?.pullRequests.map(\.id) == ["PR_reset"])
+        #expect(await mockClient.receivedQueries.last == preset.query)
     }
 
-    // MARK: - createPresetViews
-
-    @Test("createPresetViews adds all presets when no conflicts")
-    func addsAllPresets() throws {
-        let viewModel = try makeViewModel(suiteName: "CreatePresetsClean")
-
-        viewModel.createPresetViews(replacingConflicts: false)
-
-        #expect(viewModel.views.count == DashboardView.presetViews.count)
-        for preset in DashboardView.presetViews {
-            #expect(viewModel.views.contains(where: { $0.title == preset.title && $0.query == preset.query }))
-        }
-    }
-
-    @Test("createPresetViews skips conflicting presets when not replacing")
-    func skipsConflicts() throws {
-        let viewModel = try makeViewModel(suiteName: "CreatePresetsSkip")
-        let preset = DashboardView.presetViews[0]
-        viewModel.addView(DashboardView(id: UUID(), title: preset.title, query: "custom query"))
-
-        viewModel.createPresetViews(replacingConflicts: false)
-
-        let matchingView = viewModel.views.first(where: { $0.title == preset.title })
-        #expect(matchingView?.query == "custom query")
-    }
-
-    @Test("createPresetViews replaces conflicting presets when replacing")
-    func replacesConflicts() throws {
-        let viewModel = try makeViewModel(suiteName: "CreatePresetsReplace")
-        let preset = DashboardView.presetViews[0]
-        let originalID = UUID()
-        viewModel.addView(DashboardView(id: originalID, title: preset.title, query: "custom query"))
-
-        viewModel.createPresetViews(replacingConflicts: true)
-
-        let matchingView = viewModel.views.first(where: { $0.title == preset.title })
-        #expect(matchingView?.query == preset.query)
-        #expect(matchingView?.id == originalID)
-    }
-
-    @Test("createPresetViews sets selectedViewID when none was selected")
-    func setsSelection() throws {
-        let viewModel = try makeViewModel(suiteName: "CreatePresetsSelect")
-
-        #expect(viewModel.selectedViewID == nil)
-        viewModel.createPresetViews(replacingConflicts: false)
-        #expect(viewModel.selectedViewID != nil)
+    @Test("resetting a preset without a view of that name changes nothing")
+    func resetMissingPreset() throws {
+        let viewModel = try makeViewModel(suiteName: "ResetMissingPreset")
+        viewModel.resetPresetView(DashboardView.presetViews[0])
+        #expect(viewModel.views.isEmpty)
     }
 }

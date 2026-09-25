@@ -21,6 +21,8 @@ enum Constants {
         static let collapsedOrgs = "collapsedOrgs"
         static let collapsedRepos = "collapsedRepos"
         static let badgeViewIDs = "badgeViewIDs"
+        static let detailPanelWidth = "detailPanelWidth"
+        static let detailPanelHeight = "detailPanelHeight"
     }
 
     enum URLs {

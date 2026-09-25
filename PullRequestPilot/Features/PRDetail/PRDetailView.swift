@@ -1,17 +1,13 @@
 import SwiftUI
 
 struct PRDetailView: View {
-    let viewModel: PRDetailViewModel
+    @Bindable var viewModel: PRDetailViewModel
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
             detailContent
-        }
-        .onChange(of: viewModel.selectedPR?.id) {
-            checksCollapsed = true
-            reviewersCollapsed = false
         }
     }
 
@@ -46,6 +42,12 @@ struct PRDetailView: View {
                     }
                 }
                 Spacer()
+                if viewModel.isRefreshing {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .help("Refreshing")
+                        .accessibilityLabel("Refreshing pull request details")
+                }
                 Button {
                     viewModel.deselect()
                 } label: {
@@ -117,23 +119,23 @@ struct PRDetailView: View {
                         timelineSection
                     }
                 }
+                .scrollTargetLayout()
             }
+            .scrollPosition(id: $viewModel.scrollAnchor)
         }
     }
 
     // MARK: - Reviewers Section
 
-    @State private var reviewersCollapsed = false
-
     private var reviewersSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
-                    reviewersCollapsed.toggle()
+                    viewModel.isReviewersExpanded.toggle()
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: reviewersCollapsed ? "chevron.right" : "chevron.down")
+                    Image(systemName: viewModel.isReviewersExpanded ? "chevron.down" : "chevron.right")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .frame(width: 10)
@@ -147,13 +149,16 @@ struct PRDetailView: View {
             .buttonStyle(.plain)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityValue(viewModel.isReviewersExpanded ? "Expanded" : "Collapsed")
 
-            if !reviewersCollapsed {
+            if viewModel.isReviewersExpanded {
                 ForEach(viewModel.reviewers) { reviewer in
                     reviewerRow(reviewer)
                 }
             }
         }
+        .id("reviewers")
     }
 
     private func reviewerRow(_ reviewer: Reviewer) -> some View {
@@ -200,17 +205,15 @@ struct PRDetailView: View {
 
     // MARK: - Checks Section
 
-    @State private var checksCollapsed = true
-
     private var checksSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
-                    checksCollapsed.toggle()
+                    viewModel.isChecksExpanded.toggle()
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: checksCollapsed ? "chevron.right" : "chevron.down")
+                    Image(systemName: viewModel.isChecksExpanded ? "chevron.down" : "chevron.right")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .frame(width: 10)
@@ -225,8 +228,10 @@ struct PRDetailView: View {
             .buttonStyle(.plain)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityValue(viewModel.isChecksExpanded ? "Expanded" : "Collapsed")
 
-            if !checksCollapsed {
+            if viewModel.isChecksExpanded {
                 ForEach(viewModel.checkRuns) { check in
                     checkRow(check)
                     if check.id != viewModel.checkRuns.last?.id {
@@ -236,6 +241,7 @@ struct PRDetailView: View {
                 }
             }
         }
+        .id("checks")
     }
 
     private var checksSummaryBadge: some View {
@@ -316,9 +322,12 @@ struct PRDetailView: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .accessibilityAddTraits(.isHeader)
+            .id("activity")
 
         ForEach(viewModel.timelineEvents) { event in
             timelineRow(event)
+                .id(event.id)
             if event.id != viewModel.timelineEvents.last?.id {
                 Divider()
                     .padding(.leading, 36)

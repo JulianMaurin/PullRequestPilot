@@ -114,7 +114,7 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
             }
             .task(id: "token-validation") {
                 if viewModel.hasSavedToken, viewModel.viewerLogin == nil, viewModel.validationState == .idle {
-                    await validateTokenAndStart()
+                    await viewModel.saveAndStart()
                 }
             }
 
@@ -170,15 +170,8 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
             .alert("Reset View?", isPresented: $showResetConfirmation) {
                 Button("Cancel", role: .cancel) { presetToReset = nil }
                 Button("Reset") {
-                    if let preset = presetToReset,
-                       let existing = dashboard.views.first(where: { $0.title == preset.title }) {
-                        dashboard.updateView(DashboardView(
-                            id: existing.id,
-                            title: preset.title,
-                            query: preset.query,
-                            hideReviewed: preset.hideReviewed
-                        ))
-                        Task { await dashboard.refresh(viewID: existing.id) }
+                    if let preset = presetToReset {
+                        dashboard.resetPresetView(preset)
                     }
                     presetToReset = nil
                 }
@@ -346,8 +339,7 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
             titleVisibility: .visible
         ) {
             Button("Sign Out", role: .destructive) {
-                dashboard.clearAllData()
-                Task { await viewModel.clearToken() }
+                Task { await viewModel.signOut() }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -394,16 +386,7 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
     }
 
     private func saveTokenAndStart() {
-        Task { await validateTokenAndStart() }
-    }
-
-    private func validateTokenAndStart() async {
-        await viewModel.save()
-        if viewModel.validationState == .valid {
-            dashboard.startAutoRefresh()
-            viewModel.restartRepoScan()
-            await dashboard.refreshAll()
-        }
+        Task { await viewModel.saveAndStart() }
     }
 
     @ViewBuilder
@@ -448,14 +431,7 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
                 .help(isModified ? "Reset query to preset default" : "Query matches preset")
             } else {
                 Button("Add") {
-                    let newView = DashboardView(
-                        id: UUID(),
-                        title: preset.title,
-                        query: preset.query,
-                        hideReviewed: preset.hideReviewed
-                    )
-                    dashboard.addView(newView)
-                    Task { await dashboard.refresh(viewID: newView.id) }
+                    dashboard.addPresetView(preset)
                 }
                 .controlSize(.small)
             }

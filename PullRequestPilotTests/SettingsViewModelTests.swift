@@ -8,10 +8,16 @@ struct SettingsViewModelTests {
     private let mockClient = MockGitHubClient()
     private let localRepoService = LocalRepositoryService()
 
+    /// Records what the session hooks were asked to do.
+    private final class SessionLog {
+        var events: [String] = []
+    }
+
     private func makeViewModel(
         storedToken: String? = nil,
         suiteName: String = "SettingsVMTests",
-        reporter: EventReporter = .noop
+        reporter: EventReporter = .noop,
+        session: SessionLog = SessionLog()
     ) throws -> (SettingsViewModel, KeychainService, IdentityActor, GitDirectoriesStore, UserDefaults) {
         let keychainService = "com.pullrequestpilot.settings.tests.\(suiteName)"
         let keychain = KeychainService.forTesting(service: keychainService)
@@ -31,9 +37,43 @@ struct SettingsViewModelTests {
             localRepositoryService: localRepoService,
             defaults: defaults,
             reporter: reporter,
-            initialToken: storedToken
+            initialToken: storedToken,
+            onSignedIn: { session.events.append("signed in") },
+            onSigningOut: { session.events.append("signing out") }
         )
         return (vm, keychain, identity, gitDirStore, defaults)
+    }
+
+    // MARK: - Session
+
+    @Test("a token that validates starts the session once; one that doesn't starts nothing")
+    func saveAndStartOnlyWhenValid() async throws {
+        let session = SessionLog()
+        let (vm, keychain, _, _, _) = try makeViewModel(suiteName: "SaveAndStart", session: session)
+        defer { try? keychain.delete(key: Constants.Keychain.githubToken) }
+
+        await mockClient.setValidateTokenError(GitHubClientError.unauthorized)
+        vm.token = "ghp_rejected"
+        await vm.saveAndStart()
+        #expect(session.events.isEmpty)
+
+        await mockClient.setValidateTokenError(nil)
+        vm.token = "ghp_accepted"
+        await vm.saveAndStart()
+        #expect(session.events == ["signed in"])
+        #expect(vm.validationState == .valid)
+    }
+
+    @Test("signing out clears the session's data and forgets the token")
+    func signOutClearsSessionAndToken() async throws {
+        let session = SessionLog()
+        let (vm, keychain, _, _, _) = try makeViewModel(storedToken: "ghp_stored", suiteName: "SignOut", session: session)
+
+        await vm.signOut()
+
+        #expect(session.events == ["signing out"])
+        #expect(!vm.hasSavedToken)
+        #expect(try keychain.readItem(key: Constants.Keychain.githubToken) == nil)
     }
 
     // MARK: - Token

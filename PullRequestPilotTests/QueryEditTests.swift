@@ -87,7 +87,7 @@ struct QueryEditTests {
         let (vm, viewID) = try makeViewModel(suiteName: "FilterAppend")
         try await loadOldRows(vm, viewID: viewID, thenServe: [try TestPullRequestFactory.make(id: "PR_new")])
 
-        vm.appendFilter(viewID: viewID, qualifier: "org:acme")
+        vm.appendFilter(viewID: viewID, qualifier: .org("acme"))
 
         #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr is:open org:acme")
         #expect(vm.viewStates[viewID]?.pullRequests.isEmpty == true)
@@ -111,55 +111,31 @@ struct QueryEditTests {
     @Test("appendFilter skips if qualifier already present")
     func appendFilterSkipsDuplicate() throws {
         let (vm, viewID) = try makeViewModel(suiteName: "FilterDup")
-        vm.appendFilter(viewID: viewID, qualifier: "is:pr")
+        vm.appendFilter(viewID: viewID, qualifier: SearchQualifier(key: "is", value: "pr"))
         #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr is:open")
     }
 
     @Test("appendFilter is no-op for invalid viewID")
     func appendFilterInvalidView() throws {
         let (vm, viewID) = try makeViewModel(suiteName: "FilterInvalid")
-        vm.appendFilter(viewID: UUID(), qualifier: "org:acme")
+        vm.appendFilter(viewID: UUID(), qualifier: .org("acme"))
         #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr is:open")
     }
 
     @Test("appendFilter appends negated qualifier and dedupes on repeat")
     func appendFilterNegated() throws {
         let (vm, viewID) = try makeViewModel(suiteName: "FilterAppendNegated")
-        vm.appendFilter(viewID: viewID, qualifier: "-author:alice")
+        vm.appendFilter(viewID: viewID, qualifier: .author(Author(login: "alice", avatarURL: nil)).excluded)
         #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr is:open -author:alice")
-        vm.appendFilter(viewID: viewID, qualifier: "-author:alice")
+        vm.appendFilter(viewID: viewID, qualifier: .author(Author(login: "alice", avatarURL: nil)).excluded)
         #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr is:open -author:alice")
     }
 
-    // MARK: - queryContainsFilter
-
-    @Test("queryContainsFilter returns true when qualifier exists")
-    func queryContainsFilterTrue() throws {
-        let (vm, viewID) = try makeViewModel(suiteName: "ContainsFilterTrue")
-        vm.selectedViewID = viewID
-        #expect(vm.queryContainsFilter(qualifier: "is:pr"))
-    }
-
-    @Test("queryContainsFilter returns false when qualifier absent")
-    func queryContainsFilterFalse() throws {
-        let (vm, viewID) = try makeViewModel(suiteName: "ContainsFilterFalse")
-        vm.selectedViewID = viewID
-        #expect(!vm.queryContainsFilter(qualifier: "org:acme"))
-    }
-
-    @Test("queryContainsFilter returns false when no view selected")
-    func queryContainsFilterNoSelection() throws {
-        let (vm, _) = try makeViewModel(suiteName: "ContainsFilterNone")
-        vm.selectedViewID = nil
-        #expect(!vm.queryContainsFilter(qualifier: "is:pr"))
-    }
-
-    @Test("queryContainsFilter distinguishes negated from positive qualifier")
-    func queryContainsFilterNegated() throws {
-        let (vm, viewID) = try makeViewModel(suiteName: "ContainsFilterNegated")
-        vm.selectedViewID = viewID
-        vm.appendFilter(viewID: viewID, qualifier: "-author:alice")
-        #expect(vm.queryContainsFilter(qualifier: "-author:alice"))
-        #expect(!vm.queryContainsFilter(qualifier: "author:alice"))
+    @Test("appendFilter quotes a label with spaces and recognises it afterwards")
+    func appendFilterQuotedLabel() throws {
+        let (vm, viewID) = try makeViewModel(suiteName: "FilterQuotedLabel")
+        vm.appendFilter(viewID: viewID, qualifier: .label("needs review"))
+        vm.appendFilter(viewID: viewID, qualifier: .label("needs review"))
+        #expect(vm.views.first(where: { $0.id == viewID })?.query == "is:pr is:open label:\"needs review\"")
     }
 }

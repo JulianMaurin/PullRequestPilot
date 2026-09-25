@@ -361,6 +361,90 @@ struct PRDetailViewModelTests {
         #expect(await client.checksCallCount(nodeID: "PR_1") <= 2)
     }
 
+    // MARK: - Refreshing
+
+    @Test("a load cancelled before it starts leaves no spinner behind")
+    func cancelledBeforeStartLeavesNoSpinner() async throws {
+        let (vm, _) = makeViewModel()
+
+        vm.selectPR(try makePR())
+        vm.deselect()
+        await vm.waitForCurrentLoad()
+
+        #expect(!vm.isLoading)
+        #expect(!vm.isRefreshing)
+    }
+
+    @Test("refresh keeps the current detail on screen until the new one arrives")
+    func refreshKeepsContent() async throws {
+        let client = MockGitHubClient()
+        await client.setTimelineEventsToReturn([makeTimelineEvent(id: "old")])
+        let (vm, _) = makeViewModel(client: client)
+        vm.selectPR(try makePR())
+        await vm.waitForCurrentLoad()
+        await client.setTimelineEventsToReturn([makeTimelineEvent(id: "new")])
+
+        vm.refresh()
+
+        #expect(vm.isRefreshing)
+        #expect(!vm.isLoading)
+        #expect(vm.timelineEvents.map(\.id) == ["old"])
+        await vm.waitForCurrentLoad()
+        #expect(!vm.isRefreshing)
+        #expect(vm.timelineEvents.map(\.id) == ["new"])
+    }
+
+    @Test("a failed refresh keeps the detail on screen and toasts why")
+    func failedRefreshKeepsContent() async throws {
+        let client = MockGitHubClient()
+        await client.setTimelineEventsToReturn([makeTimelineEvent(id: "old")])
+        let recorder = EventRecorder()
+        let vm = PRDetailViewModel(gitHubClient: client, reporter: recorder.reporter())
+        vm.selectPR(try makePR())
+        await vm.waitForCurrentLoad()
+        await client.setErrorToThrow(GitHubClientError.serverError(statusCode: 502))
+
+        vm.refresh()
+        await vm.waitForCurrentLoad()
+
+        #expect(vm.error == nil)
+        #expect(vm.timelineEvents.map(\.id) == ["old"])
+        #expect(!vm.isRefreshing)
+        #expect(recorder.events.map(\.payload) == [.error(.serverError(statusCode: 502))])
+    }
+
+    @Test("a changed copy of the open pull request reloads its detail; the same copy doesn't")
+    func updateReloadsOnlyOnChange() async throws {
+        let client = MockGitHubClient()
+        let (vm, _) = makeViewModel(client: client)
+        let pr = try makePR(id: "PR_1")
+        vm.selectPR(pr)
+        await vm.waitForCurrentLoad()
+        let fetches = await client.fetchTimelineCallCount
+
+        vm.updateSelectedPR(pr)
+        await vm.waitForCurrentLoad()
+        #expect(await client.fetchTimelineCallCount == fetches)
+
+        vm.updateSelectedPR(try TestPullRequestFactory.make(id: "PR_1", checkStatus: .failure))
+        await vm.waitForCurrentLoad()
+        #expect(await client.fetchTimelineCallCount == fetches + 1)
+        #expect(vm.selectedPR?.checkStatus == .failure)
+    }
+
+    @Test("each pull request opens with reviewers expanded and checks collapsed")
+    func expansionResetsPerPullRequest() async throws {
+        let (vm, _) = makeViewModel()
+        vm.selectPR(try makePR(id: "PR_1"))
+        vm.isChecksExpanded = true
+        vm.isReviewersExpanded = false
+
+        vm.selectPR(try makePR(id: "PR_2"))
+
+        #expect(!vm.isChecksExpanded)
+        #expect(vm.isReviewersExpanded)
+    }
+
     // MARK: - updateSelectedPR
 
     @Test("updateSelectedPR updates when ID matches")

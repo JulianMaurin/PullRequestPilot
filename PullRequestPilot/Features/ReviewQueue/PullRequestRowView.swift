@@ -4,7 +4,7 @@ struct PullRequestRowView<RowMenu: View>: View {
     let pullRequest: PullRequest
     var stackSize: Int = 0
     var onToggleStack: () -> Void = {}
-    var onFilterBy: ((String) -> Void)?
+    var onFilterBy: ((SearchQualifier) -> Void)?
     @ViewBuilder var rowContextMenu: () -> RowMenu
 
     var body: some View {
@@ -46,9 +46,10 @@ struct PullRequestRowView<RowMenu: View>: View {
     // MARK: - Filter Menu
 
     @ViewBuilder
-    private func filterMenuItems(_ onFilterBy: @escaping (String) -> Void) -> some View {
+    private func filterMenuItems(_ onFilterBy: @escaping (SearchQualifier) -> Void) -> some View {
+        let author = SearchQualifier.author(pullRequest.author)
         Button {
-            onFilterBy("author:\(pullRequest.author.searchQualifierValue)")
+            onFilterBy(author)
         } label: {
             SwiftUI.Label(
                 "Filter by author \"\(pullRequest.author.login)\"",
@@ -57,7 +58,7 @@ struct PullRequestRowView<RowMenu: View>: View {
         }
 
         Button {
-            onFilterBy("-author:\(pullRequest.author.searchQualifierValue)")
+            onFilterBy(author.excluded)
         } label: {
             SwiftUI.Label(
                 "Exclude author \"\(pullRequest.author.login)\"",
@@ -67,9 +68,7 @@ struct PullRequestRowView<RowMenu: View>: View {
 
         if pullRequest.labels.count == 1, let label = pullRequest.labels.first {
             Button {
-                let escaped = label.name.replacingOccurrences(of: "\"", with: "\\\"")
-                let value = label.name.contains(" ") ? "\"\(escaped)\"" : escaped
-                onFilterBy("label:\(value)")
+                onFilterBy(.label(label.name))
             } label: {
                 SwiftUI.Label(
                     "Filter by label \"\(label.name)\"",
@@ -77,9 +76,7 @@ struct PullRequestRowView<RowMenu: View>: View {
                 )
             }
             Button {
-                let escaped = label.name.replacingOccurrences(of: "\"", with: "\\\"")
-                let value = label.name.contains(" ") ? "\"\(escaped)\"" : escaped
-                onFilterBy("-label:\(value)")
+                onFilterBy(SearchQualifier.label(label.name).excluded)
             } label: {
                 SwiftUI.Label(
                     "Exclude label \"\(label.name)\"",
@@ -90,14 +87,9 @@ struct PullRequestRowView<RowMenu: View>: View {
             Menu {
                 ForEach(Array(pullRequest.labels.prefix(10)), id: \.name) { label in
                     Button {
-                        let escaped = label.name.replacingOccurrences(of: "\"", with: "\\\"")
-                let value = label.name.contains(" ") ? "\"\(escaped)\"" : escaped
-                        onFilterBy("label:\(value)")
+                        onFilterBy(.label(label.name))
                     } label: {
-                        SwiftUI.Label(
-                            label.name,
-                            systemImage: "tag"
-                        )
+                        SwiftUI.Label(label.name, systemImage: "tag")
                     }
                 }
             } label: {
@@ -106,14 +98,9 @@ struct PullRequestRowView<RowMenu: View>: View {
             Menu {
                 ForEach(Array(pullRequest.labels.prefix(10)), id: \.name) { label in
                     Button {
-                        let escaped = label.name.replacingOccurrences(of: "\"", with: "\\\"")
-                        let value = label.name.contains(" ") ? "\"\(escaped)\"" : escaped
-                        onFilterBy("-label:\(value)")
+                        onFilterBy(SearchQualifier.label(label.name).excluded)
                     } label: {
-                        SwiftUI.Label(
-                            label.name,
-                            systemImage: "tag"
-                        )
+                        SwiftUI.Label(label.name, systemImage: "tag")
                     }
                 }
             } label: {

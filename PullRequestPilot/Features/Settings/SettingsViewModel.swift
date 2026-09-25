@@ -27,6 +27,8 @@ final class SettingsViewModel {
     private let localRepositoryService: LocalRepositoryService
     private let defaults: UserDefaults
     private let reporter: EventReporter
+    private let onSignedIn: @MainActor () async -> Void
+    private let onSigningOut: @MainActor () -> Void
     private let rescanTaskStorage = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
     private let invalidationObservationStorage = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
     private let logger = Logger(category: "Settings")
@@ -44,12 +46,26 @@ final class SettingsViewModel {
 
     /// `tokenReadFailure` describes a Keychain that couldn't be read at launch;
     /// the token field then explains that instead of looking like a first run.
-    init(identity: IdentityActor, gitDirectoriesStore: GitDirectoriesStore, localRepositoryService: LocalRepositoryService, defaults: UserDefaults, reporter: EventReporter = .noop, initialToken: String? = nil, tokenReadFailure: String? = nil) {
+    /// `onSignedIn` and `onSigningOut` start and clear the rest of the app's
+    /// session (refresh, views, badges).
+    init(
+        identity: IdentityActor,
+        gitDirectoriesStore: GitDirectoriesStore,
+        localRepositoryService: LocalRepositoryService,
+        defaults: UserDefaults,
+        reporter: EventReporter = .noop,
+        initialToken: String? = nil,
+        tokenReadFailure: String? = nil,
+        onSignedIn: @escaping @MainActor () async -> Void = {},
+        onSigningOut: @escaping @MainActor () -> Void = {}
+    ) {
         self.identity = identity
         self.gitDirectoriesStore = gitDirectoriesStore
         self.localRepositoryService = localRepositoryService
         self.defaults = defaults
         self.reporter = reporter
+        self.onSignedIn = onSignedIn
+        self.onSigningOut = onSigningOut
         self.token = initialToken ?? ""
         self.hasSavedToken = (initialToken?.isEmpty == false)
         if let tokenReadFailure {
@@ -136,6 +152,20 @@ final class SettingsViewModel {
             logger.error("Unexpected error during token validation: \(error, privacy: .public)")
             validationState = .invalid("Something went wrong. Check the logs for details.")
         }
+    }
+
+    /// Validates and stores the typed token, then starts the session with it.
+    func saveAndStart() async {
+        await save()
+        guard validationState == .valid else { return }
+        restartRepoScan()
+        await onSignedIn()
+    }
+
+    /// Clears the session's data, then forgets the token.
+    func signOut() async {
+        onSigningOut()
+        await clearToken()
     }
 
     static let missingRepoScopeWarning = "This token doesn't have the repo scope, so pull requests in private repositories won't appear. Create a token with the repo scope to see them."

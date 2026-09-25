@@ -9,11 +9,15 @@ struct ViewState: Sendable {
     var isLoadingMore = false
     var error: String?
     var isNetworkError = false
+    /// `error` came from loading the next page, not from a refresh.
+    var loadMoreFailed = false
     var nextCursor: String?
     var rateLimitRetryAfter: TimeInterval?
     var reachedLimit = false
     var rawFetchedCount = 0
     var nonPullRequestCount = 0
+    /// Pull requests the view's filter removed (hide-reviewed).
+    var filteredOutCount = 0
     /// Why GitHub matched results the list can't show (withheld behind SSO,
     /// undecodable); nil when nothing is hidden.
     var hiddenResultsNotice: String?
@@ -23,6 +27,8 @@ struct ViewState: Sendable {
     var isEmpty: Bool { pullRequests.isEmpty && !isLoading }
     var hasData: Bool { !pullRequests.isEmpty }
     var canLoadMore: Bool { nextCursor != nil && !isLoadingMore && !reachedLimit }
+    /// GitHub has more results than the app fetches.
+    var isTruncated: Bool { reachedLimit && nextCursor != nil }
 }
 
 @MainActor
@@ -354,6 +360,11 @@ final class DashboardViewModel {
         fetcher.ensureState(for: view.id)
     }
 
+    func addViewAndRefresh(_ view: DashboardView) {
+        addView(view)
+        scheduleRefresh(for: view)
+    }
+
     func updateView(_ view: DashboardView) {
         let previous = views.first { $0.id == view.id }
         viewRegistry.updateView(view)
@@ -404,43 +415,30 @@ final class DashboardViewModel {
         badgeTracker.pruneUnseen(viewStates: fetcher.states)
     }
 
-    func presetConflicts() -> [String] {
-        let existingTitles = Set(views.map(\.title))
-        return DashboardView.presetViews
-            .map(\.title)
-            .filter { existingTitles.contains($0) }
+    // MARK: - Presets
+
+    /// Adds a copy of `preset` as a new view and loads it.
+    func addPresetView(_ preset: DashboardView) {
+        addViewAndRefresh(DashboardView(
+            id: UUID(),
+            title: preset.title,
+            query: preset.query,
+            hideReviewed: preset.hideReviewed
+        ))
     }
 
-    func createPresetViews(replacingConflicts: Bool) {
-        var viewsToRefresh: [DashboardView] = []
-        for preset in DashboardView.presetViews {
-            if let existingIndex = views.firstIndex(where: { $0.title == preset.title }) {
-                if replacingConflicts {
-                    let oldID = views[existingIndex].id
-                    let replacement = DashboardView(
-                        id: oldID,
-                        title: preset.title,
-                        query: preset.query,
-                        hideReviewed: preset.hideReviewed
-                    )
-                    viewRegistry.updateView(replacement)
-                    viewsToRefresh.append(replacement)
-                }
-            } else {
-                let newView = DashboardView(
-                    id: UUID(),
-                    title: preset.title,
-                    query: preset.query,
-                    hideReviewed: preset.hideReviewed
-                )
-                viewRegistry.addView(newView)
-                fetcher.ensureState(for: newView.id)
-                viewsToRefresh.append(newView)
-            }
-        }
-        for view in viewsToRefresh {
-            scheduleRefresh(for: view)
-        }
+    /// Restores the query and filter of the view named after `preset`. The
+    /// view keeps its ID, so its bell and badge settings stay.
+    func resetPresetView(_ preset: DashboardView) {
+        guard let existing = views.first(where: { $0.title == preset.title }) else { return }
+        let restored = DashboardView(
+            id: existing.id,
+            title: preset.title,
+            query: preset.query,
+            hideReviewed: preset.hideReviewed
+        )
+        updateView(restored)
+        scheduleRefresh(for: restored)
     }
 
     // MARK: - Sign Out
@@ -465,11 +463,7 @@ final class DashboardViewModel {
         widgetSync.writeNow()
     }
 
-    // MARK: - Open in Editor
-
-    var isVSCodeAvailable: Bool { localRepositoryService.isVSCodeAvailable }
-    var isITermAvailable: Bool { localRepositoryService.isITermAvailable }
-    var isCmuxAvailable: Bool { localRepositoryService.isCmuxAvailable }
+    // MARK: - Opening
 
     func localMatch(for pr: PullRequest) -> LocalRepoMatch? {
         localRepositoryService.findLocalDirectory(for: pr)
@@ -477,21 +471,6 @@ final class DashboardViewModel {
 
     func openInBrowser(_ pr: PullRequest) {
         NSWorkspace.shared.open(pr.url)
-    }
-
-    func openInEditor(_ pr: PullRequest) {
-        guard let match = localMatch(for: pr) else { return }
-        localRepositoryService.openInVSCode(path: match.path)
-    }
-
-    func openInTerminal(_ pr: PullRequest) {
-        guard let match = localMatch(for: pr) else { return }
-        localRepositoryService.openInITerm(path: match.path)
-    }
-
-    func openInCmux(_ pr: PullRequest) {
-        guard let match = localMatch(for: pr) else { return }
-        localRepositoryService.openInCmux(path: match.path)
     }
 
     // MARK: - Draft State
@@ -530,16 +509,11 @@ final class DashboardViewModel {
         scheduleRefresh(for: updated)
     }
 
-    func queryContainsFilter(qualifier: String) -> Bool {
-        guard let viewID = selectedViewID,
-              let dashView = views.first(where: { $0.id == viewID }) else { return false }
-        return dashView.query.split(separator: " ").contains(where: { String($0) == qualifier })
-    }
-
-    func appendFilter(viewID: UUID, qualifier: String) {
+    func appendFilter(viewID: UUID, qualifier: SearchQualifier) {
         guard let dashView = views.first(where: { $0.id == viewID }) else { return }
-        guard !dashView.query.split(separator: " ").contains(where: { String($0) == qualifier }) else { return }
-        let newQuery = dashView.query + " " + qualifier
+        let query = SearchQuery(dashView.query)
+        guard !query.contains(qualifier) else { return }
+        let newQuery = query.appending(qualifier).text
         let updated = DashboardView(id: dashView.id, title: dashView.title, query: newQuery, hideReviewed: dashView.hideReviewed)
         viewRegistry.updateView(updated)
         resetResults(for: viewID)

@@ -3,6 +3,34 @@ import Foundation
 import os
 import UserNotifications
 
+/// Where a notification leads when clicked: the view it announced, and the
+/// pull request when it announced exactly one.
+struct NotificationRoute: Equatable, Sendable {
+    let viewID: UUID
+    let pullRequestID: String?
+
+    private static let viewIDKey = "viewID"
+    private static let pullRequestIDKey = "pullRequestID"
+
+    init(viewID: UUID, pullRequestID: String? = nil) {
+        self.viewID = viewID
+        self.pullRequestID = pullRequestID
+    }
+
+    init?(userInfo: [AnyHashable: Any]) {
+        guard let rawViewID = userInfo[Self.viewIDKey] as? String,
+              let viewID = UUID(uuidString: rawViewID)
+        else { return nil }
+        self.init(viewID: viewID, pullRequestID: userInfo[Self.pullRequestIDKey] as? String)
+    }
+
+    var userInfo: [String: String] {
+        var info = [Self.viewIDKey: viewID.uuidString]
+        info[Self.pullRequestIDKey] = pullRequestID
+        return info
+    }
+}
+
 @MainActor
 @Observable
 final class NotificationService {
@@ -97,6 +125,10 @@ final class NotificationService {
         let content = UNMutableNotificationContent()
         content.title = viewTitle
         content.sound = .default
+        // Notification Center groups each view's notifications together.
+        content.threadIdentifier = viewID.uuidString
+        let announcedPullRequestID = addedPRs.count == 1 ? addedPRs.first?.id : nil
+        content.userInfo = NotificationRoute(viewID: viewID, pullRequestID: announcedPullRequestID).userInfo
 
         if addedPRs.count == 1, let pr = addedPRs.first {
             content.subtitle = pr.repository.nameWithOwner

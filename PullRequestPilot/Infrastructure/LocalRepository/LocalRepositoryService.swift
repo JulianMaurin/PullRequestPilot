@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import os
 
@@ -30,13 +29,8 @@ final class LocalRepositoryService {
     /// Lock-backed so deinit can cancel without hopping to MainActor.
     private let refreshTaskStorage = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
     private let activeScanTaskStorage = OSAllocatedUnfairLock<Task<[RepoEntry], Never>?>(initialState: nil)
-    private let reporter: EventReporter
 
     private let logger = Logger(category: "LocalRepository")
-
-    init(reporter: EventReporter = .noop) {
-        self.reporter = reporter
-    }
 
     deinit {
         refreshTaskStorage.withLock { task in
@@ -158,56 +152,6 @@ final class LocalRepositoryService {
         }
 
         return nil
-    }
-
-    var isVSCodeAvailable: Bool {
-        guard let bundleID = Self.appBundleIDs["Visual Studio Code"] else { return false }
-        return NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil
-    }
-
-    var isITermAvailable: Bool {
-        guard let bundleID = Self.appBundleIDs["iTerm"] else { return false }
-        return NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil
-    }
-
-    var isCmuxAvailable: Bool {
-        guard let bundleID = Self.appBundleIDs["cmux"] else { return false }
-        return NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil
-    }
-
-    func openInVSCode(path: URL) {
-        launchApp("Visual Studio Code", path: path)
-    }
-
-    func openInITerm(path: URL) {
-        launchApp("iTerm", path: path)
-    }
-
-    func openInCmux(path: URL) {
-        launchApp("cmux", path: path)
-    }
-
-    private static let appBundleIDs: [String: String] = [
-        "Visual Studio Code": "com.microsoft.VSCode",
-        "iTerm": "com.googlecode.iterm2",
-        "cmux": "com.cmuxterm.app",
-    ]
-
-    private func launchApp(_ appName: String, path: URL) {
-        guard let bundleID = Self.appBundleIDs[appName],
-              let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
-            logger.error("Application not found: \(appName, privacy: .public)")
-            reporter.postError(.externalAppLaunchFailed(appName: appName))
-            return
-        }
-        let config = NSWorkspace.OpenConfiguration()
-        let reporter = self.reporter
-        NSWorkspace.shared.open([path], withApplicationAt: appURL, configuration: config) { [logger] _, error in
-            if let error {
-                logger.error("Failed to open \(appName, privacy: .public): \(error, privacy: .public)")
-                Task { @MainActor in reporter.postError(.externalAppLaunchFailed(appName: appName)) }
-            }
-        }
     }
 
     // MARK: - Index Building (runs off main thread)

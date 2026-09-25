@@ -3,27 +3,19 @@ import SwiftUI
 @main
 struct PullRequestPilotApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @State private var appState: AppState?
 
-    init() {
-        // Skip full app initialization when running unit tests
-        if NSClassFromString("XCTestCase") == nil {
-            let state = AppState()
-            _appState = State(initialValue: state)
-        }
-    }
+    private var appState: AppState? { appDelegate.appState }
+    private var reviewQueue: ReviewQueueViewModel? { appState?.reviewQueueViewModel }
 
     var body: some Scene {
         Window("Pull Request Pilot", id: "main") {
             if let appState {
                 RootContentView(
-                    dashboardViewModel: appState.dashboardViewModel,
-                    prDetailViewModel: appState.prDetailViewModel,
+                    reviewQueue: appState.reviewQueueViewModel,
                     settingsViewModel: appState.settingsViewModel,
-                    events: appState.events,
-                    userDefaults: appState.userDefaults
+                    events: appState.events
                 )
-                .background(WindowAccessor())
+                .background(WindowAccessor(onWindowFound: appDelegate.mainWindowDidAppear))
                 // Anchor toasts at the Window scene root, not inside
                 // NavigationStack — the navigation frame shifts between
                 // windowed and fullscreen modes, this rect is stable.
@@ -32,12 +24,6 @@ struct PullRequestPilotApp: App {
                 }
                 .onOpenURL { url in
                     handleIncomingURL(url)
-                }
-                .onAppear {
-                    if appDelegate.appState == nil {
-                        appDelegate.appState = appState
-                        appDelegate.dashboardViewModel = appState.dashboardViewModel
-                    }
                 }
             }
         }
@@ -50,22 +36,52 @@ struct PullRequestPilotApp: App {
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
+            CommandGroup(replacing: .newItem) {
+                Button("New View…") {
+                    reviewQueue?.beginAddingView()
+                    appDelegate.showWindow()
+                }
+                .keyboardShortcut("n", modifiers: .command)
+                .disabled(reviewQueue == nil)
+                // No shortcut: ⌘⌫ would also fire while editing the query.
+                Button("Delete View…") {
+                    reviewQueue?.requestDeletionOfSelectedView()
+                    appDelegate.showWindow()
+                }
+                .disabled(reviewQueue?.selectedView == nil)
+            }
+            CommandGroup(before: .toolbar) {
+                Button("Refresh") {
+                    if let reviewQueue {
+                        Task { await reviewQueue.refresh() }
+                    }
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(!(reviewQueue?.canRefresh ?? false))
+                Button("Show Next View") {
+                    reviewQueue?.selectNextView()
+                }
+                .keyboardShortcut("]", modifiers: .command)
+                .disabled((appState?.dashboardViewModel.views.count ?? 0) < 2)
+                Button("Show Previous View") {
+                    reviewQueue?.selectPreviousView()
+                }
+                .keyboardShortcut("[", modifiers: .command)
+                .disabled((appState?.dashboardViewModel.views.count ?? 0) < 2)
+                Divider()
+            }
             CommandGroup(replacing: .windowList) {
                 if let viewModel = appState?.dashboardViewModel, !viewModel.views.isEmpty {
                     ForEach(Array(viewModel.views.enumerated()), id: \.element.id) { index, view in
                         let count = viewModel.viewStates[view.id]?.pullRequests.count ?? 0
                         if index < 9 {
                             Button("\(view.title) (\(count))") {
-                                viewModel.showingSettings = false
-                                viewModel.selectedViewID = view.id
-                                appDelegate.showWindow()
+                                appDelegate.selectView(view.id)
                             }
                             .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
                         } else {
                             Button("\(view.title) (\(count))") {
-                                viewModel.showingSettings = false
-                                viewModel.selectedViewID = view.id
-                                appDelegate.showWindow()
+                                appDelegate.selectView(view.id)
                             }
                         }
                     }
@@ -125,11 +141,7 @@ enum DeepLinkRoute: Equatable {
 extension PullRequestPilotApp {
     private func handleIncomingURL(_ url: URL) {
         guard case .selectView(let uuid)? = DeepLinkRoute.route(for: url) else { return }
-        // Dismiss Settings first — RootContentView renders SettingsView over
-        // the dashboard while showingSettings is set, hiding the view switch.
-        appState?.dashboardViewModel.showingSettings = false
-        appState?.dashboardViewModel.selectedViewID = uuid
-        appDelegate.showWindow()
+        appDelegate.selectView(uuid)
     }
 }
 
@@ -138,12 +150,16 @@ extension PullRequestPilotApp {
 /// Finds the hosting NSWindow and overrides close behavior to hide instead of destroy.
 /// Forwards all other delegate messages to SwiftUI's original delegate.
 private struct WindowAccessor: NSViewRepresentable {
+    let onWindowFound: @MainActor (NSWindow) -> Void
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
+        let onWindowFound = self.onWindowFound
         DispatchQueue.main.async {
             guard let window = view.window else { return }
             context.coordinator.originalDelegate = window.delegate
             window.delegate = context.coordinator
+            onWindowFound(window)
         }
         return view
     }

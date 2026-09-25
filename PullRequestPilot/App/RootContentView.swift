@@ -3,20 +3,18 @@ import SwiftUI
 // MARK: - Content View
 
 struct RootContentView: View {
-    let dashboardViewModel: DashboardViewModel
-    let prDetailViewModel: PRDetailViewModel
+    let reviewQueue: ReviewQueueViewModel
     let settingsViewModel: SettingsViewModel
     let events: EventCenter
-    let userDefaults: UserDefaults
     /// True when the app launched without a saved token — stays true until "Get Started" is clicked.
     @State private var needsInitialSetup: Bool
 
-    init(dashboardViewModel: DashboardViewModel, prDetailViewModel: PRDetailViewModel, settingsViewModel: SettingsViewModel, events: EventCenter, userDefaults: UserDefaults) {
-        self.dashboardViewModel = dashboardViewModel
-        self.prDetailViewModel = prDetailViewModel
+    private var dashboardViewModel: DashboardViewModel { reviewQueue.dashboard }
+
+    init(reviewQueue: ReviewQueueViewModel, settingsViewModel: SettingsViewModel, events: EventCenter) {
+        self.reviewQueue = reviewQueue
         self.settingsViewModel = settingsViewModel
         self.events = events
-        self.userDefaults = userDefaults
         self._needsInitialSetup = State(initialValue: !settingsViewModel.hasSavedToken)
     }
 
@@ -49,10 +47,8 @@ struct RootContentView: View {
                     }
             } else {
                 ReviewQueueView(
-                    viewModel: dashboardViewModel,
-                    prDetailViewModel: prDetailViewModel,
+                    viewModel: reviewQueue,
                     events: events,
-                    userDefaults: userDefaults,
                     onOpenSettings: {
                         dashboardViewModel.showingSettings = true
                     }
@@ -67,7 +63,7 @@ struct RootContentView: View {
                 needsInitialSetup = true
                 dashboardViewModel.showingSettings = false
                 dashboardViewModel.stopAutoRefresh()
-                prDetailViewModel.deselect()
+                reviewQueue.closeDetail()
             }
             // When `hasSaved` flips to true, IdentityActor.swap has already
             // refreshed the viewer login atomically — nothing else to do here.

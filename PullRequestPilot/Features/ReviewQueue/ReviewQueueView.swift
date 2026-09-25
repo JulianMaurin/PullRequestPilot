@@ -2,45 +2,19 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ReviewQueueView: View {
-    @Bindable var viewModel: DashboardViewModel
-    var prDetailViewModel: PRDetailViewModel
+    @Bindable var viewModel: ReviewQueueViewModel
     var events: EventCenter?
     var onOpenSettings: () -> Void
-    /// Injected explicitly — `@AppStorage` without an explicit `store:`
-    /// implicitly reaches the default suite, which bypasses DI and the app
-    /// group container. Panel width is persisted here instead.
-    let userDefaults: UserDefaults
-    @State private var expandedStacks: Set<String> = []
-    @State private var isAddingView = false
-    @State private var newViewTitle = ""
-    @State private var newViewQuery = ""
-    @State private var viewToDelete: DashboardView?
-    @State private var showDeleteConfirmation = false
-    @State private var editingQuery: String = ""
     @State private var draggedViewID: UUID?
     @FocusState private var isQueryFocused: Bool
-    @State private var detailPanelWidth: Double
-    @State private var detailPanelHeight: Double
     /// Tracked width of the area below the divider (list/detail container).
     /// Drives the narrow-mode layout switch. Defaults wide so initial render
     /// uses the `HSplitView` path; the `.onGeometryChange` modifier corrects
     /// it on the first layout pass.
     @State private var availableWidth: CGFloat = 1000
 
-    init(viewModel: DashboardViewModel, prDetailViewModel: PRDetailViewModel, events: EventCenter? = nil, userDefaults: UserDefaults, onOpenSettings: @escaping () -> Void) {
-        self.viewModel = viewModel
-        self.prDetailViewModel = prDetailViewModel
-        self.events = events
-        self.userDefaults = userDefaults
-        self.onOpenSettings = onOpenSettings
-        let storedWidth = userDefaults.double(forKey: Self.detailPanelWidthKey)
-        _detailPanelWidth = State(initialValue: storedWidth > 0 ? storedWidth : 550)
-        let storedHeight = userDefaults.double(forKey: Self.detailPanelHeightKey)
-        _detailPanelHeight = State(initialValue: storedHeight > 0 ? storedHeight : 300)
-    }
-
-    private static let detailPanelWidthKey = "detailPanelWidth"
-    private static let detailPanelHeightKey = "detailPanelHeight"
+    private var dashboard: DashboardViewModel { viewModel.dashboard }
+    private var detail: PRDetailViewModel { viewModel.detail }
 
     /// Below this content width, list (350) + detail (400) + split divider
     /// can't both fit side by side. The detail pane moves below the list
@@ -81,14 +55,8 @@ struct ReviewQueueView: View {
         }
         // `initial` reconciles a selection that outlived this view (Settings
         // was shown, then another view was picked before returning).
-        .onChange(of: viewModel.selectedViewState.pullRequests, initial: true) {
-            if let selected = prDetailViewModel.selectedPR {
-                if let updated = viewModel.selectedViewState.pullRequests.first(where: { $0.id == selected.id }) {
-                    prDetailViewModel.updateSelectedPR(updated)
-                } else {
-                    prDetailViewModel.deselect()
-                }
-            }
+        .onChange(of: dashboard.selectedViewState.pullRequests, initial: true) {
+            viewModel.reconcileSelection()
         }
         .onTapGesture {
             isQueryFocused = false
@@ -96,31 +64,25 @@ struct ReviewQueueView: View {
         .frame(minWidth: 500, minHeight: 300)
         .toolbar {
             ToolbarItem(placement: .automatic) {
+                // ⌘R lives on View › Refresh.
                 Button {
-                    prDetailViewModel.deselect()
-                    Task {
-                        if let id = viewModel.selectedViewID {
-                            await viewModel.refresh(viewID: id)
-                        }
-                    }
+                    Task { await viewModel.refresh() }
                 } label: {
                     ZStack {
                         Image(systemName: "arrow.clockwise")
-                            .opacity(viewModel.selectedViewState.isLoading && viewModel.selectedViewState.hasData ? 0 : 1)
-                        if viewModel.selectedViewState.isLoading && viewModel.selectedViewState.hasData {
+                            .opacity(dashboard.selectedViewState.isLoading && dashboard.selectedViewState.hasData ? 0 : 1)
+                        if dashboard.selectedViewState.isLoading && dashboard.selectedViewState.hasData {
                             ProgressView()
                                 .controlSize(.small)
                         }
                     }
                 }
-                .disabled(viewModel.selectedViewState.isLoading)
-                .help(viewModel.selectedViewState.isLoading ? "Refreshing..." : "Refresh")
+                .disabled(!viewModel.canRefresh)
+                .help(dashboard.selectedViewState.isLoading ? "Refreshing..." : "Refresh (⌘R)")
                 .accessibilityLabel("Refresh pull requests")
-                .keyboardShortcut("r", modifiers: .command)
             }
             ToolbarItem(placement: .automatic) {
                 Button {
-                    prDetailViewModel.deselect()
                     onOpenSettings()
                 } label: {
                     Image(systemName: "gearshape")
@@ -130,7 +92,7 @@ struct ReviewQueueView: View {
             }
         }
         .onAppear {
-            syncEditingQuery()
+            viewModel.syncEditingQuery()
         }
         .task {
             do {
@@ -143,58 +105,33 @@ struct ReviewQueueView: View {
         // Bells show whether System Settings lets them alert; the user can
         // change that there at any time.
         .task {
-            await viewModel.refreshNotificationAuthorization()
+            await dashboard.refreshNotificationAuthorization()
             for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) {
-                await viewModel.refreshNotificationAuthorization()
+                await dashboard.refreshNotificationAuthorization()
             }
-        }
-        .onChange(of: viewModel.selectedViewID) {
-            syncEditingQuery()
-            prDetailViewModel.deselect()
         }
         .onChange(of: isQueryFocused) {
             // Click-away without Return abandons the edit; revert the field
             // to the active query rather than displaying uncommitted text.
             if !isQueryFocused {
-                syncEditingQuery()
+                viewModel.syncEditingQuery()
             }
         }
         .onKeyPress(.escape) {
-            prDetailViewModel.deselect()
+            viewModel.closeDetail()
             return .handled
         }
-        .background {
-            Button("") {
-                prDetailViewModel.deselect()
-                viewModel.selectNextView()
-            }
-            .keyboardShortcut("]", modifiers: .command)
-            .hidden()
-
-            Button("") {
-                prDetailViewModel.deselect()
-                viewModel.selectPreviousView()
-            }
-            .keyboardShortcut("[", modifiers: .command)
-            .hidden()
-        }
-        .alert("Delete View", isPresented: $showDeleteConfirmation) {
-            Button("Cancel", role: .cancel) { viewToDelete = nil }
-            Button("Delete", role: .destructive) {
-                if let id = viewToDelete?.id {
-                    viewModel.deleteView(id: id)
-                    viewToDelete = nil
-                }
-            }
+        .alert(
+            "Delete View",
+            isPresented: Binding(
+                get: { viewModel.viewPendingDeletion != nil },
+                set: { if !$0 { viewModel.cancelDeletion() } }
+            )
+        ) {
+            Button("Cancel", role: .cancel) { viewModel.cancelDeletion() }
+            Button("Delete", role: .destructive) { viewModel.confirmDeletion() }
         } message: {
-            Text("Are you sure you want to delete \"\(viewToDelete?.title ?? "")\"?")
-        }
-    }
-
-    private func syncEditingQuery() {
-        if let id = viewModel.selectedViewID,
-           let dashView = viewModel.views.first(where: { $0.id == id }) {
-            editingQuery = dashView.query
+            Text("Are you sure you want to delete \"\(viewModel.viewPendingDeletion?.title ?? "")\"?")
         }
     }
 
@@ -210,7 +147,7 @@ struct ReviewQueueView: View {
             VSplitView {
                 contentArea
                     .frame(minHeight: 100)
-                if prDetailViewModel.selectedPR != nil {
+                if detail.selectedPR != nil {
                     bottomDetailPane
                 }
             }
@@ -218,7 +155,7 @@ struct ReviewQueueView: View {
             HSplitView {
                 contentArea
                     .frame(minWidth: 350)
-                if prDetailViewModel.selectedPR != nil {
+                if detail.selectedPR != nil {
                     splitDetailPane
                 }
             }
@@ -226,56 +163,56 @@ struct ReviewQueueView: View {
     }
 
     private var splitDetailPane: some View {
-        PRDetailView(viewModel: prDetailViewModel)
+        PRDetailView(viewModel: detail)
             .frame(minWidth: 400, maxWidth: 800)
             .background {
                 GeometryReader { geo in
                     Color.clear
                         .onChange(of: geo.size.width) { _, newWidth in
-                            detailPanelWidth = newWidth
+                            viewModel.detailPanelWidth = newWidth
                         }
                 }
             }
             .background {
-                SplitDividerRestorer(detailLength: detailPanelWidth, clampedTo: 400...800)
+                SplitDividerRestorer(detailLength: viewModel.detailPanelWidth, clampedTo: 400...800)
             }
             // Debounce: only persist once the drag settles. The
-            // task is cancelled whenever `detailPanelWidth` changes
+            // task is cancelled whenever the width changes
             // again before 250ms elapse, so a live drag produces a
             // single write at drop time.
-            .task(id: detailPanelWidth) {
+            .task(id: viewModel.detailPanelWidth) {
                 do {
                     try await Task.sleep(for: .milliseconds(250))
                 } catch {
                     return
                 }
-                userDefaults.set(detailPanelWidth, forKey: Self.detailPanelWidthKey)
+                viewModel.saveDetailPanelSize()
             }
     }
 
     /// Narrow-mode counterpart of `splitDetailPane`: same restore/persist
     /// dance, on the vertical axis.
     private var bottomDetailPane: some View {
-        PRDetailView(viewModel: prDetailViewModel)
+        PRDetailView(viewModel: detail)
             .frame(minHeight: 120)
             .background {
                 GeometryReader { geo in
                     Color.clear
                         .onChange(of: geo.size.height) { _, newHeight in
-                            detailPanelHeight = newHeight
+                            viewModel.detailPanelHeight = newHeight
                         }
                 }
             }
             .background {
-                SplitDividerRestorer(detailLength: detailPanelHeight, clampedTo: 120...600)
+                SplitDividerRestorer(detailLength: viewModel.detailPanelHeight, clampedTo: 120...600)
             }
-            .task(id: detailPanelHeight) {
+            .task(id: viewModel.detailPanelHeight) {
                 do {
                     try await Task.sleep(for: .milliseconds(250))
                 } catch {
                     return
                 }
-                userDefaults.set(detailPanelHeight, forKey: Self.detailPanelHeightKey)
+                viewModel.saveDetailPanelSize()
             }
     }
 
@@ -286,20 +223,18 @@ struct ReviewQueueView: View {
         // Without it the dragged tab stays at 40% opacity indefinitely.
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
-                ForEach(viewModel.views) { dashView in
+                ForEach(dashboard.views) { dashView in
                     TabButton(
                         dashView: dashView,
-                        isSelected: dashView.id == viewModel.selectedViewID,
+                        isSelected: dashView.id == dashboard.selectedViewID,
                         isDragged: draggedViewID == dashView.id,
                         draggedID: $draggedViewID,
-                        viewModel: viewModel,
+                        viewModel: dashboard,
                         onSelect: {
-                            prDetailViewModel.deselect()
-                            viewModel.selectedViewID = dashView.id
+                            viewModel.selectView(dashView.id)
                         },
                         onRequestDelete: {
-                            viewToDelete = dashView
-                            showDeleteConfirmation = true
+                            viewModel.requestDeletion(of: dashView)
                         }
                     )
                 }
@@ -313,10 +248,7 @@ struct ReviewQueueView: View {
 
     private var addButton: some View {
         Button {
-            prDetailViewModel.deselect()
-            newViewTitle = ""
-            newViewQuery = ""
-            isAddingView = true
+            viewModel.beginAddingView()
         } label: {
             Image(systemName: "plus")
                 .font(.caption)
@@ -324,9 +256,9 @@ struct ReviewQueueView: View {
                 .foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)
-        .help("New view")
+        .help("New view (⌘N)")
         .accessibilityLabel("New view")
-        .popover(isPresented: $isAddingView) {
+        .popover(isPresented: $viewModel.isAddingView) {
             addViewPopover
         }
     }
@@ -336,14 +268,14 @@ struct ReviewQueueView: View {
             Image(systemName: "magnifyingglass")
                 .font(.caption)
                 .foregroundStyle(.quaternary)
-            TextField("GitHub search query", text: $editingQuery, onCommit: {
-                commitQueryEdit()
-            })
-            .onTapGesture { prDetailViewModel.deselect() }
-            .textFieldStyle(.plain)
-            .font(.system(.caption, design: .monospaced))
-            .foregroundStyle(isQueryFocused ? .primary : .tertiary)
-            .focused($isQueryFocused)
+            TextField("GitHub search query", text: $viewModel.editingQuery)
+                .onSubmit {
+                    viewModel.commitQueryEdit()
+                }
+                .textFieldStyle(.plain)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(isQueryFocused ? .primary : .tertiary)
+                .focused($isQueryFocused)
             viewConfigIcons
         }
         .padding(.horizontal, 14)
@@ -352,10 +284,10 @@ struct ReviewQueueView: View {
 
     @ViewBuilder
     private var viewConfigIcons: some View {
-        if let viewID = viewModel.selectedViewID,
-           let dashView = viewModel.views.first(where: { $0.id == viewID }) {
+        if let dashView = viewModel.selectedView {
+            let viewID = dashView.id
             HStack(spacing: 2) {
-                if viewModel.isNotificationBlocked(for: viewID) {
+                if dashboard.isNotificationBlocked(for: viewID) {
                     viewToggleButton(
                         icon: "bell.slash.fill",
                         isOn: true,
@@ -363,28 +295,28 @@ struct ReviewQueueView: View {
                         helpOn: "Notifications are off in System Settings. Click to turn this view's bell off.",
                         helpOff: "Enable notifications"
                     ) {
-                        viewModel.setNotification(for: viewID, enabled: false)
+                        dashboard.setNotification(for: viewID, enabled: false)
                     }
                 } else {
                     viewToggleButton(
-                        icon: viewModel.isNotificationEnabled(for: viewID) ? "bell.fill" : "bell",
-                        isOn: viewModel.isNotificationEnabled(for: viewID),
+                        icon: dashboard.isNotificationEnabled(for: viewID) ? "bell.fill" : "bell",
+                        isOn: dashboard.isNotificationEnabled(for: viewID),
                         helpOn: "Disable notifications",
                         helpOff: "Enable notifications"
                     ) {
-                        let on = !viewModel.isNotificationEnabled(for: viewID)
-                        viewModel.setNotification(for: viewID, enabled: on)
-                        if on { Task { await viewModel.ensureNotificationPermission() } }
+                        let on = !dashboard.isNotificationEnabled(for: viewID)
+                        dashboard.setNotification(for: viewID, enabled: on)
+                        if on { Task { await dashboard.ensureNotificationPermission() } }
                     }
                 }
 
                 viewToggleButton(
                     icon: "number",
-                    isOn: viewModel.isBadgeEnabled(for: viewID),
+                    isOn: dashboard.isBadgeEnabled(for: viewID),
                     helpOn: "Hide new PRs from menu bar",
                     helpOff: "Show new PRs in menu bar"
                 ) {
-                    viewModel.setBadge(for: viewID, enabled: !viewModel.isBadgeEnabled(for: viewID))
+                    dashboard.setBadge(for: viewID, enabled: !dashboard.isBadgeEnabled(for: viewID))
                 }
 
                 viewToggleButton(
@@ -393,7 +325,7 @@ struct ReviewQueueView: View {
                     helpOn: "Show reviewed PRs",
                     helpOff: "Hide reviewed PRs"
                 ) {
-                    viewModel.toggleHideReviewed(for: viewID)
+                    dashboard.toggleHideReviewed(for: viewID)
                 }
             }
         }
@@ -413,65 +345,39 @@ struct ReviewQueueView: View {
         .accessibilityValue(isOn ? "on" : "off")
     }
 
-    private func commitQueryEdit() {
-        guard let id = viewModel.selectedViewID else { return }
-        viewModel.commitQueryEdit(viewID: id, newQuery: editingQuery)
-        // The view model rejects empty/unchanged commits; resync so the field
-        // never displays text that is not the active query (same pattern as
-        // appendFilter).
-        syncEditingQuery()
-    }
-
     private var addViewPopover: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("New View")
                 .font(.headline)
 
-            TextField("Title", text: $newViewTitle)
+            TextField("Title", text: $viewModel.newViewTitle)
                 .textFieldStyle(.roundedBorder)
 
-            TextField("GitHub search query", text: $newViewQuery)
+            TextField("GitHub search query", text: $viewModel.newViewQuery)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(.caption, design: .monospaced))
 
             HStack {
                 Spacer()
-                Button("Cancel") { isAddingView = false }
+                Button("Cancel") { viewModel.isAddingView = false }
                     .keyboardShortcut(.cancelAction)
                 Button("Add") {
-                    addNewView()
+                    viewModel.addView()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(!isNewViewValid)
+                .disabled(!viewModel.canAddView)
             }
         }
         .padding()
         .frame(width: 320)
     }
 
-    private var isNewViewValid: Bool {
-        !newViewTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !newViewQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private func addNewView() {
-        let title = newViewTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let query = newViewQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty, !query.isEmpty else { return }
-        let newView = DashboardView(id: UUID(), title: title, query: query)
-        viewModel.addView(newView)
-        viewModel.selectedViewID = newView.id
-        editingQuery = query
-        isAddingView = false
-        Task { await viewModel.refresh(viewID: newView.id) }
-    }
-
     private var contentArea: some View {
         Group {
-            if viewModel.views.isEmpty {
+            if dashboard.views.isEmpty {
                 noViewsMessage
             } else {
-                let state = viewModel.selectedViewState
+                let state = dashboard.selectedViewState
                 if state.isLoading && !state.hasData {
                     loadingView
                 } else if let error = state.error, !state.hasData {
@@ -480,18 +386,12 @@ struct ReviewQueueView: View {
                     // A page can arrive fully filtered (hide-reviewed, non-PR
                     // items) while nextCursor is still set — showing "No pull
                     // requests" there is a lie; keep fetching until a page
-                    // yields rows or paging genuinely ends. The error gate
-                    // mirrors the list sentinel's: no auto-retry of a failed
-                    // page (the errorView branch above normally intercepts,
-                    // but this must not loop if that ordering ever changes).
+                    // yields rows or paging genuinely ends.
                     if state.error == nil, state.canLoadMore || state.isLoadingMore {
                         loadingView
                             .id(state.nextCursor)
                             .onAppear {
-                                guard viewModel.selectedViewState.canLoadMore,
-                                      viewModel.selectedViewState.error == nil,
-                                      let id = viewModel.selectedViewID else { return }
-                                Task { await viewModel.loadMore(viewID: id) }
+                                Task { await viewModel.loadMoreIfPossible() }
                             }
                     } else {
                         emptyView
@@ -514,10 +414,18 @@ struct ReviewQueueView: View {
                 .foregroundStyle(.secondary)
             Text("No views yet")
                 .font(.headline)
-            Text("Tap + to create a view, or use **Create Preset Views** in Settings to get started quickly.")
+            Text("Click + to create a view from a GitHub search query, or start from a preset view in Settings.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
+            HStack {
+                Button("New View…") {
+                    viewModel.beginAddingView()
+                }
+                Button("Preset Views…") {
+                    onOpenSettings()
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -551,11 +459,7 @@ struct ReviewQueueView: View {
                     .foregroundStyle(.secondary)
             }
             Button("Retry") {
-                Task {
-                    if let id = viewModel.selectedViewID {
-                        await viewModel.refresh(viewID: id)
-                    }
-                }
+                Task { await viewModel.refresh() }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -563,7 +467,7 @@ struct ReviewQueueView: View {
     }
 
     private var emptyView: some View {
-        let state = viewModel.selectedViewState
+        let state = dashboard.selectedViewState
         let nonPullRequests = state.nonPullRequestCount
         return VStack(spacing: 12) {
             Image(systemName: "checkmark.circle")
@@ -576,6 +480,15 @@ struct ReviewQueueView: View {
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal)
+            } else if state.filteredOutCount > 0 {
+                let count = state.filteredOutCount
+                Text("You've reviewed \(count == 1 ? "the pull request" : "all \(count) pull requests") this view matched.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+                Button("Show Reviewed") {
+                    viewModel.showReviewedPullRequests()
+                }
             } else if nonPullRequests > 0 {
                 VStack(spacing: 4) {
                     Text("Your query matched \(nonPullRequests) non-PR \(nonPullRequests == 1 ? "item" : "items") (issues, discussions).")
@@ -594,11 +507,11 @@ struct ReviewQueueView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func hiddenResultsRow(_ notice: String) -> some View {
+    private func noticeRow(icon: String, _ text: String) -> some View {
         HStack(alignment: .top, spacing: 6) {
-            Image(systemName: "eye.slash")
+            Image(systemName: icon)
                 .foregroundStyle(.orange)
-            Text(notice)
+            Text(text)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -609,44 +522,64 @@ struct ReviewQueueView: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// A refresh failed while earlier rows are on screen: they stay, marked
+    /// as out of date.
+    private func staleResultsRow(_ error: String, since lastRefreshedAt: Date?) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(error)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let lastRefreshedAt {
+                    Text("Showing results from \(lastRefreshedAt, format: .relative(presentation: .named)).")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+            Button("Retry") {
+                Task { await viewModel.refresh() }
+            }
+            .controlSize(.small)
+        }
+        .font(.caption)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+
     private var listView: some View {
         // Memoized on the view model — repeated body evaluations within a
         // render cycle return the cached grouping in O(1).
-        let grouped = viewModel.groupedSelected
+        let grouped = dashboard.groupedSelected
+        let state = dashboard.selectedViewState
         // Per-row relative timestamps tick via `RelativeTimestampText`, so the
         // outer list is NOT wrapped in a `TimelineView(.periodic)`. Wrapping
         // the whole list cascaded SwiftUI diff + layout across ~100 rows every
         // 30 s.
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                if let notice = viewModel.selectedViewState.hiddenResultsNotice {
-                    hiddenResultsRow(notice)
+                if let error = state.error, !state.loadMoreFailed {
+                    staleResultsRow(error, since: state.lastRefreshedAt)
                 }
-                ForEach(Array(grouped.enumerated()), id: \.element.org) { _, orgGroup in
+                if let notice = state.hiddenResultsNotice {
+                    noticeRow(icon: "eye.slash", notice)
+                }
+                ForEach(grouped, id: \.org) { orgGroup in
                     orgSection(orgGroup)
                 }
-                // Load-more sentinel. Keyed to the row identity, the trigger
-                // went dead whenever the fetch-order last PR was a stack
-                // child, inside a collapsed section, or filtered out — page 2
-                // became unreachable. The sentinel fires on reaching the
-                // rendered bottom regardless of grouping; `.id(nextCursor)`
-                // re-creates it per page so it re-arms while still visible.
-                // The error gate stops the remove/re-insert cycle from
-                // retrying a failed page in a tight loop (offline, rate
-                // limit); the next successful refresh clears the error and
-                // re-arms the sentinel.
-                if viewModel.selectedViewState.canLoadMore, viewModel.selectedViewState.error == nil {
+                // Load-more sentinel: fires on reaching the rendered bottom,
+                // whatever the grouping. `.id(nextCursor)` re-creates it per
+                // page so it re-arms while still visible; no error, so a
+                // failed page isn't retried in a loop.
+                if state.canLoadMore, state.error == nil {
                     Color.clear
                         .frame(height: 1)
-                        .id(viewModel.selectedViewState.nextCursor)
+                        .id(state.nextCursor)
                         .onAppear {
-                            guard viewModel.selectedViewState.canLoadMore,
-                                  viewModel.selectedViewState.error == nil,
-                                  let id = viewModel.selectedViewID else { return }
-                            Task { await viewModel.loadMore(viewID: id) }
+                            Task { await viewModel.loadMoreIfPossible() }
                         }
                 }
-                if viewModel.selectedViewState.isLoadingMore {
+                if state.isLoadingMore {
                     HStack {
                         Spacer()
                         ProgressView()
@@ -658,24 +591,41 @@ struct ReviewQueueView: View {
                     }
                     .padding(.vertical, 8)
                 }
+                if let error = state.error, state.loadMoreFailed {
+                    HStack(spacing: 8) {
+                        Text("Couldn't load more: \(error)")
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("Retry") {
+                            Task { await viewModel.retryLoadMore() }
+                        }
+                        .controlSize(.small)
+                    }
+                    .font(.caption)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                }
+                if state.isTruncated {
+                    noticeRow(
+                        icon: "text.append",
+                        "Showing the first \(Constants.App.maxPullRequests) results. Narrow the query to see the rest."
+                    )
+                }
             }
             .padding(.vertical, 4)
+            .scrollTargetLayout()
         }
+        .scrollPosition(id: $viewModel.listScrollAnchor)
     }
 
     @ViewBuilder
     private func orgSection(_ orgGroup: DashboardViewModel.OrgGroup) -> some View {
-        let isOrgCollapsed = viewModel.collapsedOrgs.contains(orgGroup.org)
+        let isOrgCollapsed = viewModel.isOrgCollapsed(orgGroup.org)
         let prCount = orgGroup.repos.reduce(0) { $0 + $1.stacks.reduce(0) { $0 + $1.totalCount } }
 
         Button {
-            prDetailViewModel.deselect()
             withAnimation(.easeInOut(duration: 0.2)) {
-                if isOrgCollapsed {
-                    viewModel.collapsedOrgs.remove(orgGroup.org)
-                } else {
-                    viewModel.collapsedOrgs.insert(orgGroup.org)
-                }
+                viewModel.toggleOrg(orgGroup.org)
             }
         } label: {
             HStack(spacing: 6) {
@@ -696,57 +646,32 @@ struct ReviewQueueView: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
+        .accessibilityLabel("\(orgGroup.org), \(prCount) pull \(prCount == 1 ? "request" : "requests")")
+        .accessibilityValue(isOrgCollapsed ? "Collapsed" : "Expanded")
+        .accessibilityAddTraits(.isHeader)
+        .id("org:\(orgGroup.org)")
         .contextMenu {
             if isOrgCollapsed {
                 Button("Expand") {
-                    withAnimation { _ = viewModel.collapsedOrgs.remove(orgGroup.org) }
+                    withAnimation { viewModel.toggleOrg(orgGroup.org) }
                 }
             } else {
                 Button("Collapse Repos") {
-                    withAnimation {
-                        for repo in orgGroup.repos {
-                            viewModel.collapsedRepos.insert("\(orgGroup.org)/\(repo.repo)")
-                        }
-                    }
+                    withAnimation { viewModel.collapseRepos(of: orgGroup) }
                 }
                 Button("Expand Repos") {
-                    withAnimation {
-                        for repo in orgGroup.repos {
-                            _ = viewModel.collapsedRepos.remove("\(orgGroup.org)/\(repo.repo)")
-                        }
-                    }
+                    withAnimation { viewModel.expandRepos(of: orgGroup) }
                 }
                 Divider()
                 Button("Collapse All Orgs") {
-                    withAnimation {
-                        for org in viewModel.groupedSelected { viewModel.collapsedOrgs.insert(org.org) }
-                    }
+                    withAnimation { viewModel.collapseAllOrgs() }
                 }
                 Button("Expand All Orgs") {
-                    withAnimation {
-                        viewModel.collapsedOrgs.removeAll()
-                    }
+                    withAnimation { viewModel.expandAllOrgs() }
                 }
             }
             Divider()
-            Button {
-                appendFilter("org:\(orgGroup.org)")
-            } label: {
-                SwiftUI.Label(
-                    "Filter by org \"\(orgGroup.org)\"",
-                    systemImage: "line.3.horizontal.decrease.circle"
-                )
-            }
-            .disabled(viewModel.queryContainsFilter(qualifier: "org:\(orgGroup.org)"))
-            Button {
-                appendFilter("-org:\(orgGroup.org)")
-            } label: {
-                SwiftUI.Label(
-                    "Exclude org \"\(orgGroup.org)\"",
-                    systemImage: "minus.circle"
-                )
-            }
-            .disabled(viewModel.queryContainsFilter(qualifier: "-org:\(orgGroup.org)"))
+            filterMenuItems(.org(orgGroup.org), label: "org \"\(orgGroup.org)\"")
         }
 
         if !isOrgCollapsed {
@@ -758,18 +683,13 @@ struct ReviewQueueView: View {
 
     @ViewBuilder
     private func repoSection(_ repoGroup: DashboardViewModel.RepoGroup, org: String) -> some View {
-        let repoKey = "\(org)/\(repoGroup.repo)"
-        let isRepoCollapsed = viewModel.collapsedRepos.contains(repoKey)
+        let isRepoCollapsed = viewModel.isRepoCollapsed(org: org, repo: repoGroup.repo)
         let prCount = repoGroup.stacks.reduce(0) { $0 + $1.totalCount }
+        let nameWithOwner = "\(org)/\(repoGroup.repo)"
 
         Button {
-            prDetailViewModel.deselect()
             withAnimation(.easeInOut(duration: 0.2)) {
-                if isRepoCollapsed {
-                    viewModel.collapsedRepos.remove(repoKey)
-                } else {
-                    viewModel.collapsedRepos.insert(repoKey)
-                }
+                viewModel.toggleRepo(org: org, repo: repoGroup.repo)
             }
         } label: {
             HStack(spacing: 6) {
@@ -791,25 +711,12 @@ struct ReviewQueueView: View {
         .padding(.horizontal, 12)
         .padding(.leading, 8)
         .padding(.vertical, 4)
+        .accessibilityLabel("\(repoGroup.repo), \(prCount) pull \(prCount == 1 ? "request" : "requests")")
+        .accessibilityValue(isRepoCollapsed ? "Collapsed" : "Expanded")
+        .accessibilityAddTraits(.isHeader)
+        .id("repo:\(nameWithOwner)")
         .contextMenu {
-            Button {
-                appendFilter("repo:\(org)/\(repoGroup.repo)")
-            } label: {
-                SwiftUI.Label(
-                    "Filter by repo \"\(org)/\(repoGroup.repo)\"",
-                    systemImage: "line.3.horizontal.decrease.circle"
-                )
-            }
-            .disabled(viewModel.queryContainsFilter(qualifier: "repo:\(org)/\(repoGroup.repo)"))
-            Button {
-                appendFilter("-repo:\(org)/\(repoGroup.repo)")
-            } label: {
-                SwiftUI.Label(
-                    "Exclude repo \"\(org)/\(repoGroup.repo)\"",
-                    systemImage: "minus.circle"
-                )
-            }
-            .disabled(viewModel.queryContainsFilter(qualifier: "-repo:\(org)/\(repoGroup.repo)"))
+            filterMenuItems(.repo(nameWithOwner), label: "repo \"\(nameWithOwner)\"")
         }
 
         if !isRepoCollapsed {
@@ -819,23 +726,32 @@ struct ReviewQueueView: View {
         }
     }
 
+    /// "Filter by …" and "Exclude …", each disabled once the query has it.
+    @ViewBuilder
+    private func filterMenuItems(_ qualifier: SearchQualifier, label: String) -> some View {
+        Button {
+            viewModel.appendFilter(qualifier)
+        } label: {
+            SwiftUI.Label("Filter by \(label)", systemImage: "line.3.horizontal.decrease.circle")
+        }
+        .disabled(viewModel.isFilterApplied(qualifier))
+        Button {
+            viewModel.appendFilter(qualifier.excluded)
+        } label: {
+            SwiftUI.Label("Exclude \(label)", systemImage: "minus.circle")
+        }
+        .disabled(viewModel.isFilterApplied(qualifier.excluded))
+    }
+
     @ViewBuilder
     private func stackView(_ stack: DashboardViewModel.PRStack) -> some View {
-        let isExpanded = expandedStacks.contains(stack.id)
-
         pullRequestItem(stack.root, stackSize: stack.totalCount) {
-            if stack.totalCount > 1 {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    if isExpanded {
-                        expandedStacks.remove(stack.id)
-                    } else {
-                        expandedStacks.insert(stack.id)
-                    }
-                }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                viewModel.toggleStack(stack)
             }
         }
 
-        if isExpanded {
+        if viewModel.isStackExpanded(stack) {
             ForEach(stack.children) { member in
                 pullRequestItem(member.pullRequest, stackSize: 0, stackDepth: member.depth) {}
             }
@@ -863,27 +779,15 @@ struct ReviewQueueView: View {
                 .frame(width: 24)
                 .padding(.leading, CGFloat(stackDepth - 1) * 16)
             }
-            PullRequestRowView(pullRequest: pr, stackSize: stackSize, onToggleStack: onToggleStack, onFilterBy: appendFilter) {
+            PullRequestRowView(pullRequest: pr, stackSize: stackSize, onToggleStack: onToggleStack, onFilterBy: viewModel.appendFilter) {
                 Menu("Open in") {
                     Button("Browser") {
-                        viewModel.openInBrowser(pr)
+                        dashboard.openInBrowser(pr)
                     }
                     if let match = viewModel.localMatch(for: pr) {
-                        if viewModel.isVSCodeAvailable {
-                            Button("VS Code") {
-                                viewModel.openInEditor(pr)
-                            }
-                            .help(openInEditorHelp(match))
-                        }
-                        if viewModel.isITermAvailable {
-                            Button("iTerm") {
-                                viewModel.openInTerminal(pr)
-                            }
-                            .help(openInEditorHelp(match))
-                        }
-                        if viewModel.isCmuxAvailable {
-                            Button("cmux") {
-                                viewModel.openInCmux(pr)
+                        ForEach(viewModel.installedEditors) { editor in
+                            Button(editor.displayName) {
+                                Task { await viewModel.open(pr, in: editor) }
                             }
                             .help(openInEditorHelp(match))
                         }
@@ -901,7 +805,7 @@ struct ReviewQueueView: View {
                 if pr.state == .open {
                     Divider()
                     Button(pr.isDraft ? "Mark as Ready for Review" : "Convert to Draft") {
-                        Task { await viewModel.setDraft(pr, isDraft: !pr.isDraft) }
+                        Task { await dashboard.setDraft(pr, isDraft: !pr.isDraft) }
                     }
                 }
             }
@@ -911,26 +815,20 @@ struct ReviewQueueView: View {
         .padding(.vertical, 2)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(prDetailViewModel.selectedPR?.id == pr.id
+                .fill(detail.selectedPR?.id == pr.id
                     ? Color.accentColor.opacity(0.15)
                     : Color.clear)
                 .padding(.horizontal, 8)
         )
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
-            viewModel.openInBrowser(pr)
+            dashboard.openInBrowser(pr)
         }
         .onTapGesture {
-            prDetailViewModel.selectPR(pr)
+            viewModel.toggleSelection(of: pr)
         }
-    }
-
-    // MARK: - Query Filters
-
-    private func appendFilter(_ qualifier: String) {
-        guard let id = viewModel.selectedViewID else { return }
-        viewModel.appendFilter(viewID: id, qualifier: qualifier)
-        syncEditingQuery()
+        .accessibilityAddTraits(detail.selectedPR?.id == pr.id ? .isSelected : [])
+        .id(pr.id)
     }
 
     // MARK: - Editor
@@ -1014,6 +912,7 @@ private struct TabButton: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
         .opacity(isDragged ? 0.4 : 1.0)
         .onDrag {
             draggedID = dashView.id

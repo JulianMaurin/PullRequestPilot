@@ -2,18 +2,8 @@ import Testing
 import Foundation
 @testable import PullRequestPilot
 
-@MainActor
 @Suite("URL Routing")
 struct URLRoutingTests {
-
-    private func makeDashboardViewModel(suiteName: String) throws -> DashboardViewModel {
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
-        let store = ViewsStore(defaults: defaults)
-        let mockClient = MockGitHubClient()
-        let localRepoService = LocalRepositoryService()
-        return DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
-    }
 
     // MARK: - DeepLinkRoute
 
@@ -46,24 +36,5 @@ struct URLRoutingTests {
     func unroutableLinks(urlString: String) throws {
         let url = try #require(URL(string: urlString))
         #expect(DeepLinkRoute.route(for: url) == nil)
-    }
-
-    // MARK: - AppDelegate.selectView
-
-    @Test("selectView dismisses Settings and selects the view")
-    func selectViewDismissesSettings() throws {
-        let viewModel = try makeDashboardViewModel(suiteName: "URLRoutingSelectView")
-        let firstView = DashboardView(id: UUID(), title: "First", query: "is:pr")
-        let secondView = DashboardView(id: UUID(), title: "Second", query: "is:pr author:@me")
-        viewModel.addView(firstView)
-        viewModel.addView(secondView)
-        viewModel.showingSettings = true
-
-        let delegate = AppDelegate()
-        delegate.dashboardViewModel = viewModel
-        delegate.selectView(secondView.id)
-
-        #expect(viewModel.showingSettings == false)
-        #expect(viewModel.selectedViewID == secondView.id)
     }
 }
