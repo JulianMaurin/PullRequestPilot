@@ -1,12 +1,19 @@
 import SwiftUI
 
-/// Inline banner scoped to a particular kind of error. Views that want to
-/// surface a persistent failure (e.g., hide-reviewed disabled because the
-/// viewer identity is unavailable) render this and pass a filter predicate.
+/// Inline banner for standing errors (`AppError.isStanding`). Each screen
+/// passes a filter for the errors it has no other surface for.
 struct EventBannerView: View {
     struct Action {
         let label: String
         let run: () -> Void
+
+        /// Shows a corruption backup in Finder; the file lives in the app's
+        /// own container, so the sandbox allows it.
+        static func revealBackup(atPath path: String) -> Action {
+            Action(label: "Reveal Backup") {
+                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+            }
+        }
     }
 
     let events: EventCenter

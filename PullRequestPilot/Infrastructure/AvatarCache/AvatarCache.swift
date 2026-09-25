@@ -13,7 +13,7 @@ final class AvatarCache {
     private let cache = NSCache<NSURL, NSImage>()
     private let coalescer = RequestCoalescer<URL, Data>()
     private let session: URLSession
-    private let logger = Logger(subsystem: "PullRequestPilot", category: "AvatarCache")
+    private let logger = Logger(category: "AvatarCache")
 
     init(session: URLSession? = nil) {
         cache.countLimit = 200

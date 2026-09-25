@@ -154,10 +154,25 @@ private struct WindowAccessor: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSWindowDelegate {
         weak var originalDelegate: NSWindowDelegate?
+        /// Hiding a full-screen window leaves its empty Space behind, so a
+        /// close in full screen exits full screen first and hides after.
+        private var hidesAfterExitingFullScreen = false
 
         func windowShouldClose(_ sender: NSWindow) -> Bool {
-            sender.orderOut(nil)
+            if sender.styleMask.contains(.fullScreen) {
+                hidesAfterExitingFullScreen = true
+                sender.toggleFullScreen(nil)
+            } else {
+                sender.orderOut(nil)
+            }
             return false
+        }
+
+        func windowDidExitFullScreen(_ notification: Notification) {
+            originalDelegate?.windowDidExitFullScreen?(notification)
+            guard hidesAfterExitingFullScreen, let window = notification.object as? NSWindow else { return }
+            hidesAfterExitingFullScreen = false
+            window.orderOut(nil)
         }
 
         func windowDidResize(_ notification: Notification) {

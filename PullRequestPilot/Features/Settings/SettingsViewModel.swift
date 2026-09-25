@@ -11,8 +11,12 @@ final class SettingsViewModel {
     private(set) var viewerAvatarURL: URL?
     private(set) var validationState: ValidationState = .idle
     private(set) var saveError: String?
+    /// Set when the saved token works but can't read private repositories.
+    private(set) var tokenScopeWarning: String?
     var gitDirectories: [URL] = []
-    private(set) var staleDirectoryWarning: String?
+    /// Bookmarked directories that don't resolve right now (disk not mounted,
+    /// folder moved); retried on every reload.
+    private(set) var unavailableDirectoryPaths: [String] = []
     private(set) var launchAtLoginEnabled: Bool
     private(set) var launchAtLoginError: String?
     /// True while a signed-in user is entering a replacement token.
@@ -25,7 +29,7 @@ final class SettingsViewModel {
     private let reporter: EventReporter
     private let rescanTaskStorage = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
     private let invalidationObservationStorage = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Settings")
+    private let logger = Logger(category: "Settings")
 
     enum ValidationState: Equatable {
         case idle
@@ -52,10 +56,7 @@ final class SettingsViewModel {
             self.validationState = .invalid("Couldn't read your saved token from the Keychain (\(tokenReadFailure)). Unlock the Keychain and relaunch, or paste the token again.")
         }
         self.gitDirectories = gitDirectoriesStore.load()
-        if gitDirectoriesStore.lastPrunedStaleCount > 0 {
-            let count = gitDirectoriesStore.lastPrunedStaleCount
-            self.staleDirectoryWarning = "\(count) directory bookmark\(count == 1 ? " was" : "s were") removed because \(count == 1 ? "it is" : "they are") no longer accessible. Re-add \(count == 1 ? "it" : "them") using the Add Directory button."
-        }
+        self.unavailableDirectoryPaths = gitDirectoriesStore.unavailableDirectoryPaths
 
         let prInterval = defaults.double(forKey: Constants.UserDefaultsKeys.prRefreshInterval)
         self.prRefreshInterval = prInterval > 0 ? prInterval : Constants.App.defaultPRRefreshInterval
@@ -96,6 +97,7 @@ final class SettingsViewModel {
     func save() async {
         let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
         saveError = nil
+        tokenScopeWarning = nil
         validationState = .validating
 
         logger.info("Validating token against GitHub API...")
@@ -106,9 +108,16 @@ final class SettingsViewModel {
             // confirmed mid-save can't be overwritten by a late resume.
             viewerLogin = viewer.login
             viewerAvatarURL = viewer.avatarURL
+            tokenScopeWarning = viewer.lacksPrivateRepositoryAccess ? Self.missingRepoScopeWarning : nil
             isChangingToken = false
             hasSavedToken = true
             validationState = .valid
+            reporter.resolve { error in
+                switch error {
+                case .unauthorized, .permissionDenied, .tokenSaveFailed: return true
+                default: return false
+                }
+            }
             logger.info("Token validated — authenticated as \(viewer.login, privacy: .private)")
         } catch is CancellationError {
             validationState = .idle
@@ -129,11 +138,14 @@ final class SettingsViewModel {
         }
     }
 
+    static let missingRepoScopeWarning = "This token doesn't have the repo scope, so pull requests in private repositories won't appear. Create a token with the repo scope to see them."
+
     func clearToken() async {
         await identity.invalidate(reason: .userSignedOut)
         token = ""
         viewerLogin = nil
         viewerAvatarURL = nil
+        tokenScopeWarning = nil
         isChangingToken = false
         validationState = .idle
         hasSavedToken = false
@@ -163,6 +175,7 @@ final class SettingsViewModel {
         token = ""
         viewerLogin = nil
         viewerAvatarURL = nil
+        tokenScopeWarning = nil
         isChangingToken = false
         hasSavedToken = false
         validationState = .invalid("GitHub rejected the saved token — it may have expired or been revoked. Paste a new one to continue; your views are kept.")
@@ -224,12 +237,7 @@ final class SettingsViewModel {
         localRepositoryService.stopPeriodicRefresh()
         let store = gitDirectoriesStore
         localRepositoryService.startPeriodicRefresh(
-            directories: {
-                // startAccessing is balanced by stopAccessing when directories are
-                // removed via SettingsViewModel. The initial access started in
-                // AppState.init() covers these URLs for the app's lifetime.
-                store.load()
-            },
+            directories: { store.load() },
             interval: repoScanInterval
         )
     }
@@ -269,6 +277,20 @@ final class SettingsViewModel {
         gitDirectories.removeAll { $0 == url }
         gitDirectoriesStore.save(gitDirectories)
         triggerRescan()
+    }
+
+    func removeUnavailableDirectory(atPath path: String) {
+        gitDirectoriesStore.removeUnavailableDirectory(atPath: path)
+        unavailableDirectoryPaths = gitDirectoriesStore.unavailableDirectoryPaths
+    }
+
+    /// Re-resolves the bookmarks, picking up directories whose disk came back.
+    func reloadGitDirectories() {
+        let directories = gitDirectoriesStore.load()
+        if directories != gitDirectories {
+            gitDirectories = directories
+        }
+        unavailableDirectoryPaths = gitDirectoriesStore.unavailableDirectoryPaths
     }
 
     func rescan() {

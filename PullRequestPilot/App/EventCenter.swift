@@ -7,16 +7,24 @@ import os
 /// or dismiss events (stores, non-UI services) hold this instead of the full
 /// center. Sendable so it can cross actor boundaries.
 struct EventReporter: Sendable {
-    private let _post: @Sendable (AppEvent) -> Void
+    typealias ErrorMatch = @Sendable (AppError) -> Bool
 
-    init(post: @escaping @Sendable (AppEvent) -> Void) {
+    private let _post: @Sendable (AppEvent) -> Void
+    private let _resolve: @Sendable (@escaping ErrorMatch) -> Void
+
+    init(post: @escaping @Sendable (AppEvent) -> Void, resolve: @escaping @Sendable (@escaping ErrorMatch) -> Void = { _ in }) {
         self._post = post
+        self._resolve = resolve
     }
 
     func post(_ event: AppEvent) { _post(event) }
     func postError(_ error: AppError) { _post(.error(error)) }
     func postInfo(_ text: String) { _post(.info(text)) }
     func postWarning(_ text: String) { _post(.warning(text)) }
+
+    /// The subsystem recovered: clears matching errors from every surface,
+    /// including the standing banner.
+    func resolve(matching match: @escaping ErrorMatch) { _resolve(match) }
 
     /// A no-op reporter — used in tests or contexts where no user surface exists.
     static let noop = EventReporter(post: { _ in })
@@ -37,10 +45,12 @@ final class EventCenter {
     /// dismissed nor timed out.
     var activeEvents: [AppEvent] { events.filter { !dismissed.contains($0.id) && !autoDismissed.contains($0.id) } }
 
-    /// The entries rendered by inline banners (persistent surfaces). A timed
-    /// toast expiry hides the toast only; a banner clears on explicit
-    /// dismissal or a recovery `dismissAll(matching:)`.
-    var standingEvents: [AppEvent] { events.filter { !dismissed.contains($0.id) } }
+    /// The entries rendered by inline banners: standing errors
+    /// (`AppError.isStanding`) that are neither dismissed nor resolved. A timed
+    /// toast expiry hides the toast only.
+    var standingEvents: [AppEvent] {
+        events.filter { !dismissed.contains($0.id) && $0.appError?.isStanding == true }
+    }
 
     /// IDs hidden everywhere (user dismissal or subsystem recovery).
     /// Invariant: always a subset of `events`' IDs — pruned when overflow
@@ -54,7 +64,7 @@ final class EventCenter {
     private let autoDismissTasksStorage = OSAllocatedUnfairLock<[UUID: Task<Void, Never>]>(initialState: [:])
     private let maxHistory: Int
     private let clock: any Clock<Duration>
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "EventCenter")
+    private let logger = Logger(category: "EventCenter")
 
     init(maxHistory: Int = 50, clock: any Clock<Duration> = ContinuousClock()) {
         self.maxHistory = maxHistory
@@ -147,10 +157,10 @@ final class EventCenter {
         scheduleAutoDismiss(id: id, after: duration)
     }
 
-    /// Dismiss every error with this exact case (ignoring associated values).
-    /// Used when a subsystem recovers and wants to clear its prior banner.
+    /// Dismiss every error the predicate matches. Used when a subsystem
+    /// recovers and wants to clear its prior toast and banner.
     func dismissAll(matching match: (AppError) -> Bool) {
-        for event in events {
+        for event in events where !dismissed.contains(event.id) {
             if case .error(let err) = event.payload, match(err) {
                 dismissed.insert(event.id)
                 autoDismissed.remove(event.id)
@@ -163,10 +173,16 @@ final class EventCenter {
 
     /// Write-only view for layers that post but never read.
     func reporter() -> EventReporter {
-        EventReporter { [weak self] event in
-            guard let self else { return }
-            Task { @MainActor in self.post(event) }
-        }
+        EventReporter(
+            post: { [weak self] event in
+                guard let self else { return }
+                Task { @MainActor in self.post(event) }
+            },
+            resolve: { [weak self] match in
+                guard let self else { return }
+                Task { @MainActor in self.dismissAll(matching: match) }
+            }
+        )
     }
 
     // MARK: - Private

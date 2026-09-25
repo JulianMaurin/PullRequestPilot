@@ -77,7 +77,7 @@ final class LogExportService {
         let predicate = "subsystem == \"\(bundleID)\""
         let wrote = await pasteboard.setString(predicate)
         if !wrote {
-            Logger(subsystem: bundleID, category: "LogExport")
+            Logger(category: "LogExport")
                 .warning("Pasteboard write failed — user must type the predicate manually in Console.")
         }
 

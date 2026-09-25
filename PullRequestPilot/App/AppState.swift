@@ -32,7 +32,7 @@ final class AppState {
             storedToken = try IdentityActor.readStoredToken(from: keychain)
             tokenReadFailure = nil
         } catch {
-            Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "AppState")
+            Logger(category: "AppState")
                 .error("Keychain read failed at launch: \(error, privacy: .public)")
             storedToken = nil
             tokenReadFailure = error.localizedDescription
@@ -56,7 +56,6 @@ final class AppState {
         let gitDirectoriesStore = GitDirectoriesStore(defaults: defaults, reporter: reporter)
         let localRepositoryService = LocalRepositoryService(reporter: reporter)
 
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.pullrequestpilot.app"
         let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–"
         let appBuild = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "–"
         let osVersion = ProcessInfo.processInfo.operatingSystemVersionString
@@ -65,7 +64,7 @@ final class AppState {
             store: OSLogEntrySource(),
             pasteboard: NSPasteboardAdapter(),
             workspace: NSWorkspaceAdapter(),
-            bundleID: bundleID,
+            bundleID: Logger.appSubsystem,
             appVersion: appVersion,
             appBuild: appBuild,
             osVersion: osVersion
@@ -93,6 +92,8 @@ final class AppState {
             viewsStore: viewsStore,
             localRepositoryService: localRepositoryService,
             defaults: defaults,
+            notificationCenter: SystemUserNotificationCenter(),
+            widgetDestination: .appGroup,
             reporter: reporter,
             availabilityEvents: systemAvailabilityMonitor.events
         )
@@ -106,10 +107,6 @@ final class AppState {
             tokenReadFailure: tokenReadFailure
         )
 
-        // Start security-scoped access for bookmarked directories
-        let initialDirectories = gitDirectoriesStore.load()
-        gitDirectoriesStore.startAccessing(initialDirectories)
-
         // Start auto-refresh independently of window visibility so notifications work
         // even when the window is hidden (menu bar app). Without a token every tick
         // would fail; signing in starts it instead.
@@ -121,13 +118,9 @@ final class AppState {
         let store = gitDirectoriesStore
         let scanInterval = defaults.double(forKey: Constants.UserDefaultsKeys.repoScanInterval)
         localRepositoryService.startPeriodicRefresh(
-            directories: {
-                let dirs = store.load()
-                // startAccessing is balanced by stopAccessing when directories are
-                // removed via SettingsViewModel. For the periodic scan, the initial
-                // access started above covers these URLs for the app's lifetime.
-                return dirs
-            },
+            // load() starts security-scoped access for each directory as it
+            // resolves: at launch, or later once an unavailable disk is back.
+            directories: { store.load() },
             interval: scanInterval > 0 ? scanInterval : Constants.App.defaultRepoScanInterval
         )
     }

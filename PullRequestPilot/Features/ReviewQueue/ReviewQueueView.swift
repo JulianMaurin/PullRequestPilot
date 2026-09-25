@@ -56,16 +56,16 @@ struct ReviewQueueView: View {
             if let events {
                 EventBannerView(
                     events: events,
-                    filter: { err in
-                        if case .viewerIdentityUnavailable = err { return true }
-                        if case .bookmarkPruned = err { return true }
-                        return false
-                    },
+                    filter: \.isStanding,
                     actionFor: { err in
-                        if case .bookmarkPruned = err {
+                        switch err {
+                        case .unauthorized, .permissionDenied, .gitDirectoriesUnavailable:
                             return EventBannerView.Action(label: "Open Settings", run: onOpenSettings)
+                        case .decodeCorruption(_, let backupPath?):
+                            return EventBannerView.Action.revealBackup(atPath: backupPath)
+                        default:
+                            return nil
                         }
-                        return nil
                     }
                 )
                 .padding(.horizontal, 12)
@@ -139,6 +139,14 @@ struct ReviewQueueView: View {
                 return
             }
             isQueryFocused = false
+        }
+        // Bells show whether System Settings lets them alert; the user can
+        // change that there at any time.
+        .task {
+            await viewModel.refreshNotificationAuthorization()
+            for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) {
+                await viewModel.refreshNotificationAuthorization()
+            }
         }
         .onChange(of: viewModel.selectedViewID) {
             syncEditingQuery()
@@ -347,15 +355,27 @@ struct ReviewQueueView: View {
         if let viewID = viewModel.selectedViewID,
            let dashView = viewModel.views.first(where: { $0.id == viewID }) {
             HStack(spacing: 2) {
-                viewToggleButton(
-                    icon: viewModel.isNotificationEnabled(for: viewID) ? "bell.fill" : "bell",
-                    isOn: viewModel.isNotificationEnabled(for: viewID),
-                    helpOn: "Disable notifications",
-                    helpOff: "Enable notifications"
-                ) {
-                    let on = !viewModel.isNotificationEnabled(for: viewID)
-                    viewModel.setNotification(for: viewID, enabled: on)
-                    if on { Task { await viewModel.ensureNotificationPermission(for: viewID) } }
+                if viewModel.isNotificationBlocked(for: viewID) {
+                    viewToggleButton(
+                        icon: "bell.slash.fill",
+                        isOn: true,
+                        tint: .orange,
+                        helpOn: "Notifications are off in System Settings. Click to turn this view's bell off.",
+                        helpOff: "Enable notifications"
+                    ) {
+                        viewModel.setNotification(for: viewID, enabled: false)
+                    }
+                } else {
+                    viewToggleButton(
+                        icon: viewModel.isNotificationEnabled(for: viewID) ? "bell.fill" : "bell",
+                        isOn: viewModel.isNotificationEnabled(for: viewID),
+                        helpOn: "Disable notifications",
+                        helpOff: "Enable notifications"
+                    ) {
+                        let on = !viewModel.isNotificationEnabled(for: viewID)
+                        viewModel.setNotification(for: viewID, enabled: on)
+                        if on { Task { await viewModel.ensureNotificationPermission() } }
+                    }
                 }
 
                 viewToggleButton(
@@ -379,11 +399,11 @@ struct ReviewQueueView: View {
         }
     }
 
-    private func viewToggleButton(icon: String, isOn: Bool, helpOn: String, helpOff: String, action: @escaping () -> Void) -> some View {
+    private func viewToggleButton(icon: String, isOn: Bool, tint: Color = .accentColor, helpOn: String, helpOff: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.caption)
-                .foregroundStyle(isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
+                .foregroundStyle(isOn ? AnyShapeStyle(tint) : AnyShapeStyle(.quaternary))
                 .frame(width: 20, height: 20)
                 .contentShape(Rectangle())
         }
@@ -816,20 +836,22 @@ struct ReviewQueueView: View {
         }
 
         if isExpanded {
-            ForEach(stack.children) { child in
-                pullRequestItem(child, stackSize: 0, isStacked: true) {}
+            ForEach(stack.children) { member in
+                pullRequestItem(member.pullRequest, stackSize: 0, stackDepth: member.depth) {}
             }
         }
     }
 
+    /// `stackDepth` 0 is a stack root or a standalone PR; deeper members are
+    /// indented one step per level.
     private func pullRequestItem(
         _ pr: PullRequest,
         stackSize: Int,
-        isStacked: Bool = false,
+        stackDepth: Int = 0,
         onToggleStack: @escaping () -> Void
     ) -> some View {
         HStack(spacing: 0) {
-            if isStacked {
+            if stackDepth > 0 {
                 HStack(spacing: 4) {
                     Rectangle()
                         .fill(.quaternary)
@@ -839,6 +861,7 @@ struct ReviewQueueView: View {
                         .foregroundStyle(.tertiary)
                 }
                 .frame(width: 24)
+                .padding(.leading, CGFloat(stackDepth - 1) * 16)
             }
             PullRequestRowView(pullRequest: pr, stackSize: stackSize, onToggleStack: onToggleStack, onFilterBy: appendFilter) {
                 Menu("Open in") {

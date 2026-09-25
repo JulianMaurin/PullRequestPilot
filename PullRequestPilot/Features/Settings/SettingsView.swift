@@ -3,12 +3,14 @@ import SwiftUI
 struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
     @Bindable var viewModel: SettingsViewModel
     var dashboard: Dashboard
+    var events: EventCenter?
     var isInitialSetup: Bool = false
     var onDismiss: (() -> Void)?
     @State private var showResetConfirmation = false
     @State private var presetToReset: DashboardView?
     @State private var showSignOutConfirmation = false
     @State private var directoryToRemove: URL?
+    @State private var unavailableDirectoryToRemove: String?
     var body: some View {
         Form {
             Section {
@@ -42,22 +44,28 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
                             }
                         }
                     }
+                    if let warning = viewModel.tokenScopeWarning {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                            Text(warning)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .font(.caption)
+                    }
                 } else {
                     SecureField("Personal Access Token", text: $viewModel.token)
                         .textFieldStyle(.roundedBorder)
+                        .onSubmit {
+                            if canSaveToken { saveTokenAndStart() }
+                        }
 
                     HStack {
                         Button("Save & Validate") {
-                            Task {
-                                await viewModel.save()
-                                if viewModel.validationState == .valid {
-                                    dashboard.startAutoRefresh()
-                                    viewModel.restartRepoScan()
-                                    await dashboard.refreshAll()
-                                }
-                            }
+                            saveTokenAndStart()
                         }
-                        .disabled(!viewModel.hasToken || viewModel.validationState == .validating)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(!canSaveToken)
 
                         if viewModel.isChangingToken {
                             Button("Cancel") {
@@ -96,19 +104,32 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
                 Text("GitHub Token")
             } footer: {
                 if viewModel.viewerLogin == nil || viewModel.isChangingToken {
-                    Text("Create a token at github.com/settings/tokens with the `repo` scope.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Link("Create a classic token with the repo scope…", destination: Constants.URLs.newClassicToken)
+                        Text("A fine-grained token needs read access to Pull requests, Checks and Commit statuses on the repositories you review, plus write access to Pull requests to change drafts.")
+                        Text("If an organization uses SAML single sign-on, authorize the token for it on GitHub.")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
             }
             .task(id: "token-validation") {
                 if viewModel.hasSavedToken, viewModel.viewerLogin == nil, viewModel.validationState == .idle {
-                    await viewModel.save()
-                    if viewModel.validationState == .valid {
-                        dashboard.startAutoRefresh()
-                        viewModel.restartRepoScan()
-                        await dashboard.refreshAll()
+                    await validateTokenAndStart()
+                }
+            }
+
+            // First run: directly below the token, visible without scrolling.
+            if isInitialSetup && viewModel.validationState == .valid {
+                Section {
+                    Button {
+                        onDismiss?()
+                    } label: {
+                        Text("Get Started")
+                            .frame(maxWidth: .infinity)
                     }
+                    .controlSize(.large)
+                    .buttonStyle(.borderedProminent)
                 }
             }
 
@@ -196,9 +217,11 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
             .task {
                 await dashboard.refreshNotificationAuthorization()
                 viewModel.refreshLaunchAtLoginStatus()
+                viewModel.reloadGitDirectories()
                 for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) {
                     await dashboard.refreshNotificationAuthorization()
                     viewModel.refreshLaunchAtLoginStatus()
+                    viewModel.reloadGitDirectories()
                 }
             }
 
@@ -220,6 +243,31 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
                         .buttonStyle(.plain)
                         .help("Remove directory")
                         .accessibilityLabel("Remove directory \(directory.lastPathComponent)")
+                    }
+                }
+
+                ForEach(viewModel.unavailableDirectoryPaths, id: \.self) { path in
+                    HStack {
+                        Image(systemName: "externaldrive.badge.xmark")
+                            .foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(path)
+                                .lineLimit(1)
+                                .truncationMode(.head)
+                            Text("Unavailable: reconnect its disk, or remove it if it's gone.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button {
+                            unavailableDirectoryToRemove = path
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .foregroundStyle(.red)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Remove directory")
+                        .accessibilityLabel("Remove unavailable directory \((path as NSString).lastPathComponent)")
                     }
                 }
 
@@ -248,14 +296,6 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Directories containing cloned repositories. Used to locate PRs on disk and open them in your editor.")
-                    if let warning = viewModel.staleDirectoryWarning {
-                        HStack(alignment: .top, spacing: 4) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
-                            Text(warning)
-                        }
-                        .foregroundStyle(.orange)
-                    }
                     scanStatus
                 }
                 .font(.caption)
@@ -274,20 +314,32 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
                 Text("About")
             }
 
-            if isInitialSetup && viewModel.validationState == .valid {
-                Section {
-                    Button {
-                        onDismiss?()
-                    } label: {
-                        Text("Get Started")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .controlSize(.large)
-                    .buttonStyle(.borderedProminent)
-                }
-            }
         }
         .formStyle(.grouped)
+        .safeAreaInset(edge: .top) {
+            if let events {
+                EventBannerView(
+                    events: events,
+                    filter: { error in
+                        switch error {
+                        // The token section shows these next to the field.
+                        case .unauthorized, .tokenSaveFailed:
+                            return false
+                        default:
+                            return error.isStanding
+                        }
+                    },
+                    actionFor: { error in
+                        if case .decodeCorruption(_, let backupPath?) = error {
+                            return .revealBackup(atPath: backupPath)
+                        }
+                        return nil
+                    }
+                )
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+            }
+        }
         .frame(minWidth: 450, minHeight: 250)
         .confirmationDialog(
             "Sign out of GitHub?",
@@ -318,6 +370,40 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
             Button("Cancel", role: .cancel) { directoryToRemove = nil }
         } message: { directory in
             Text("Pull Request Pilot will stop matching pull requests to repositories under \(directory.path).")
+        }
+        .confirmationDialog(
+            "Remove this unavailable directory?",
+            isPresented: Binding(
+                get: { unavailableDirectoryToRemove != nil },
+                set: { if !$0 { unavailableDirectoryToRemove = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: unavailableDirectoryToRemove
+        ) { path in
+            Button("Remove", role: .destructive) {
+                viewModel.removeUnavailableDirectory(atPath: path)
+                unavailableDirectoryToRemove = nil
+            }
+            Button("Cancel", role: .cancel) { unavailableDirectoryToRemove = nil }
+        } message: { path in
+            Text("To use \(path) again later, add it with Add Directory.")
+        }
+    }
+
+    private var canSaveToken: Bool {
+        viewModel.hasToken && viewModel.validationState != .validating
+    }
+
+    private func saveTokenAndStart() {
+        Task { await validateTokenAndStart() }
+    }
+
+    private func validateTokenAndStart() async {
+        await viewModel.save()
+        if viewModel.validationState == .valid {
+            dashboard.startAutoRefresh()
+            viewModel.restartRepoScan()
+            await dashboard.refreshAll()
         }
     }
 

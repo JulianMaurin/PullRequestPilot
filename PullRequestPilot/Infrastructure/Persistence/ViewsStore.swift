@@ -17,7 +17,7 @@ final class ViewsStore: ViewsStoreProtocol {
     private static let key = "dashboard_views"
     private let defaults: UserDefaults
     private let reporter: EventReporter
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "ViewsStore")
+    private let logger = Logger(category: "ViewsStore")
 
     init(defaults: UserDefaults, reporter: EventReporter = .noop) {
         self.defaults = defaults
@@ -80,7 +80,7 @@ final class ViewsStore: ViewsStoreProtocol {
                 create: true
             )
         } catch {
-            Logger(subsystem: bundleID, category: "ViewsStore")
+            Logger(category: "ViewsStore")
                 .error("Application Support directory unavailable: \(error, privacy: .public)")
             return nil
         }

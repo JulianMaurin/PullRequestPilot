@@ -44,6 +44,28 @@ struct ChecksPage: Sendable {
     let nextCursor: String?
 }
 
+/// The account a token belongs to, and what it may read.
+struct TokenValidation: Sendable, Equatable {
+    let login: String
+    let avatarURL: URL?
+    /// A classic token's scopes (`X-OAuth-Scopes`); nil for fine-grained
+    /// tokens, which don't report scopes.
+    let classicTokenScopes: Set<String>?
+
+    init(login: String, avatarURL: URL?, classicTokenScopes: Set<String>? = nil) {
+        self.login = login
+        self.avatarURL = avatarURL
+        self.classicTokenScopes = classicTokenScopes
+    }
+
+    /// A classic token without `repo` validates, but private repositories'
+    /// pull requests never appear in its searches.
+    var lacksPrivateRepositoryAccess: Bool {
+        guard let classicTokenScopes else { return false }
+        return !classicTokenScopes.contains("repo")
+    }
+}
+
 protocol GitHubClientProtocol: Sendable {
     func fetchPullRequests(query: String, cursor: String?, pageSize: Int) async throws -> PullRequestPage
     func fetchTimeline(nodeID: String, cursor: String?, eventPageOffset: Int, checksPageOffset: Int) async throws -> TimelinePage
@@ -51,7 +73,7 @@ protocol GitHubClientProtocol: Sendable {
     func fetchViewer() async throws -> (login: String, avatarURL: URL?)
     /// Validates an explicit token against the GitHub API, bypassing the
     /// ambient token provider. Used by IdentityActor.swap before committing.
-    func validateToken(_ token: String) async throws -> (login: String, avatarURL: URL?)
+    func validateToken(_ token: String) async throws -> TokenValidation
     /// Converts an open pull request to draft, or marks a draft ready for review.
     /// Throws unless GitHub reports the requested state afterwards.
     func setDraft(pullRequestID: String, isDraft: Bool) async throws
@@ -157,12 +179,12 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
     private let tokenProvider: @Sendable () async -> String?
     private let onUnauthorized: @Sendable (String) -> Void
     private let session: URLSession
-    private let logger = Logger(subsystem: "PullRequestPilot", category: "GitHubClient")
+    private let logger = Logger(category: "GitHubClient")
 
     /// Coalesces concurrent identical reads (same query + token) into a single
     /// network round-trip. Two dashboard views polling the same repo, or two
     /// `refreshAll` calls overlapping, now share one request instead of racing.
-    private let networkCoalescer = RequestCoalescer<NetworkKey, Data>()
+    private let networkCoalescer = RequestCoalescer<NetworkKey, RawResponse>()
 
     private struct NetworkKey: Hashable, Sendable {
         let query: String
@@ -277,9 +299,20 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         return try viewerResult(from: response)
     }
 
-    func validateToken(_ token: String) async throws -> (login: String, avatarURL: URL?) {
-        let response: GraphQLResponse<ViewerData> = try await execute(query: GitHubGraphQL.viewerQuery, overrideToken: token)
-        return try viewerResult(from: response)
+    func validateToken(_ token: String) async throws -> TokenValidation {
+        let raw = try await fetchRawResponse(query: GitHubGraphQL.viewerQuery, token: token)
+        let response: GraphQLResponse<ViewerData> = try decode(raw.body)
+        let viewer = try viewerResult(from: response)
+        return TokenValidation(
+            login: viewer.login,
+            avatarURL: viewer.avatarURL,
+            classicTokenScopes: raw.oauthScopes.map(Self.parseScopes)
+        )
+    }
+
+    /// `X-OAuth-Scopes` lists scopes separated by commas and spaces.
+    static func parseScopes(_ header: String) -> Set<String> {
+        Set(header.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
     }
 
     func setDraft(pullRequestID: String, isDraft: Bool) async throws {
@@ -329,8 +362,11 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             throw GitHubClientError.unauthorized
         }
 
-        let data = try await fetchRawData(query: query, token: token)
+        let raw = try await fetchRawResponse(query: query, token: token)
+        return try decode(raw.body)
+    }
 
+    private func decode<T: Decodable>(_ data: Data) throws -> GraphQLResponse<T> {
         do {
             return try JSONDecoder().decode(GraphQLResponse<T>.self, from: data)
         } catch {
@@ -344,10 +380,15 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
         }
     }
 
+    private struct RawResponse: Sendable {
+        let body: Data
+        let oauthScopes: String?
+    }
+
     /// Performs the network round-trip and HTTP status classification, returning
-    /// raw response bytes. Coalesced on (query, token): concurrent callers with
+    /// the raw response. Coalesced on (query, token): concurrent callers with
     /// the same key share a single request, decode independently.
-    private func fetchRawData(query: String, token: String) async throws -> Data {
+    private func fetchRawResponse(query: String, token: String) async throws -> RawResponse {
         let key = NetworkKey(query: query, token: token)
         let session = self.session
         let onUnauthorized = self.onUnauthorized
@@ -398,7 +439,8 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
                 }
             }
 
-            return data
+            let oauthScopes = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "X-OAuth-Scopes")
+            return RawResponse(body: data, oauthScopes: oauthScopes)
         }
     }
 

@@ -24,7 +24,7 @@ final class AutoRefreshScheduler {
     /// can isolate schedulers from posts made by parallel suites.
     private let notificationCenter: NotificationCenter
 
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "AutoRefresh")
+    private let logger = Logger(category: "AutoRefresh")
 
     /// Tick closure passed to `start()`. Kept on the scheduler so the
     /// interval-observer can restart the loop without the owner having to

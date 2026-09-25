@@ -10,7 +10,7 @@ import os
 actor IdentityActor {
     private let keychain: KeychainService
     private let github: GitHubClientProtocol
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Identity")
+    private let logger = Logger(category: "Identity")
 
     private(set) var state: IdentityState = .unauthenticated
     /// Bumped on every state mutation. Observers that launch async work capture
@@ -123,13 +123,13 @@ actor IdentityActor {
     /// atomically, and commits state. On any failure, throws and leaves prior
     /// state untouched. `CancellationError` is rethrown as-is.
     @discardableResult
-    func swap(to newToken: String) async throws -> (login: String, avatarURL: URL?) {
+    func swap(to newToken: String) async throws -> TokenValidation {
         let trimmed = newToken.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw AuthError(reason: .invalidToken)
         }
 
-        let viewer: (login: String, avatarURL: URL?)
+        let viewer: TokenValidation
         do {
             viewer = try await github.validateToken(trimmed)
         } catch is CancellationError {

@@ -9,19 +9,37 @@ final class NotificationService {
 
     // MARK: - Properties
 
+    /// The views whose bell the user turned on. System authorization never
+    /// changes it: a bell turned on while notifications are off in System
+    /// Settings stays on and alerts once they're back.
     private(set) var enabledViewIDs: Set<String> = []
-    private(set) var systemAuthorized: Bool = false
+    /// nil until the first check.
+    private(set) var systemAuthorizationStatus: UNAuthorizationStatus?
+
+    var systemAuthorized: Bool {
+        switch systemAuthorizationStatus {
+        case .authorized, .provisional, .ephemeral: true
+        default: false
+        }
+    }
+
+    /// Notifications are off for the app in System Settings: enabled bells
+    /// can't alert.
+    var systemDenied: Bool { systemAuthorizationStatus == .denied }
+
+    static let deniedExplanation = "Notifications are off for Pull Request Pilot in System Settings, so bells can't alert you. Turn them on from Settings › Notifications."
 
     private let defaults: UserDefaults
+    private let center: any UserNotificationCenterProtocol
     private let reporter: EventReporter
-    private let logger: Logger
+    private let logger = Logger(category: "Notifications")
 
     // MARK: - Init
 
-    init(defaults: UserDefaults, reporter: EventReporter = .noop) {
+    init(defaults: UserDefaults, center: any UserNotificationCenterProtocol, reporter: EventReporter = .noop) {
         self.defaults = defaults
+        self.center = center
         self.reporter = reporter
-        self.logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Notifications")
         self.enabledViewIDs = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.notifiedViewIDs) ?? [])
     }
 
@@ -41,48 +59,40 @@ final class NotificationService {
     }
 
     func refreshAuthorization() async {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        systemAuthorized = settings.authorizationStatus == .authorized
-        if !systemAuthorized {
-            enabledViewIDs = []
-            persistEnabledViewIDs()
-        }
+        systemAuthorizationStatus = await center.authorizationStatus()
     }
 
-    func ensurePermission(for viewID: UUID) async {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-
-        switch settings.authorizationStatus {
-        case .notDetermined:
-            let granted = await requestPermission()
-            systemAuthorized = granted
-            if !granted {
-                setEnabled(for: viewID, enabled: false)
-            }
-        case .denied:
-            systemAuthorized = false
-            setEnabled(for: viewID, enabled: false)
-        case .authorized, .provisional, .ephemeral:
-            systemAuthorized = true
-        @unknown default:
-            break
+    /// Called when a bell turns on: asks for permission the first time, and
+    /// explains a denial instead of turning the bell back off.
+    func ensurePermission() async {
+        var status = await center.authorizationStatus()
+        if status == .notDetermined {
+            _ = await requestPermission()
+            status = await center.authorizationStatus()
+        }
+        systemAuthorizationStatus = status
+        if status == .denied {
+            reporter.postWarning(Self.deniedExplanation)
         }
     }
 
     func requestPermissionAndOpenSettings() async {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        if settings.authorizationStatus == .notDetermined {
-            let granted = await requestPermission()
-            systemAuthorized = granted
+        if await center.authorizationStatus() == .notDetermined {
+            _ = await requestPermission()
         }
+        systemAuthorizationStatus = await center.authorizationStatus()
         if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings") {
             NSWorkspace.shared.open(url)
         }
     }
 
     func deliver(viewTitle: String, viewID: UUID, addedPRs: [PullRequest]) async {
-        // Skip delivering notifications during unit tests
-        guard NSClassFromString("XCTestCase") == nil else { return }
+        let status = await center.authorizationStatus()
+        systemAuthorizationStatus = status
+        guard systemAuthorized else {
+            logger.info("Skipping a notification: not authorized in System Settings")
+            return
+        }
 
         let content = UNMutableNotificationContent()
         content.title = viewTitle
@@ -107,7 +117,7 @@ final class NotificationService {
         )
 
         do {
-            try await UNUserNotificationCenter.current().add(request)
+            try await center.add(request)
         } catch is CancellationError {
             return
         } catch {
@@ -130,7 +140,7 @@ final class NotificationService {
 
     private func requestPermission() async -> Bool {
         do {
-            return try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+            return try await center.requestAuthorization(options: [.alert, .sound])
         } catch {
             return handlePermissionError(error)
         }

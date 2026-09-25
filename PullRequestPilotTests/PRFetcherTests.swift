@@ -25,9 +25,10 @@ struct PRFetcherTests {
     @MainActor
     private static func makeFetcher(
         client: MockGitHubClient,
-        filter: @escaping PRFetcher.PRFilter = PRFetcherTests.identityFilter
+        filter: @escaping PRFetcher.PRFilter = PRFetcherTests.identityFilter,
+        reporter: EventReporter = .noop
     ) -> PRFetcher {
-        PRFetcher(gitHubClient: client, filter: filter)
+        PRFetcher(gitHubClient: client, filter: filter, reporter: reporter)
     }
 
     @MainActor
@@ -53,6 +54,25 @@ struct PRFetcherTests {
             try await Task.sleep(for: .seconds(20))
             await client.failAllPending()
         }
+    }
+
+    // MARK: - Reporting
+
+    @MainActor
+    @Test("a failed refresh toasts its error; the next success resolves a transient 401")
+    func refreshFailureToastsAndSuccessResolves() async throws {
+        let client = MockGitHubClient()
+        let recorder = EventRecorder()
+        let fetcher = Self.makeFetcher(client: client, reporter: recorder.reporter())
+        let view = Self.makeView()
+
+        await client.setErrorToThrow(GitHubClientError.unauthorized)
+        await fetcher.refresh(for: view)
+        #expect(recorder.unresolvedErrors == [.unauthorized])
+
+        await client.setErrorToThrow(nil)
+        await fetcher.refresh(for: view)
+        #expect(recorder.unresolvedErrors.isEmpty)
     }
 
     // MARK: - state access
@@ -597,8 +617,8 @@ private actor GatedGitHubClient: GitHubClientProtocol {
         (login: "testuser", avatarURL: nil)
     }
 
-    func validateToken(_ token: String) async throws -> (login: String, avatarURL: URL?) {
-        (login: "testuser", avatarURL: nil)
+    func validateToken(_ token: String) async throws -> TokenValidation {
+        TokenValidation(login: "testuser", avatarURL: nil)
     }
 
     func setDraft(pullRequestID: String, isDraft: Bool) async throws {}

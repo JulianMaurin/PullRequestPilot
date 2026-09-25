@@ -2,6 +2,20 @@ import Foundation
 import os
 import WidgetKit
 
+/// Where `WidgetSync` writes the widgets' data and how it asks WidgetKit to
+/// reload. `AppState` passes the app-group file; tests pass a temporary one.
+struct WidgetDestination: Sendable {
+    /// nil when the app-group container is unavailable.
+    let fileURL: URL?
+    let reloadTimelines: @Sendable () -> Void
+
+    static var appGroup: WidgetDestination {
+        WidgetDestination(fileURL: WidgetData.appGroupFileURL) {
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+    }
+}
+
 @MainActor
 final class WidgetSync {
 
@@ -9,11 +23,8 @@ final class WidgetSync {
 
     private let buildWidgetData: @MainActor () -> WidgetData
     private let throttleInterval: TimeInterval
-    /// Write destination override; nil uses the shared app-group container.
-    /// Injected by tests so writes never touch real widget data.
-    private let storageURL: URL?
-    private let reloadTimelines: @Sendable () -> Void
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "WidgetSync")
+    private let destination: WidgetDestination
+    private let logger = Logger(category: "WidgetSync")
 
     private var lastSyncAt: Date?
     /// Content of the last write that triggered a timeline reload.
@@ -24,14 +35,12 @@ final class WidgetSync {
 
     init(
         throttleInterval: TimeInterval = 0.5,
-        storageURL: URL? = nil,
-        reloadTimelines: @escaping @Sendable () -> Void = WidgetSync.reloadRealTimelines,
+        destination: WidgetDestination,
         buildWidgetData: @escaping @MainActor () -> WidgetData
     ) {
         self.buildWidgetData = buildWidgetData
         self.throttleInterval = throttleInterval
-        self.storageURL = storageURL
-        self.reloadTimelines = reloadTimelines
+        self.destination = destination
     }
 
     deinit {
@@ -70,26 +79,18 @@ final class WidgetSync {
     func writeNow() {
         pendingSyncTask.withLock { $0?.cancel(); $0 = nil }
         let data = buildWidgetData()
-        if let storageURL {
-            data.save(to: storageURL)
-        } else {
-            data.save()
+        guard let fileURL = destination.fileURL else {
+            logger.error("App-group container unavailable; widgets can't be updated")
+            return
         }
+        data.save(to: fileURL)
         lastSyncAt = .now
         guard data.views != lastReloadedViews else { return }
         lastReloadedViews = data.views
-        reloadTimelines()
+        destination.reloadTimelines()
     }
 
     // MARK: - Private
-
-    /// Default reload action. Skips the real WidgetCenter poke under unit
-    /// tests (same guard as NotificationService.deliver) — DashboardViewModel
-    /// builds its own WidgetSync, so tests cannot inject a no-op there.
-    private nonisolated static func reloadRealTimelines() {
-        guard NSClassFromString("XCTestCase") == nil else { return }
-        WidgetCenter.shared.reloadAllTimelines()
-    }
 
     private func scheduleDeferredWrite(after delay: TimeInterval) {
         let task = Task { @MainActor [weak self] in

@@ -227,7 +227,7 @@ struct EventCenterTests {
     func requiresActionErrorLongerWindow() {
         #expect(AppEvent.error(.unauthorized).autoDismissAfter == .seconds(20))
         #expect(AppEvent.error(.permissionDenied(detail: nil)).autoDismissAfter == .seconds(20))
-        #expect(AppEvent.error(.bookmarkPruned(count: 2)).autoDismissAfter == .seconds(20))
+        #expect(AppEvent.error(.gitDirectoriesUnavailable(count: 2)).autoDismissAfter == .seconds(20))
         #expect(AppEvent.error(.tokenSaveFailed(underlying: "x")).autoDismissAfter == .seconds(20))
         #expect(AppEvent.error(.decodeCorruption(subsystem: "views", backupPath: nil)).autoDismissAfter == .seconds(20))
     }
@@ -237,7 +237,7 @@ struct EventCenterTests {
     @Test("toast expiry keeps the event standing for banners")
     func toastExpiryKeepsStanding() async throws {
         let center = EventCenter()
-        center.post(AppEvent(payload: .error(.bookmarkPruned(count: 1)), autoDismissAfter: .milliseconds(50)))
+        center.post(AppEvent(payload: .error(.gitDirectoriesUnavailable(count: 1)), autoDismissAfter: .milliseconds(50)))
         try await waitUntil { center.activeEvents.isEmpty }
 
         #expect(center.activeEvents.isEmpty)
@@ -247,7 +247,7 @@ struct EventCenterTests {
     @Test("explicit dismiss clears both the toast and the standing surface")
     func explicitDismissClearsStanding() throws {
         let center = EventCenter()
-        center.post(.error(.bookmarkPruned(count: 1)))
+        center.post(.error(.gitDirectoriesUnavailable(count: 1)))
         let id = try #require(center.events.first?.id)
         center.dismiss(id)
 
@@ -267,6 +267,39 @@ struct EventCenterTests {
             return false
         }
         #expect(center.standingEvents.isEmpty)
+    }
+
+    @Test("standing events hold only standing errors")
+    func standingEventsFilterByPolicy() {
+        let center = EventCenter()
+        center.post(.error(.network(underlying: "offline")))
+        center.post(.info("saved"))
+        center.post(.error(.viewerIdentityUnavailable))
+
+        #expect(center.standingEvents.map(\.appError) == [.viewerIdentityUnavailable])
+    }
+
+    @Test("reporter resolve clears matching standing errors and keeps the rest")
+    func reporterResolveClearsMatching() async throws {
+        let center = EventCenter()
+        center.post(.error(.viewerIdentityUnavailable))
+        center.post(.error(.decodeCorruption(subsystem: "views", backupPath: nil)))
+
+        center.reporter().resolve { $0 == .viewerIdentityUnavailable }
+        try await waitUntil { center.standingEvents.count == 1 }
+
+        #expect(center.standingEvents.first?.appError == .decodeCorruption(subsystem: "views", backupPath: nil))
+        #expect(center.activeEvents.count == 1)
+    }
+
+    @Test("unavailable directories stay one event as their count changes")
+    func unavailableDirectoriesDedupeAcrossCounts() {
+        let center = EventCenter()
+        center.post(.error(.gitDirectoriesUnavailable(count: 1)))
+        center.post(.error(.gitDirectoriesUnavailable(count: 2)))
+
+        #expect(center.events.count == 1)
+        #expect(center.events.first?.appError == .gitDirectoriesUnavailable(count: 2))
     }
 
     @Test("explicit autoDismissAfter overrides the smart default")
@@ -370,7 +403,7 @@ struct AppErrorRequiresActionTests {
     func actionRequiredCases() {
         #expect(AppError.unauthorized.requiresAction)
         #expect(AppError.permissionDenied(detail: nil).requiresAction)
-        #expect(AppError.bookmarkPruned(count: 1).requiresAction)
+        #expect(AppError.gitDirectoriesUnavailable(count: 1).requiresAction)
         #expect(AppError.tokenSaveFailed(underlying: "x").requiresAction)
         #expect(AppError.decodeCorruption(subsystem: "views", backupPath: nil).requiresAction)
     }
@@ -408,12 +441,24 @@ struct AppErrorTests {
         #expect(description.localizedStandardContains("rate limit"))
     }
 
-    @Test("bookmarkPruned description pluralizes correctly")
-    func bookmarkPrunedPlural() {
-        let one = AppError.bookmarkPruned(count: 1).errorDescription ?? ""
-        let many = AppError.bookmarkPruned(count: 3).errorDescription ?? ""
-        #expect(one.contains("1 directory"))
-        #expect(many.contains("3 directories"))
+    @Test("standing errors are the action-required ones plus the lost viewer identity")
+    func standingPolicy() {
+        #expect(AppError.unauthorized.isStanding)
+        #expect(AppError.permissionDenied(detail: nil).isStanding)
+        #expect(AppError.decodeCorruption(subsystem: "views", backupPath: "/backup").isStanding)
+        #expect(AppError.gitDirectoriesUnavailable(count: 1).isStanding)
+        #expect(AppError.viewerIdentityUnavailable.isStanding)
+        #expect(!AppError.network(underlying: "offline").isStanding)
+        #expect(!AppError.rateLimited(resetAt: nil).isStanding)
+        #expect(!AppError.widgetSaveFailed(underlying: "disk full").isStanding)
+    }
+
+    @Test("gitDirectoriesUnavailable description pluralizes correctly")
+    func gitDirectoriesUnavailablePlural() {
+        let one = AppError.gitDirectoriesUnavailable(count: 1).errorDescription ?? ""
+        let many = AppError.gitDirectoriesUnavailable(count: 3).errorDescription ?? ""
+        #expect(one.hasPrefix("A git directory is unavailable"))
+        #expect(many.hasPrefix("3 git directories are unavailable"))
     }
 }
 

@@ -531,13 +531,13 @@ private actor GatedValidationClient: GitHubClientProtocol {
         self.gatedOutcome = gatedOutcome
     }
 
-    func validateToken(_ token: String) async throws -> (login: String, avatarURL: URL?) {
+    func validateToken(_ token: String) async throws -> TokenValidation {
         validateTokenCallCount += 1
-        guard token == gatedToken else { return (login: Self.ungatedLogin, avatarURL: nil) }
+        guard token == gatedToken else { return TokenValidation(login: Self.ungatedLogin, avatarURL: nil) }
         if !isReleased {
             await withCheckedContinuation { parked.append($0) }
         }
-        return (login: try gatedOutcome.get(), avatarURL: nil)
+        return TokenValidation(login: try gatedOutcome.get(), avatarURL: nil)
     }
 
     /// Resumes every parked call and lets later calls through ungated.

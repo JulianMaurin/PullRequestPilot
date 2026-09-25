@@ -17,12 +17,16 @@ struct AppEvent: Sendable, Identifiable, Equatable {
         case info(String)
 
         /// De-duplication equality. A rate limit is one ongoing condition even
-        /// though every failed request computes its own reset time.
+        /// though every failed request computes its own reset time; unavailable
+        /// directories are one condition whatever their count.
         func describesSameCondition(as other: Payload) -> Bool {
-            if case .error(.rateLimited) = self, case .error(.rateLimited) = other {
+            switch (self, other) {
+            case (.error(.rateLimited), .error(.rateLimited)),
+                 (.error(.gitDirectoriesUnavailable), .error(.gitDirectoriesUnavailable)):
                 return true
+            default:
+                return self == other
             }
-            return self == other
         }
     }
 
@@ -61,9 +65,9 @@ struct AppEvent: Sendable, Identifiable, Equatable {
     // MARK: - Convenience constructors
 
     /// Every error toast auto-dismisses — a toast that never leaves reads as
-    /// the app being stuck. Action-required errors get a longer window and
-    /// stay visible in `EventCenter.standingEvents` (the inline banner
-    /// surface) until explicitly dismissed or resolved.
+    /// the app being stuck. Action-required errors get a longer window;
+    /// standing errors (`AppError.isStanding`) stay on the inline banner until
+    /// dismissed or resolved.
     static func error(_ error: AppError) -> AppEvent {
         let duration: Duration = error.requiresAction ? .seconds(20) : .seconds(8)
         return AppEvent(payload: .error(error), autoDismissAfter: duration)
@@ -98,7 +102,7 @@ enum AppError: LocalizedError, Sendable, Hashable {
     case decodeResponse(detail: String)
     case tokenSaveFailed(underlying: String)
     case decodeCorruption(subsystem: String, backupPath: String?)
-    case bookmarkPruned(count: Int)
+    case gitDirectoriesUnavailable(count: Int)
     case bookmarkCreationFailed(path: String)
     case viewerIdentityUnavailable
     case launchAtLoginFailed(underlying: String)
@@ -144,10 +148,11 @@ enum AppError: LocalizedError, Sendable, Hashable {
                 return base + " Backup: \(backupPath)"
             }
             return base
-        case .bookmarkPruned(let count):
-            let noun = count == 1 ? "directory" : "directories"
-            let pronoun = count == 1 ? "it" : "them"
-            return "\(count) \(noun) lost sandbox access and \(count == 1 ? "was" : "were") removed. Re-add \(pronoun) in Settings."
+        case .gitDirectoriesUnavailable(let count):
+            if count == 1 {
+                return "A git directory is unavailable: its disk may be disconnected or the folder moved. It's used again once it's back; remove it in Settings if it's gone."
+            }
+            return "\(count) git directories are unavailable: their disks may be disconnected or the folders moved. They're used again once they're back; remove them in Settings if they're gone."
         case .bookmarkCreationFailed(let path):
             return "Couldn't store a sandbox bookmark for \(path). The directory wasn't added."
         case .viewerIdentityUnavailable:
@@ -178,16 +183,15 @@ enum AppError: LocalizedError, Sendable, Hashable {
     }
 
     /// True when the user must take action before the error is meaningfully
-    /// resolved (update a token, re-grant sandbox access, read a backup path).
-    /// These errors get a longer toast window and persist on the inline
-    /// banner (`standingEvents`) until explicitly dismissed or resolved.
+    /// resolved (update a token, reconnect a directory, read a backup path).
+    /// These errors get a longer toast window.
     var requiresAction: Bool {
         switch self {
         case .unauthorized,
              .permissionDenied,
              .tokenSaveFailed,
              .decodeCorruption,
-             .bookmarkPruned:
+             .gitDirectoriesUnavailable:
             return true
         case .rateLimited,
              .network,
@@ -204,5 +208,12 @@ enum AppError: LocalizedError, Sendable, Hashable {
              .draftStateChangeFailed:
             return false
         }
+    }
+
+    /// Errors that stay on the inline banner after their toast times out,
+    /// until the user dismisses them or the failing subsystem reports
+    /// recovery through `EventReporter.resolve(matching:)`.
+    var isStanding: Bool {
+        requiresAction || self == .viewerIdentityUnavailable
     }
 }

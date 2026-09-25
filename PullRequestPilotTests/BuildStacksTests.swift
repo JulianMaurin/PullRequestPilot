@@ -12,7 +12,7 @@ struct BuildStacksTests {
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         let store = ViewsStore(defaults: defaults)
-        return DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        return DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
     }
 
     // MARK: - groupedByOrgAndRepo
@@ -175,6 +175,56 @@ struct BuildStacksTests {
         #expect(stacks[0].root.id == "root")
         // children count should be exactly 2 (a, b) — visited set prevents revisiting
         #expect(stacks[0].children.count == 2)
+    }
+
+    @Test("every PR stacked on the same branch is nested, not just the first")
+    func siblingsAreNested() throws {
+        let vm = try makeViewModel(suiteName: "Siblings")
+        let root = try TestPullRequestFactory.make(id: "root", baseRefName: "main", headRefName: "a")
+        let first = try TestPullRequestFactory.make(id: "first", baseRefName: "a", headRefName: "b")
+        let second = try TestPullRequestFactory.make(id: "second", baseRefName: "a", headRefName: "c")
+        let stacks = vm.groupedByOrgAndRepo([root, first, second])[0].repos[0].stacks
+
+        #expect(stacks.count == 1)
+        #expect(stacks[0].totalCount == 3)
+        #expect(stacks[0].children.map(\.id) == ["first", "second"])
+        #expect(stacks[0].children.map(\.depth) == [1, 1])
+    }
+
+    @Test("members are listed depth-first with their depth")
+    func depthFirstOrder() throws {
+        let vm = try makeViewModel(suiteName: "DepthFirst")
+        let root = try TestPullRequestFactory.make(id: "root", baseRefName: "main", headRefName: "a")
+        let first = try TestPullRequestFactory.make(id: "first", baseRefName: "a", headRefName: "b")
+        let second = try TestPullRequestFactory.make(id: "second", baseRefName: "a", headRefName: "c")
+        let firstChild = try TestPullRequestFactory.make(id: "firstChild", baseRefName: "b", headRefName: "d")
+        let stacks = vm.groupedByOrgAndRepo([root, first, second, firstChild])[0].repos[0].stacks
+
+        #expect(stacks[0].children.map(\.id) == ["first", "firstChild", "second"])
+        #expect(stacks[0].children.map(\.depth) == [1, 2, 1])
+    }
+
+    @Test("two roots with the same head branch share a child once")
+    func duplicateHeadsCountOnce() throws {
+        let vm = try makeViewModel(suiteName: "DuplicateHeads")
+        let closed = try TestPullRequestFactory.make(id: "closed", state: .closed, baseRefName: "main", headRefName: "x")
+        let reopened = try TestPullRequestFactory.make(id: "reopened", baseRefName: "main", headRefName: "x")
+        let child = try TestPullRequestFactory.make(id: "child", baseRefName: "x", headRefName: "y")
+        let stacks = vm.groupedByOrgAndRepo([closed, reopened, child])[0].repos[0].stacks
+
+        #expect(stacks.reduce(0) { $0 + $1.totalCount } == 3)
+        #expect(stacks.flatMap(\.children).map(\.id) == ["child"])
+    }
+
+    @Test("a fork's branch name doesn't stack a same-repository PR on it")
+    func forkHeadsAreNotParents() throws {
+        let vm = try makeViewModel(suiteName: "ForkHead")
+        let fork = try TestPullRequestFactory.make(id: "fork", baseRefName: "main", headRefName: "feature", isCrossRepository: true)
+        let local = try TestPullRequestFactory.make(id: "local", baseRefName: "feature", headRefName: "follow-up")
+        let stacks = vm.groupedByOrgAndRepo([fork, local])[0].repos[0].stacks
+
+        #expect(stacks.count == 2)
+        #expect(stacks.allSatisfy { $0.children.isEmpty })
     }
 
     @Test("totalCount includes root plus children")

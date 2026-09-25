@@ -79,11 +79,24 @@ final class DashboardViewModel: DashboardActionsProtocol {
     private let pendingScheduledRefreshes = TaskMap()
     private let pendingSideEffectTasks = TaskMap()
     private var isRefreshingAll = false
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Dashboard")
+    private let logger = Logger(category: "Dashboard")
 
     // MARK: - Init
 
-    init(gitHubClient: GitHubClientProtocol, identity: IdentityActor, viewsStore: any ViewsStoreProtocol, localRepositoryService: LocalRepositoryService, defaults: UserDefaults, reporter: EventReporter = .noop, availabilityEvents: AsyncStream<SystemAvailabilityEvent>? = nil) {
+    /// `notificationCenter` and `widgetDestination` are the system endpoints
+    /// the dashboard writes to; tests pass doubles so no run touches the
+    /// user's notifications or widgets.
+    init(
+        gitHubClient: GitHubClientProtocol,
+        identity: IdentityActor,
+        viewsStore: any ViewsStoreProtocol,
+        localRepositoryService: LocalRepositoryService,
+        defaults: UserDefaults,
+        notificationCenter: any UserNotificationCenterProtocol,
+        widgetDestination: WidgetDestination,
+        reporter: EventReporter = .noop,
+        availabilityEvents: AsyncStream<SystemAvailabilityEvent>? = nil
+    ) {
         self.gitHubClient = gitHubClient
         self.identity = identity
         self.localRepositoryService = localRepositoryService
@@ -92,12 +105,12 @@ final class DashboardViewModel: DashboardActionsProtocol {
         self.collapsedOrgs = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.collapsedOrgs) ?? [])
         self.collapsedRepos = Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.collapsedRepos) ?? [])
         self.badgeTracker = BadgeTracker(defaults: defaults)
-        self.notificationService = NotificationService(defaults: defaults, reporter: reporter)
+        self.notificationService = NotificationService(defaults: defaults, center: notificationCenter, reporter: reporter)
         self.viewRegistry = ViewRegistry(viewsStore: viewsStore, defaults: defaults)
 
         let filterIdentity = identity
         let filterReporter = reporter
-        let filterLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "Dashboard.Filter")
+        let filterLogger = Logger(category: "Dashboard.Filter")
         let filter: PRFetcher.PRFilter = { prs, view in
             guard view.hideReviewed else { return prs }
             let login: String?
@@ -118,6 +131,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
                 filterReporter.postError(.viewerIdentityUnavailable)
                 return prs
             }
+            filterReporter.resolve { $0 == .viewerIdentityUnavailable }
             let filtered = prs.filter { pr in
                 guard let viewerReview = pr.latestReviews.first(where: { $0.login == login }) else {
                     return true
@@ -135,7 +149,7 @@ final class DashboardViewModel: DashboardActionsProtocol {
 
         let widgetRegistry = viewRegistry
         let widgetFetcher = fetcher
-        self.widgetSync = WidgetSync { [widgetRegistry, widgetFetcher] in
+        self.widgetSync = WidgetSync(destination: widgetDestination) { [widgetRegistry, widgetFetcher] in
             Self.buildWidgetData(registry: widgetRegistry, fetcher: widgetFetcher)
         }
 
@@ -232,8 +246,13 @@ final class DashboardViewModel: DashboardActionsProtocol {
         }
     }
 
-    func ensureNotificationPermission(for viewID: UUID) async {
-        await notificationService.ensurePermission(for: viewID)
+    /// The bell is on but notifications are off in System Settings.
+    func isNotificationBlocked(for viewID: UUID) -> Bool {
+        notificationService.isEnabled(for: viewID) && notificationService.systemDenied
+    }
+
+    func ensureNotificationPermission() async {
+        await notificationService.ensurePermission()
     }
 
     func refreshNotificationAuthorization() async {

@@ -124,6 +124,116 @@ struct GitDirectoriesStoreTests {
         _ = store // keep alive
     }
 
+    // MARK: - Unavailable and stale bookmarks
+
+    private func makeTemporaryDirectory(_ label: String) throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("gds-\(label)-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    private func storedBookmarkCount(_ defaults: UserDefaults) -> Int {
+        (defaults.array(forKey: "git_directory_bookmarks") as? [Data])?.count ?? 0
+    }
+
+    @Test("an unresolvable bookmark is kept, listed and reported instead of deleted")
+    func unavailableBookmarkIsKept() throws {
+        let directory = try makeTemporaryDirectory("unavailable")
+        let (seedStore, defaults) = try makeStore(suiteName: "GDSUnavailable")
+        #expect(seedStore.saveFromPanel(directory) != nil)
+        try FileManager.default.removeItem(at: directory)
+
+        let recorder = EventRecorder()
+        let store = GitDirectoriesStore(defaults: defaults, reporter: recorder.reporter())
+        let loaded = store.load()
+
+        #expect(loaded.isEmpty)
+        #expect(storedBookmarkCount(defaults) == 1)
+        #expect(store.unavailableDirectoryPaths.count == 1)
+        #expect(store.unavailableDirectoryPaths.first?.hasSuffix(directory.lastPathComponent) == true)
+        #expect(recorder.unresolvedErrors == [.gitDirectoriesUnavailable(count: 1)])
+
+        // Unchanged availability on the next load doesn't re-post.
+        _ = store.load()
+        #expect(recorder.events.count == 1)
+    }
+
+    @Test("a directory that comes back is used again and its warning resolves")
+    func unavailableBookmarkRecovers() throws {
+        let directory = try makeTemporaryDirectory("recovers")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let (seedStore, defaults) = try makeStore(suiteName: "GDSRecovers")
+        #expect(seedStore.saveFromPanel(directory) != nil)
+        try FileManager.default.removeItem(at: directory)
+
+        let recorder = EventRecorder()
+        let store = GitDirectoriesStore(defaults: defaults, reporter: recorder.reporter())
+        #expect(store.load().isEmpty)
+        #expect(recorder.unresolvedErrors.count == 1)
+
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let loaded = store.load()
+
+        #expect(loaded.map(\.lastPathComponent) == [directory.lastPathComponent])
+        #expect(store.unavailableDirectoryPaths.isEmpty)
+        #expect(recorder.unresolvedErrors.isEmpty)
+    }
+
+    @Test("a stale bookmark to a moved directory is refreshed in storage")
+    func staleBookmarkIsRefreshed() throws {
+        let original = try makeTemporaryDirectory("stale")
+        let moved = original.deletingLastPathComponent().appendingPathComponent("gds-moved-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: moved) }
+        let (store, defaults) = try makeStore(suiteName: "GDSStale")
+        #expect(store.saveFromPanel(original) != nil)
+        let bookmarkBefore = try #require((defaults.array(forKey: "git_directory_bookmarks") as? [Data])?.first)
+
+        try FileManager.default.moveItem(at: original, to: moved)
+        let loaded = store.load()
+
+        #expect(loaded.map(\.lastPathComponent) == [moved.lastPathComponent])
+        #expect(store.unavailableDirectoryPaths.isEmpty)
+        let bookmarkAfter = try #require((defaults.array(forKey: "git_directory_bookmarks") as? [Data])?.first)
+        #expect(bookmarkAfter != bookmarkBefore)
+    }
+
+    @Test("saving the available list keeps unavailable bookmarks")
+    func saveKeepsUnavailableBookmarks() throws {
+        let gone = try makeTemporaryDirectory("gone")
+        let present = try makeTemporaryDirectory("present")
+        defer { try? FileManager.default.removeItem(at: present) }
+        let (store, defaults) = try makeStore(suiteName: "GDSSaveKeeps")
+        store.save([gone, present])
+        try FileManager.default.removeItem(at: gone)
+
+        let available = store.load()
+        store.save(available)
+
+        #expect(storedBookmarkCount(defaults) == 2)
+        #expect(store.load().map(\.lastPathComponent) == [present.lastPathComponent])
+    }
+
+    @Test("removing an unavailable directory deletes only its bookmark")
+    func removeUnavailableDirectory() throws {
+        let gone = try makeTemporaryDirectory("remove-gone")
+        let present = try makeTemporaryDirectory("remove-present")
+        defer { try? FileManager.default.removeItem(at: present) }
+        let (seedStore, defaults) = try makeStore(suiteName: "GDSRemoveUnavailable")
+        seedStore.save([gone, present])
+        try FileManager.default.removeItem(at: gone)
+
+        let recorder = EventRecorder()
+        let store = GitDirectoriesStore(defaults: defaults, reporter: recorder.reporter())
+        _ = store.load()
+        let path = try #require(store.unavailableDirectoryPaths.first)
+        store.removeUnavailableDirectory(atPath: path)
+
+        #expect(storedBookmarkCount(defaults) == 1)
+        #expect(store.unavailableDirectoryPaths.isEmpty)
+        #expect(recorder.unresolvedErrors.isEmpty)
+        #expect(store.load().map(\.lastPathComponent) == [present.lastPathComponent])
+    }
+
     // MARK: - Save overwrite
 
     @Test("save replaces all previous bookmarks")

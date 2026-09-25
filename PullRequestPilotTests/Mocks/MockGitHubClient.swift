@@ -25,6 +25,7 @@ actor MockGitHubClient: GitHubClientProtocol {
     var errorToThrow: Error?
     var fetchViewerError: Error?
     var validateTokenError: Error?
+    var classicTokenScopesToReturn: Set<String>?
     var checkRunsToReturn: [CheckRun] = []
     var setDraftError: Error?
 
@@ -63,6 +64,7 @@ actor MockGitHubClient: GitHubClientProtocol {
     func setErrorToThrow(_ value: Error?) { errorToThrow = value }
     func setFetchViewerError(_ value: Error?) { fetchViewerError = value }
     func setValidateTokenError(_ value: Error?) { validateTokenError = value }
+    func setClassicTokenScopes(_ value: Set<String>?) { classicTokenScopesToReturn = value }
     func setCheckRunsToReturn(_ value: [CheckRun]) { checkRunsToReturn = value }
     func setFetchPullRequestsCallCount(_ value: Int) { fetchPullRequestsCallCount = value }
     func setSetDraftError(_ value: Error?) { setDraftError = value }
@@ -110,13 +112,13 @@ actor MockGitHubClient: GitHubClientProtocol {
         return (login: viewerLoginToReturn, avatarURL: viewerAvatarURLToReturn)
     }
 
-    func validateToken(_ token: String) async throws -> (login: String, avatarURL: URL?) {
+    func validateToken(_ token: String) async throws -> TokenValidation {
         validateTokenCallCount += 1
         receivedValidateTokens.append(token)
         if let validateTokenError { throw validateTokenError }
         if let fetchViewerError { throw fetchViewerError }
         if let errorToThrow { throw errorToThrow }
-        return (login: viewerLoginToReturn, avatarURL: viewerAvatarURLToReturn)
+        return TokenValidation(login: viewerLoginToReturn, avatarURL: viewerAvatarURLToReturn, classicTokenScopes: classicTokenScopesToReturn)
     }
 
     func setDraft(pullRequestID: String, isDraft: Bool) async throws {

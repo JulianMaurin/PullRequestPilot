@@ -12,7 +12,7 @@ struct NotificationServiceTests {
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         let center = EventCenter()
-        let service = NotificationService(defaults: defaults, reporter: center.reporter())
+        let service = NotificationService(defaults: defaults, center: MockUserNotificationCenter(), reporter: center.reporter())
         return (service, center)
     }
 
@@ -60,5 +60,93 @@ struct NotificationServiceTests {
             return
         }
         #expect(detail == "boom")
+    }
+}
+
+@Suite("NotificationService authorization and delivery")
+@MainActor
+struct NotificationServiceAuthorizationTests {
+
+    private func makeService(center: MockUserNotificationCenter, recorder: EventRecorder = EventRecorder()) throws -> (NotificationService, UserDefaults) {
+        let suiteName = "NotificationServiceAuthorizationTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        return (NotificationService(defaults: defaults, center: center, reporter: recorder.reporter()), defaults)
+    }
+
+    @Test("checking authorization while notifications are denied keeps every bell")
+    func deniedAuthorizationKeepsBells() async throws {
+        let center = MockUserNotificationCenter(status: .denied)
+        let (service, defaults) = try makeService(center: center)
+        let first = UUID()
+        let second = UUID()
+        service.setEnabled(for: first, enabled: true)
+        service.setEnabled(for: second, enabled: true)
+
+        await service.refreshAuthorization()
+
+        #expect(service.systemDenied)
+        #expect(service.isEnabled(for: first))
+        #expect(service.isEnabled(for: second))
+        #expect(Set(defaults.stringArray(forKey: Constants.UserDefaultsKeys.notifiedViewIDs) ?? []) == [first.uuidString, second.uuidString])
+
+        center.status = .authorized
+        await service.refreshAuthorization()
+        #expect(!service.systemDenied)
+        #expect(service.isEnabled(for: first))
+    }
+
+    @Test("turning a bell on while denied keeps it on and explains why")
+    func bellWhileDeniedExplains() async throws {
+        let center = MockUserNotificationCenter(status: .denied)
+        let recorder = EventRecorder()
+        let (service, _) = try makeService(center: center, recorder: recorder)
+        let viewID = UUID()
+
+        service.setEnabled(for: viewID, enabled: true)
+        await service.ensurePermission()
+
+        #expect(service.isEnabled(for: viewID))
+        #expect(center.authorizationRequestCount == 0)
+        #expect(recorder.events.map(\.payload) == [.warning(NotificationService.deniedExplanation)])
+    }
+
+    @Test("the first bell asks for permission; declining keeps the bell and explains")
+    func firstBellRequestsPermission() async throws {
+        let center = MockUserNotificationCenter(status: .notDetermined, statusAfterRequest: .denied)
+        let recorder = EventRecorder()
+        let (service, _) = try makeService(center: center, recorder: recorder)
+        let viewID = UUID()
+
+        service.setEnabled(for: viewID, enabled: true)
+        await service.ensurePermission()
+
+        #expect(center.authorizationRequestCount == 1)
+        #expect(service.isEnabled(for: viewID))
+        #expect(service.systemDenied)
+        #expect(recorder.events.map(\.payload) == [.warning(NotificationService.deniedExplanation)])
+    }
+
+    @Test("granting permission posts nothing")
+    func grantedPermissionIsQuiet() async throws {
+        let center = MockUserNotificationCenter(status: .notDetermined, statusAfterRequest: .authorized)
+        let recorder = EventRecorder()
+        let (service, _) = try makeService(center: center, recorder: recorder)
+
+        await service.ensurePermission()
+
+        #expect(service.systemAuthorized)
+        #expect(recorder.events.isEmpty)
+    }
+
+    @Test("nothing is delivered while notifications are denied")
+    func deliverSkipsWhenDenied() async throws {
+        let center = MockUserNotificationCenter(status: .denied)
+        let (service, _) = try makeService(center: center)
+        let pr = try TestPullRequestFactory.make()
+
+        await service.deliver(viewTitle: "View", viewID: UUID(), addedPRs: [pr])
+
+        #expect(center.delivered.isEmpty)
     }
 }

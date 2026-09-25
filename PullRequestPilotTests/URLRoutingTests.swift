@@ -12,7 +12,7 @@ struct URLRoutingTests {
         let store = ViewsStore(defaults: defaults)
         let mockClient = MockGitHubClient()
         let localRepoService = LocalRepositoryService()
-        return DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults)
+        return DashboardViewModel(gitHubClient: mockClient, identity: IdentityActorTestFactory.make(github: mockClient), viewsStore: store, localRepositoryService: localRepoService, defaults: defaults, notificationCenter: MockUserNotificationCenter(), widgetDestination: .temporary())
     }
 
     // MARK: - DeepLinkRoute

@@ -67,17 +67,30 @@ actor MockWorkspace: WorkspaceOpening {
     }
 }
 
-/// Test-only sink for `EventReporter` posts. Lives on the main actor so tests
-/// can read `events` synchronously without polling.
+/// Test-only sink for `EventReporter` posts and resolutions. Lives on the
+/// main actor so tests can read it synchronously without polling; callers
+/// must post from the main actor.
 @MainActor
 final class EventRecorder {
     private(set) var events: [AppEvent] = []
+    /// Posted errors not yet resolved, oldest first: what the banner shows.
+    private(set) var unresolvedErrors: [AppError] = []
 
     func reporter() -> EventReporter {
-        EventReporter { [weak self] event in
-            MainActor.assumeIsolated {
-                self?.events.append(event)
+        EventReporter(
+            post: { [weak self] event in
+                MainActor.assumeIsolated {
+                    self?.events.append(event)
+                    if let error = event.appError {
+                        self?.unresolvedErrors.append(error)
+                    }
+                }
+            },
+            resolve: { [weak self] match in
+                MainActor.assumeIsolated {
+                    self?.unresolvedErrors.removeAll(where: match)
+                }
             }
-        }
+        )
     }
 }

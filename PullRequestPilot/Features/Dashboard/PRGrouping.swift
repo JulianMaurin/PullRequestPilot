@@ -3,8 +3,18 @@ import Foundation
 enum PRGrouping {
 
     struct PRStack: Identifiable {
+        struct Member: Identifiable {
+            let pullRequest: PullRequest
+            /// 1 for a PR based on the root's branch, 2 for one based on that
+            /// PR's branch, and so on.
+            let depth: Int
+            var id: String { pullRequest.id }
+        }
+
         let root: PullRequest
-        let children: [PullRequest]
+        /// Every PR stacked on `root`, depth-first: each member is followed by
+        /// the PRs stacked on it, then by its siblings.
+        let children: [Member]
         var id: String { root.id }
         var totalCount: Int { 1 + children.count }
     }
@@ -33,35 +43,39 @@ enum PRGrouping {
     }
 
     static func buildStacks(_ pullRequests: [PullRequest]) -> [PRStack] {
-        let headToPR = Dictionary(pullRequests.map { ($0.headRefName, $0) }, uniquingKeysWith: { first, _ in first })
-        let byBase = Dictionary(grouping: pullRequests, by: { $0.baseRefName })
-        let childIDs = Set(pullRequests.compactMap { pr -> String? in
-            guard headToPR[pr.baseRefName] != nil else { return nil }
-            return pr.id
-        })
-        let roots = pullRequests.filter { !childIDs.contains($0.id) }
+        // A fork's branch lives in another repository, so its name says
+        // nothing about this repository's branches: only same-repository
+        // heads can be another PR's base.
+        let stackableHeads = Set(pullRequests.filter { !$0.isCrossRepository }.map(\.headRefName))
+        let byBase = Dictionary(grouping: pullRequests, by: \.baseRefName)
+        let roots = pullRequests.filter { !stackableHeads.contains($0.baseRefName) }
 
+        // Shared across every walk, so a PR reachable from two parents (two
+        // PRs with the same head branch) is listed and counted once.
         var emittedIDs: Set<String> = []
-        var stacks: [PRStack] = []
-        for root in roots {
-            var children: [PullRequest] = []
-            var currentHead = root.headRefName
-            var visited: Set<String> = [root.id]
-            let maxDepth = pullRequests.count
-            while children.count < maxDepth,
-                  let next = byBase[currentHead]?.first(where: { !visited.contains($0.id) }) {
-                children.append(next)
-                visited.insert(next.id)
-                currentHead = next.headRefName
+
+        func members(stackedOn parent: PullRequest, depth: Int) -> [PRStack.Member] {
+            guard !parent.isCrossRepository else { return [] }
+            var result: [PRStack.Member] = []
+            for child in byBase[parent.headRefName] ?? [] where !emittedIDs.contains(child.id) {
+                emittedIDs.insert(child.id)
+                result.append(PRStack.Member(pullRequest: child, depth: depth))
+                result += members(stackedOn: child, depth: depth + 1)
             }
-            emittedIDs.formUnion(visited)
-            stacks.append(PRStack(root: root, children: children))
+            return result
+        }
+
+        var stacks: [PRStack] = []
+        for root in roots where !emittedIDs.contains(root.id) {
+            emittedIDs.insert(root.id)
+            stacks.append(PRStack(root: root, children: members(stackedOn: root, depth: 1)))
         }
 
         // Base/head cycles (e.g. release PR + back-merge PR referencing each
         // other's branches) classify every member as a child, so no root walk
         // reaches them; emit them as standalone stacks instead of dropping them.
         for pr in pullRequests where !emittedIDs.contains(pr.id) {
+            emittedIDs.insert(pr.id)
             stacks.append(PRStack(root: pr, children: []))
         }
         return stacks

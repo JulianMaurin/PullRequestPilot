@@ -217,22 +217,6 @@ struct WidgetDataTests {
         #expect(WidgetData.load(from: url) == nil)
     }
 
-    // No suspension between override, save(), and load() — the MainActor
-    // stretch keeps parallel suites that also set the override from
-    // interleaving between the write and the read-back.
-    @MainActor
-    @Test("setStorageURLOverride redirects load() and save()")
-    func storageOverrideRedirects() throws {
-        let url = Self.tempFileURL()
-        WidgetData.setStorageURLOverride(url)
-        let data = WidgetData(views: [], lastUpdated: Date(timeIntervalSince1970: 42))
-        data.save()
-        #expect(FileManager.default.fileExists(atPath: url.path))
-        let loaded = try #require(WidgetData.load())
-        #expect(loaded.views.isEmpty)
-        #expect(loaded.lastUpdated == Date(timeIntervalSince1970: 42))
-    }
-
     // MARK: - WidgetPullRequest Hashable & Identifiable
 
     @Test("WidgetPullRequest uses id for identity")

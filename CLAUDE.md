@@ -194,7 +194,7 @@ Enforced by SwiftLint (`user_defaults_standard_outside_appstate`).
 
 ### Security-scoped bookmarks
 
-Bookmarked git directories get app-lifetime access on purpose, so the periodic repo scan can read them: `AppState` starts access at launch, `SettingsViewModel` stops it when a directory is removed, and `AppState.cleanup()` stops the rest. Don't "fix" that into per-function pairing.
+Bookmarked git directories get app-lifetime access on purpose, so the periodic repo scan can read them: `GitDirectoriesStore.load()` starts access as each bookmark resolves (at launch, or later once an unavailable disk is back), `SettingsViewModel` stops it when a directory is removed, and `AppState.cleanup()` stops the rest. Don't "fix" that into per-function pairing. A bookmark that doesn't resolve stays stored and is retried on every load; only an explicit removal deletes it.
 
 Any other `url.startAccessingSecurityScopedResource()` must be paired with `stopAccessingSecurityScopedResource()` in the same scope (`defer`). Missing stops leak access counts and eventually break sandbox reads.
 

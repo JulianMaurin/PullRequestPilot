@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let searchResultLogger = Logger(subsystem: "PullRequestPilot", category: "SearchResult")
+private let searchResultLogger = Logger(category: "SearchResult")
 
 // MARK: - GraphQL Response Envelope
 
@@ -698,13 +698,13 @@ private func parseISO8601Date(_ string: String) -> Date? {
 extension PullRequestNode {
     func toDomain() -> PullRequest? {
         guard let url = URL(string: url) else {
-            os_log(.error, "Dropping PR #%d — URL failed to parse: %{public}@", number, url)
+            searchResultLogger.error("Dropping PR #\(number, privacy: .public) — URL failed to parse: \(url, privacy: .private)")
             return nil
         }
 
         guard let created = parseISO8601Date(createdAt),
               let updated = parseISO8601Date(updatedAt) else {
-            os_log(.error, "Failed to parse ISO8601 date for PR #%d: createdAt=%{public}@, updatedAt=%{public}@", number, createdAt, updatedAt)
+            searchResultLogger.error("Failed to parse ISO8601 date for PR #\(number, privacy: .public): createdAt=\(createdAt, privacy: .public), updatedAt=\(updatedAt, privacy: .public)")
             return nil
         }
 

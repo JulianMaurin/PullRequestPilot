@@ -38,6 +38,44 @@ struct GitHubClientTests {
         }
     }
 
+    @Test("validateToken reports a classic token's scopes")
+    func validateTokenReportsClassicScopes() async throws {
+        let (client, http) = makeClient()
+        http.handler = { request in
+            try TestHTTP.response(
+                for: request,
+                body: Data(#"{"data": {"viewer": {"login": "octocat", "avatarUrl": null}}}"#.utf8),
+                headers: ["X-OAuth-Scopes": "public_repo, read:org"]
+            )
+        }
+
+        let validation = try await client.validateToken("ghp_classic")
+
+        #expect(validation.login == "octocat")
+        #expect(validation.classicTokenScopes == ["public_repo", "read:org"])
+        #expect(validation.lacksPrivateRepositoryAccess)
+    }
+
+    @Test("validateToken reports no scopes for a fine-grained token")
+    func validateTokenFineGrainedHasNoScopes() async throws {
+        let (client, http) = makeClient()
+        http.handler = { request in
+            try TestHTTP.response(for: request, body: Data(#"{"data": {"viewer": {"login": "octocat", "avatarUrl": null}}}"#.utf8))
+        }
+
+        let validation = try await client.validateToken("github_pat_fine")
+
+        #expect(validation.classicTokenScopes == nil)
+        #expect(!validation.lacksPrivateRepositoryAccess)
+    }
+
+    @Test("a classic token with the repo scope reads private repositories")
+    func repoScopeCoversPrivateRepositories() {
+        #expect(!TokenValidation(login: "a", avatarURL: nil, classicTokenScopes: ["repo", "workflow"]).lacksPrivateRepositoryAccess)
+        #expect(TokenValidation(login: "a", avatarURL: nil, classicTokenScopes: []).lacksPrivateRepositoryAccess)
+        #expect(GitHubClient.parseScopes(" repo ,read:org,, ") == ["repo", "read:org"])
+    }
+
     // MARK: - HTTP 401
 
     @Test("throws unauthorized on HTTP 401 response")

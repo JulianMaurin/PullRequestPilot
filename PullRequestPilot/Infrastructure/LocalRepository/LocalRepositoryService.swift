@@ -32,10 +32,7 @@ final class LocalRepositoryService {
     private let activeScanTaskStorage = OSAllocatedUnfairLock<Task<[RepoEntry], Never>?>(initialState: nil)
     private let reporter: EventReporter
 
-    private let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot",
-        category: "LocalRepository"
-    )
+    private let logger = Logger(category: "LocalRepository")
 
     init(reporter: EventReporter = .noop) {
         self.reporter = reporter

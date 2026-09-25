@@ -10,7 +10,8 @@ struct SettingsViewModelTests {
 
     private func makeViewModel(
         storedToken: String? = nil,
-        suiteName: String = "SettingsVMTests"
+        suiteName: String = "SettingsVMTests",
+        reporter: EventReporter = .noop
     ) throws -> (SettingsViewModel, KeychainService, IdentityActor, GitDirectoriesStore, UserDefaults) {
         let keychainService = "com.pullrequestpilot.settings.tests.\(suiteName)"
         let keychain = KeychainService(service: keychainService)
@@ -29,6 +30,7 @@ struct SettingsViewModelTests {
             gitDirectoriesStore: gitDirStore,
             localRepositoryService: localRepoService,
             defaults: defaults,
+            reporter: reporter,
             initialToken: storedToken
         )
         return (vm, keychain, identity, gitDirStore, defaults)
@@ -54,6 +56,68 @@ struct SettingsViewModelTests {
         let (vm, _, _, _, _) = try makeViewModel(suiteName: "HasTokenContent")
         vm.token = "ghp_abc123"
         #expect(vm.hasToken)
+    }
+
+    @Test("a validated token resolves the token and permission banners only")
+    func saveResolvesTokenErrors() async throws {
+        let recorder = EventRecorder()
+        let (vm, keychain, _, _, _) = try makeViewModel(suiteName: "SaveResolves", reporter: recorder.reporter())
+        defer { try? keychain.delete(key: Constants.Keychain.githubToken) }
+        let reporter = recorder.reporter()
+        reporter.postError(.unauthorized)
+        reporter.postError(.permissionDenied(detail: nil))
+        reporter.postError(.decodeCorruption(subsystem: "views", backupPath: nil))
+        await mockClient.setViewerLogin("octocat")
+
+        vm.token = "ghp_resolves"
+        await vm.save()
+
+        #expect(recorder.unresolvedErrors == [.decodeCorruption(subsystem: "views", backupPath: nil)])
+    }
+
+    @Test("a classic token without the repo scope saves with a warning")
+    func missingRepoScopeWarns() async throws {
+        let (vm, keychain, _, _, _) = try makeViewModel(suiteName: "MissingRepoScope")
+        defer { try? keychain.delete(key: Constants.Keychain.githubToken) }
+        await mockClient.setViewerLogin("octocat")
+        await mockClient.setClassicTokenScopes(["public_repo"])
+
+        vm.token = "ghp_public_only"
+        await vm.save()
+
+        #expect(vm.validationState == .valid)
+        #expect(vm.tokenScopeWarning == SettingsViewModel.missingRepoScopeWarning)
+
+        await mockClient.setClassicTokenScopes(["repo"])
+        vm.beginChangingToken()
+        vm.token = "ghp_full"
+        await vm.save()
+        #expect(vm.tokenScopeWarning == nil)
+    }
+
+    @Test("the token help links to GitHub's classic-token form with the repo scope")
+    func newClassicTokenLink() throws {
+        let components = try #require(URLComponents(url: Constants.URLs.newClassicToken, resolvingAgainstBaseURL: false))
+        #expect(components.host == "github.com")
+        #expect(components.queryItems?.first { $0.name == "scopes" }?.value == "repo")
+    }
+
+    @Test("unavailable git directories are listed and can be removed")
+    func unavailableDirectoriesListedAndRemovable() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("settings-unavailable-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let (vm, _, _, store, defaults) = try makeViewModel(suiteName: "UnavailableDirectories")
+        #expect(store.saveFromPanel(directory) != nil)
+        try FileManager.default.removeItem(at: directory)
+
+        vm.reloadGitDirectories()
+        let path = try #require(vm.unavailableDirectoryPaths.first)
+        #expect(vm.gitDirectories.isEmpty)
+        #expect(path.hasSuffix(directory.lastPathComponent))
+
+        vm.removeUnavailableDirectory(atPath: path)
+        #expect(vm.unavailableDirectoryPaths.isEmpty)
+        #expect((defaults.array(forKey: "git_directory_bookmarks") as? [Data])?.isEmpty == true)
     }
 
     @Test("save stores token and validates against GitHub API")

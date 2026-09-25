@@ -150,6 +150,18 @@ custom_rules:
     message: "Never hard-code is:pr — the app intentionally supports issue queries too."
     severity: error
 
+  logger_subsystem:
+    included:
+      - "PullRequestPilot/.*\\.swift"
+      - "PullRequestPilotWidget/.*\\.swift"
+      - "Shared/.*\\.swift"
+    excluded:
+      - "Shared/Logger\\+Category\\.swift"
+    name: "Logger outside the bundle-ID subsystem"
+    regex: 'Logger\(\s*subsystem:|\bos_log\('
+    message: "Use Logger(category:). Export Logs filters on the bundle-ID subsystem; any other subsystem is missing from support bundles."
+    severity: error
+
   audit_finding_reference:
     name: "Audit finding IDs in source"
     regex: 'FINDING-[0-9]+'

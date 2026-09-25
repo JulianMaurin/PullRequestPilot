@@ -57,7 +57,7 @@ struct WidgetData: Codable, Sendable {
     let lastUpdated: Date
 
     static let appGroupIdentifier = "FNR3B372S8.com.pullrequestpilot.shared"
-    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "WidgetData")
+    private static let logger = Logger(category: "WidgetData")
 
     /// Set by the main app at launch to route save failures into the user-visible
     /// EventCenter. The widget extension leaves this nil — widgets have no toast
@@ -72,38 +72,18 @@ struct WidgetData: Codable, Sendable {
         errorReporterStorage.withLock { $0 }
     }
 
-    /// Test seam: redirects `load()`/`save()` to an alternate file. The
-    /// widget extension and the WidgetSync built inside DashboardViewModel
-    /// have no injection path, so the override is process-global. Production
-    /// never sets it — the app and widget always use the app-group container.
-    private static let storageURLOverrideStorage = OSAllocatedUnfairLock<URL?>(initialState: nil)
-
-    static func setStorageURLOverride(_ url: URL?) {
-        storageURLOverrideStorage.withLock { $0 = url }
-    }
-
-    private static var sharedFileURL: URL? {
-        guard let container = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: appGroupIdentifier
-        ) else { return nil }
-        return container.appendingPathComponent("widget-data.json")
-    }
-
-    private static var storageURL: URL? {
-        if let override = storageURLOverrideStorage.withLock({ $0 }) { return override }
-        // Never fall through to the real app-group file in a test process
-        // (same guard as NotificationService.deliver) — suites that write
-        // widget data without setting the override would overwrite the
-        // installed widget's data.
-        if NSClassFromString("XCTestCase") != nil {
-            return FileManager.default.temporaryDirectory
-                .appendingPathComponent("widget-data-tests-default.json")
-        }
-        return sharedFileURL
+    /// The file the app writes and the widget reads, in the shared app-group
+    /// container. nil when the container is unavailable.
+    static var appGroupFileURL: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)?
+            .appendingPathComponent("widget-data.json")
     }
 
     static func load() -> WidgetData? {
-        guard let url = storageURL else { return nil }
+        guard let url = appGroupFileURL else {
+            logger.error("App-group container unavailable; no widget data to read")
+            return nil
+        }
         return load(from: url)
     }
 
@@ -121,11 +101,6 @@ struct WidgetData: Codable, Sendable {
             logger.error("Failed to load widget data: \(error, privacy: .public)")
             return nil
         }
-    }
-
-    func save() {
-        guard let url = Self.storageURL else { return }
-        save(to: url)
     }
 
     func save(to url: URL) {

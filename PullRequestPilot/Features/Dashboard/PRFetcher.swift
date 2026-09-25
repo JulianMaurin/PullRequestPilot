@@ -85,7 +85,7 @@ final class PRFetcher {
     private let gitHubClient: GitHubClientProtocol
     private let filter: PRFilter
     private let reporter: EventReporter
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "PullRequestPilot", category: "PRFetcher")
+    private let logger = Logger(category: "PRFetcher")
 
     /// Coalesces concurrent `refresh(for:)` calls: a second caller for the
     /// same view joins the first task's completion instead of starting a
@@ -243,6 +243,9 @@ final class PRFetcher {
             states[view.id]?.hiddenResultsNotice = Self.hiddenResultsNotice(for: page)
             states[view.id]?.lastRefreshedAt = .now
             logger.info("Fetched \(uniquePRs.count, privacy: .public) PR(s) for '\(view.title, privacy: .public)'")
+            // A 401 that IdentityActor didn't confirm was transient: GitHub
+            // accepted the token again.
+            reporter.resolve { $0 == .unauthorized }
             onFetched?(FetchOutcome(viewID: view.id, pullRequests: filteredPRs))
         } catch is CancellationError {
             // URLError.cancelled rethrows as CancellationError without this

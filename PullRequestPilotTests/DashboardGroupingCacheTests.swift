@@ -21,7 +21,9 @@ struct DashboardGroupingCacheTests {
             viewsStore: store,
             localRepositoryService: localRepo,
             defaults: defaults
-        )
+        ,
+            notificationCenter: MockUserNotificationCenter(),
+            widgetDestination: .temporary())
         return (viewModel, mock, defaults)
     }
 

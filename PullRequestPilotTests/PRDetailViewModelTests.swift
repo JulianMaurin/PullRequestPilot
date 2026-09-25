@@ -403,8 +403,8 @@ private actor PaginatingMockGitHubClient: GitHubClientProtocol {
         (login: "testuser", avatarURL: nil)
     }
 
-    func validateToken(_ token: String) async throws -> (login: String, avatarURL: URL?) {
-        (login: "testuser", avatarURL: nil)
+    func validateToken(_ token: String) async throws -> TokenValidation {
+        TokenValidation(login: "testuser", avatarURL: nil)
     }
 
     func setDraft(pullRequestID: String, isDraft: Bool) async throws {}

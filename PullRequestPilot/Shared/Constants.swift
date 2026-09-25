@@ -31,6 +31,10 @@ enum Constants {
         static let support: URL =
             URL(string: "https://github.com/JulianMaurin/PullRequestPilot/issues")
             ?? URL(fileURLWithPath: "/")
+        /// GitHub's classic-token form, pre-filled with the repo scope.
+        static let newClassicToken: URL =
+            URL(string: "https://github.com/settings/tokens/new?scopes=repo&description=Pull%20Request%20Pilot")
+            ?? URL(fileURLWithPath: "/")
     }
 
     enum Notifications {

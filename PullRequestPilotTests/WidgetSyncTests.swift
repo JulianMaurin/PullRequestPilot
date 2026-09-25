@@ -37,8 +37,7 @@ struct WidgetSyncTests {
     ) -> WidgetSync {
         WidgetSync(
             throttleInterval: throttleInterval,
-            storageURL: storageURL ?? tempStorageURL(),
-            reloadTimelines: reloadTimelines
+            destination: WidgetDestination(fileURL: storageURL ?? tempStorageURL(), reloadTimelines: reloadTimelines)
         ) {
             counter.increment()
             return emptyData
@@ -137,7 +136,7 @@ struct WidgetSyncTests {
         let writes = BuildCounter()
         let reloads = BuildCounter()
         let url = Self.tempStorageURL()
-        let sync = WidgetSync(throttleInterval: 0, storageURL: url, reloadTimelines: { reloads.increment() }) {
+        let sync = WidgetSync(throttleInterval: 0, destination: WidgetDestination(fileURL: url, reloadTimelines: { reloads.increment() })) {
             writes.increment()
             return WidgetData(views: source.views, lastUpdated: .now)
         }
