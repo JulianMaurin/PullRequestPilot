@@ -169,6 +169,55 @@ custom_rules:
     severity: error
 
   # -------------------------------------------------------------------------
+  # Layering (CLAUDE.md → Architecture): one module, so only these rules
+  # keep the dependency arrows pointing Features → Infrastructure → Domain.
+  # -------------------------------------------------------------------------
+
+  domain_imports_foundation_only:
+    included:
+      - "PullRequestPilot/Domain/.*\\.swift"
+    name: "Domain depends on Foundation only"
+    regex: '^import (?!Foundation\b)\w+'
+    message: "Domain models are plain data: import Foundation only."
+    severity: error
+
+  infrastructure_knows_no_ui:
+    included:
+      - "PullRequestPilot/Infrastructure/.*\\.swift"
+    name: "Infrastructure holds no views and names no app or feature types"
+    regex: '^import SwiftUI|\b(EventCenter|AppState|\w+ViewModel)\b'
+    match_kinds: [keyword, identifier, typeidentifier]
+    message: "Infrastructure serves Features; views belong in Features/, and events go through EventReporter (Domain)."
+    severity: error
+
+  dashboard_feature_isolated:
+    included:
+      - "PullRequestPilot/Features/Dashboard/.*\\.swift"
+    name: "Dashboard names no other feature"
+    regex: '\b(SettingsView|SettingsViewModel|PRDetailView|PRDetailViewModel|ReviewQueueView|ReviewQueueViewModel)\b'
+    match_kinds: [identifier, typeidentifier]
+    message: "Features never reference each other; compose them in App/ or in the ReviewQueue screen."
+    severity: error
+
+  settings_feature_isolated:
+    included:
+      - "PullRequestPilot/Features/Settings/.*\\.swift"
+    name: "Settings names no other feature"
+    regex: '\b(DashboardViewModel|PRDetailView|PRDetailViewModel|ReviewQueueView|ReviewQueueViewModel)\b'
+    match_kinds: [identifier, typeidentifier]
+    message: "Settings reaches the dashboard through DashboardActionsProtocol, which AppState conforms."
+    severity: error
+
+  pull_request_detail_feature_isolated:
+    included:
+      - "PullRequestPilot/Features/PRDetail/.*\\.swift"
+    name: "PRDetail names no other feature"
+    regex: '\b(SettingsView|SettingsViewModel|DashboardViewModel|ReviewQueueView|ReviewQueueViewModel)\b'
+    match_kinds: [identifier, typeidentifier]
+    message: "Features never reference each other; compose them in App/ or in the ReviewQueue screen."
+    severity: error
+
+  # -------------------------------------------------------------------------
   # App Store / sandbox rules
   # -------------------------------------------------------------------------
 

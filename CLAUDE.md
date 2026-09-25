@@ -60,9 +60,9 @@ Shared/               — Cross-cutting constants (app target only)
 
 These live under `PullRequestPilot/`. The top-level `Shared/` directory is different: it's compiled into both the app and the widget (see Widget Extension Rules).
 
-**Dependency flow:** Features → Infrastructure → Domain (arrows point at dependencies). Features never import each other. Infrastructure never imports Features. This is intent, not compiler-enforced — everything is one module — so check type references when adding code.
+**Dependency flow:** Features → Infrastructure → Domain (arrows point at dependencies). Features never reference each other; Infrastructure never references Features or App, and holds no views; Domain imports only Foundation. Everything is one module, so SwiftLint's layering rules enforce this (`domain_imports_foundation_only`, `infrastructure_knows_no_ui`, `*_feature_isolated`). `EventReporter` lives in Domain so every layer can post events. The one composite screen is `ReviewQueue`: `ReviewQueueViewModel` drives `DashboardViewModel` and `PRDetailViewModel`. When a feature needs another's capability, it declares a protocol and `AppState` supplies the conformance (`DashboardActionsProtocol`).
 
-**Dependency injection:** All wiring happens in `AppState.swift` — the single composition root. ViewModels receive their dependencies via constructor injection.
+**Dependency injection:** All wiring happens in `AppState.swift` — the single composition root, created by `AppDelegate` so the status item and menus work before any window opens. ViewModels receive their dependencies via constructor injection.
 
 ## Code Conventions
 
@@ -164,7 +164,7 @@ Every pitfall below has shipped in this codebase at least once. The fix is alway
 
 ### State that crosses tasks
 - **`@unchecked Sendable` is almost always wrong.** If you need it, add an `NSLock` (or better, an actor). Bugs: `ViewsStore`, `GitDirectoriesStore`, `DateFormatter` statics all had real data races.
-- **Static formatters are shared state.** `ISO8601DateFormatter` / `DateFormatter` as file-level `let` is not thread-safe. Wrap in a lock or make them per-thread.
+- **Static formatters are shared state.** A `DateFormatter` or `ISO8601DateFormatter` stored in a `static let` is not Sendable. Use a `FormatStyle` (`Date.ISO8601FormatStyle`, `Date.VerbatimFormatStyle`, `.formatted(...)`), which is a Sendable value; where none fits (a relative date against a given reference date, before macOS 15), create the formatter per call.
 - **TOCTOU on caches.** Any `get-then-invalidate` pair must serialize through a generation counter or actor (see `IdentityActor.invalidateIfMatchingToken`). Bug history: keychain read on one task revived a token another task had just invalidated.
 
 ### Auto-refresh / idempotency
@@ -251,13 +251,13 @@ This app is distributed via the Mac App Store. **Every line of code must be sand
 - **AppIntentConfiguration for configurable widgets** — use `AppEntity` + `EntityQuery` + `WidgetConfigurationIntent` for widgets the user can configure (e.g., selecting a dashboard view). Mark static properties as `let` (not `var`) for Swift 6 strict concurrency.
 - **macOS caches widget metadata aggressively** — after changing widget kinds/names, you must: clear DerivedData (`rm -rf ~/Library/Developer/Xcode/DerivedData/PullRequestPilot-*`), kill NotificationCenter (`killall NotificationCenter`), and reinstall the app. A debug build in DerivedData can register a conflicting widget extension that shadows the installed app's widgets.
 - **Widget extension has its own `Assets.xcassets`** — the widget extension needs a separate asset catalog with an `AppIcon.appiconset` so the widget gallery shows the correct icon. The `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` build setting must be set in `project.yml` for the widget target.
-- **Deep linking** — the app registers the `pullrequestpilot://` scheme (`Info.plist` via `project.yml`) and handles only `pullrequestpilot://view/<viewID>` (`DeepLinkRoute`), which selects a view. Widgets wrap PR rows in `Link(destination:)` to open GitHub; no widget emits the view link yet.
+- **Deep linking** — the app registers the `pullrequestpilot://` scheme (`Info.plist` via `project.yml`) and handles only `pullrequestpilot://view/<viewID>` (`DeepLinkRoute`), which selects a view. `DeepLink` (in `Shared/`) builds it for the widgets: clicking a view widget, or a view in the summary widget, opens that view; PR rows `Link` to GitHub.
 
 ### Data & Persistence
 
 - **UserDefaults for non-sensitive preferences only.** Data shared with the widget is a JSON file (`widget-data.json`) in the app-group container `FNR3B372S8.com.pullrequestpilot.shared` (`WidgetData.appGroupIdentifier`) — there is no shared UserDefaults suite. Adding one would also need privacy-manifest reason `1C8F.1`.
 - **Keychain for secrets** — tokens, credentials, and API keys must use the Keychain. Never log, print, or persist tokens in UserDefaults, files, or crash reports.
-- **Never log sensitive data** — no token values, no full API responses containing user data. Use `os_log` with appropriate privacy levels (`%{private}@`) for any user-identifiable information.
+- **Never log sensitive data** — no token values, no full API responses containing user data. Log with `Logger(category:)` and mark user-identifiable values `privacy: .private`.
 
 ### Build Verification Checklist
 

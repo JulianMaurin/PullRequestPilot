@@ -90,9 +90,7 @@ targets:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - path: PullRequestPilotTests
-        excludes:
-          - ".swiftlint.yml"
+      - PullRequestPilotTests
     dependencies:
       - target: PullRequestPilot
     settings:
