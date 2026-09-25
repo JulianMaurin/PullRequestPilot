@@ -76,7 +76,11 @@ struct PullRequestPilotApp: App {
                     .keyboardShortcut("0", modifiers: .command)
                 }
             }
-            CommandGroup(after: .help) {
+            // Replaces the system "Pull Request Pilot Help" item: without a
+            // Help Book it only shows "Help isn't available", which App Review
+            // treats as a broken feature.
+            CommandGroup(replacing: .help) {
+                Link("Pull Request Pilot Support", destination: Constants.URLs.support)
                 Divider()
                 Button("Export Logs\u{2026}") {
                     if let service = appState?.logExportService {

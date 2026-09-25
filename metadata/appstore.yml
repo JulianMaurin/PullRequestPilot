@@ -34,7 +34,7 @@ description: |
   Build custom views with the full power of GitHub search: PRs needing your review, ones you authored, recent drafts, anything merged last week — any query works, including issues. Each view gets its own tab, its own notification settings, and its own menu-bar badge.
 
   KEEP IT VISIBLE
-  Desktop widgets in small, medium, and large sizes put your review queue on your wallpaper. Pick a compact count or a scrollable list of open PRs — whichever matches your workflow.
+  Desktop widgets in small, medium, and large sizes put your review queue on your wallpaper. Pick a compact count or a list of your top open PRs — whichever matches your workflow.
 
   STAY IN FLOW
   Click a PR to see its activity timeline, reviewer status, check results, labels, and last update at a glance — all without leaving the app. If the repository is cloned locally, open it directly in VS Code or iTerm with a single click.
