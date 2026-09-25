@@ -101,22 +101,21 @@ final class LogExportService {
         lines.append("Pull Request Pilot — log export")
         lines.append("App version: \(appVersion) (\(appBuild))")
         lines.append("macOS: \(osVersion)")
-        lines.append("Exported: \(ISO8601DateFormatter().string(from: .now))")
+        lines.append("Exported: \(Date.now.formatted(.iso8601))")
         lines.append("Subsystem: \(bundleID)")
         lines.append("")
         if entries.isEmpty {
             lines.append("No log entries were recorded during this app run.")
         } else {
-            let formatter = entryDateFormatter()
             for entry in entries {
-                lines.append("\(formatter.string(from: entry.date)) [\(entry.level.rawValue)] [\(entry.category)] \(entry.message)")
+                lines.append("\(entry.date.formatted(Self.entryDateStyle)) [\(entry.level.rawValue)] [\(entry.category)] \(entry.message)")
             }
         }
         return lines.joined(separator: "\n") + "\n"
     }
 
     private func writeExport(contents: String) throws -> URL {
-        let name = "pull-request-pilot-logs-\(filenameDateFormatter().string(from: .now)).txt"
+        let name = "pull-request-pilot-logs-\(Date.now.formatted(Self.filenameDateStyle)).txt"
         let finalURL = tempDirectory.appendingPathComponent(name)
         let stagingURL = tempDirectory.appendingPathComponent(name + ".partial")
         try contents.write(to: stagingURL, atomically: true, encoding: .utf8)
@@ -128,23 +127,19 @@ final class LogExportService {
         return finalURL
     }
 
-    private func entryDateFormatter() -> DateFormatter {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .iso8601)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone.current
-        f.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
-        return f
-    }
+    /// "2026-09-25 14:03:07.412", local time.
+    private static let entryDateStyle = Date.VerbatimFormatStyle(
+        format: "\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits):\(second: .twoDigits).\(secondFraction: .fractional(3))",
+        timeZone: .current,
+        calendar: Calendar(identifier: .gregorian)
+    )
 
-    private func filenameDateFormatter() -> DateFormatter {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .iso8601)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone.current
-        f.dateFormat = "yyyyMMdd-HHmmss"
-        return f
-    }
+    /// "20260925-140307", local time.
+    private static let filenameDateStyle = Date.VerbatimFormatStyle(
+        format: "\(year: .defaultDigits)\(month: .twoDigits)\(day: .twoDigits)-\(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased))\(minute: .twoDigits)\(second: .twoDigits)",
+        timeZone: .current,
+        calendar: Calendar(identifier: .gregorian)
+    )
 }
 
 // MARK: - Real adapters

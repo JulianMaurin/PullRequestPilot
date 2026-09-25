@@ -37,6 +37,7 @@
 		435918A905F6D46F867F9348 /* DashboardViewEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D10578F537D4DBC84E5E685 /* DashboardViewEntity.swift */; };
 		439551A075FDE6BD39E80B43 /* MockLogExportDependencies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0539E1E1791241E971A9DFF2 /* MockLogExportDependencies.swift */; };
 		469BFE4DF00494D8A5D661B8 /* WidgetDestination+Test.swift in Sources */ = {isa = PBXBuildFile; fileRef = A153FB6F0950731D209C472E /* WidgetDestination+Test.swift */; };
+		4734B2488451C1D48761A8A6 /* PullRequestAge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0EA68EAC804694C06E18530 /* PullRequestAge.swift */; };
 		475BD10DC23B7EB7B3CA38B3 /* ViewsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B7FA651CACE3D0E219A4E5D /* ViewsStoreTests.swift */; };
 		49693E22DFAE27F128D996A0 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B8BDE16E235A1F6B8BF97E7 /* AppState.swift */; };
 		4AEB0F26BFD153CADA81E314 /* MockGitHubClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DCD9C373C64F2C4FBAB5FFA /* MockGitHubClient.swift */; };
@@ -69,6 +70,7 @@
 		77C16D0F8E345235B722E6FB /* TimelineEventTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 611FE229324726ACB5D01619 /* TimelineEventTests.swift */; };
 		7AE9D1D59D755D749A07689D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E5FD8EDDD1395CE2E48479A /* SettingsView.swift */; };
 		7C25FAB8A19E27CDA9881A76 /* AutoRefreshSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9FFD99811395196093D44EE /* AutoRefreshSchedulerTests.swift */; };
+		7D0820CCC0164B81987C03C0 /* PullRequestAge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0EA68EAC804694C06E18530 /* PullRequestAge.swift */; };
 		7E49881AE6BD836AA1137F39 /* CheckRun.swift in Sources */ = {isa = PBXBuildFile; fileRef = 774BB0D9F4E2D73FC6DECF5F /* CheckRun.swift */; };
 		812EB44365E322642D879615 /* PullRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53AD27A0204C2931E1B75616 /* PullRequestTests.swift */; };
 		83F51C31BD66971C931E7092 /* GitHubGraphQL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12FD73CCEE659006259881CD /* GitHubGraphQL.swift */; };
@@ -103,6 +105,7 @@
 		B865F31D2E3AB41DB1F695D6 /* LogExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7D299CBF8585DBACFE3C1AE /* LogExportService.swift */; };
 		BA9AD624857EA13A77782955 /* ExternalEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BFE06E0FE8EFD2001C940AA /* ExternalEditor.swift */; };
 		BE07D374871AC955C82F0FD8 /* GitDirectoriesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D15F556448815396EF8A8ED2 /* GitDirectoriesStore.swift */; };
+		BE19C686144CE6EEB9CD7AC3 /* PullRequestStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01178C4F696F9453B2DB743E /* PullRequestStatus.swift */; };
 		C254EF559D6F54242472095A /* WidgetDataMappingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA2789B3716FCB47739B65B0 /* WidgetDataMappingTests.swift */; };
 		C4661C6E78FDFC7475EB8D7B /* RequestCoalescerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7327C67190D6C1480482AC7 /* RequestCoalescerTests.swift */; };
 		C485E7FD59A33E8A2B75815D /* DashboardViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E21D2ACD1877BC876B5A5E8 /* DashboardViewModelTests.swift */; };
@@ -121,6 +124,7 @@
 		DBFD642BE8D3CBF0C561C7DB /* WidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D280E24D617F6EDE1976AE5 /* WidgetData.swift */; };
 		DDE4B84F95468B16178619C7 /* Reviewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 404EA06E3CB78A55D94A2B82 /* Reviewer.swift */; };
 		DE6F6DAC33779B719399F10F /* ToastOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE73F46EF2524F91703FA296 /* ToastOverlay.swift */; };
+		E3120A3D6229DC0B238595AB /* PullRequestStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01178C4F696F9453B2DB743E /* PullRequestStatus.swift */; };
 		E61F9ADB7469BCE775EF9CB4 /* LocalRepositoryServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D1DB214BC50D97E3CD1F5DA /* LocalRepositoryServiceTests.swift */; };
 		ECE4955ACF2E7F4D23DE0351 /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8065F3287F8EA20E36F537FC /* SettingsViewModel.swift */; };
 		F1DE770210315B9A4B8FF478 /* LogEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3ACE77AC1302A6D425C48CB /* LogEntry.swift */; };
@@ -166,6 +170,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		01178C4F696F9453B2DB743E /* PullRequestStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullRequestStatus.swift; sourceTree = "<group>"; };
 		03D42FF48B4D23A41767D466 /* MockURLProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockURLProtocol.swift; sourceTree = "<group>"; };
 		0539E1E1791241E971A9DFF2 /* MockLogExportDependencies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockLogExportDependencies.swift; sourceTree = "<group>"; };
 		085F45B5BF4F3403433ECB4B /* PullRequestPilotTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PullRequestPilotTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -277,6 +282,7 @@
 		D9FFD99811395196093D44EE /* AutoRefreshSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoRefreshSchedulerTests.swift; sourceTree = "<group>"; };
 		DA81C009504CF47B9DA4EF95 /* SearchQuery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchQuery.swift; sourceTree = "<group>"; };
 		DCD4653B8D1D9368655DB6AE /* LogExportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogExportServiceTests.swift; sourceTree = "<group>"; };
+		E0EA68EAC804694C06E18530 /* PullRequestAge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullRequestAge.swift; sourceTree = "<group>"; };
 		E3ACE77AC1302A6D425C48CB /* LogEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogEntry.swift; sourceTree = "<group>"; };
 		E4FAD5E316A5839F8E3322E9 /* TimelineResponseMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineResponseMappingTests.swift; sourceTree = "<group>"; };
 		E95397D0E5E86B354D58214A /* ReviewerMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewerMappingTests.swift; sourceTree = "<group>"; };
@@ -524,6 +530,8 @@
 			isa = PBXGroup;
 			children = (
 				7956A945631A11303A53BA81 /* Logger+Category.swift */,
+				E0EA68EAC804694C06E18530 /* PullRequestAge.swift */,
+				01178C4F696F9453B2DB743E /* PullRequestStatus.swift */,
 				9D280E24D617F6EDE1976AE5 /* WidgetData.swift */,
 			);
 			path = Shared;
@@ -796,7 +804,9 @@
 			files = (
 				435918A905F6D46F867F9348 /* DashboardViewEntity.swift in Sources */,
 				59E8786349A7F96E1D408F68 /* Logger+Category.swift in Sources */,
+				4734B2488451C1D48761A8A6 /* PullRequestAge.swift in Sources */,
 				87C7E813416BBE39A49486DB /* PullRequestPilotWidget.swift in Sources */,
+				E3120A3D6229DC0B238595AB /* PullRequestStatus.swift in Sources */,
 				0EB5FF630CA876E20B04822F /* SelectViewIntent.swift in Sources */,
 				A655050091C778951289108A /* ViewDetailWidget.swift in Sources */,
 				546991698C848201A98B6FFA /* WidgetData.swift in Sources */,
@@ -843,9 +853,11 @@
 				91BBF9631803C656E4E54A6B /* PRFetcher.swift in Sources */,
 				07F19EC97F6B8C43F7F622A6 /* PRGrouping.swift in Sources */,
 				F4206F45549E53ADCEE3A7D8 /* PullRequest.swift in Sources */,
+				7D0820CCC0164B81987C03C0 /* PullRequestAge.swift in Sources */,
 				409CBA2DBF0F6F4F9DB94F77 /* PullRequestPilotApp.swift in Sources */,
 				B51C83326BFAF9253C5C16C7 /* PullRequestRowView.swift in Sources */,
 				931A44F36A86E90462B5D5DB /* PullRequestStateIconView.swift in Sources */,
+				BE19C686144CE6EEB9CD7AC3 /* PullRequestStatus.swift in Sources */,
 				F8C6E79C61B1BFAB1EE2F1A0 /* RelativeTimestampText.swift in Sources */,
 				5610CD3795558B61A34E10F0 /* RequestCoalescer.swift in Sources */,
 				A03FBAB45801495A5236A4AA /* ReviewQueueView.swift in Sources */,

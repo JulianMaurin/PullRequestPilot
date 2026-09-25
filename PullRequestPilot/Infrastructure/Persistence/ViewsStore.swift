@@ -91,17 +91,8 @@ final class ViewsStore: ViewsStoreProtocol {
         return base.appendingPathComponent(bundleID, isDirectory: true)
     }
 
-    private static let backupDateFormatterLock = NSLock()
-    private static let backupDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
-
+    /// The local calendar day, e.g. "2026-09-25".
     static func backupDateString(for date: Date = .now) -> String {
-        backupDateFormatterLock.lock()
-        defer { backupDateFormatterLock.unlock() }
-        return backupDateFormatter.string(from: date)
+        date.formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day())
     }
 }

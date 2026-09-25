@@ -661,36 +661,15 @@ extension TimelineItemsConnection {
     }
 }
 
-// MARK: - Shared ISO8601 Formatters
+// MARK: - ISO 8601 Dates
 
-private enum ISO8601DateParsing {
-    /// Per-thread formatters avoid the process-wide NSLock that serialised
-    /// every parse call. On macOS 12+ `ISO8601DateFormatter` is not thread-safe
-    /// but each thread gets its own instance via `Thread.current.threadDictionary`.
-    private static let primaryKey = "com.pullrequestpilot.iso8601.primary"
-    private static let fallbackKey = "com.pullrequestpilot.iso8601.fallback"
+/// A Sendable value type: shared across threads without a lock. Its lenient
+/// parse reads timestamps with or without fractional seconds.
+private let iso8601 = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
-    private static func formatter(key: String, options: ISO8601DateFormatter.Options) -> ISO8601DateFormatter {
-        let dict = Thread.current.threadDictionary
-        if let existing = dict[key] as? ISO8601DateFormatter {
-            return existing
-        }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = options
-        dict[key] = formatter
-        return formatter
-    }
-
-    static func parse(_ string: String) -> Date? {
-        let primary = formatter(key: primaryKey, options: [.withInternetDateTime, .withFractionalSeconds])
-        if let date = primary.date(from: string) { return date }
-        let fallback = formatter(key: fallbackKey, options: [.withInternetDateTime])
-        return fallback.date(from: string)
-    }
-}
-
+/// Callers log the timestamps that don't parse.
 private func parseISO8601Date(_ string: String) -> Date? {
-    ISO8601DateParsing.parse(string)
+    try? iso8601.parse(string)
 }
 
 // MARK: - DTO → Domain Mapping

@@ -458,13 +458,12 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
 
     // MARK: - Retry-After Parsing
 
-    private static let retryAfterLock = NSLock()
-    private static let retryAfterFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
-        return formatter
-    }()
+    /// An HTTP-date, e.g. "Fri, 22 Apr 2026 12:00:00 GMT" (always GMT).
+    private static let httpDateStrategy = Date.ParseStrategy(
+        format: "\(weekday: .abbreviated), \(day: .twoDigits) \(month: .abbreviated) \(year: .defaultDigits) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits):\(second: .twoDigits) GMT",
+        locale: Locale(identifier: "en_US_POSIX"),
+        timeZone: .gmt
+    )
 
     static func isRateLimited(response: HTTPURLResponse) -> Bool {
         if response.value(forHTTPHeaderField: "Retry-After") != nil { return true }
@@ -511,11 +510,7 @@ final class GitHubClient: GitHubClientProtocol, Sendable {
             if let seconds = TimeInterval(retryStr) {
                 return seconds
             }
-            // Try HTTP-date format (e.g. "Fri, 22 Apr 2026 12:00:00 GMT")
-            retryAfterLock.lock()
-            let date = retryAfterFormatter.date(from: retryStr)
-            retryAfterLock.unlock()
-            if let date {
+            if let date = try? httpDateStrategy.parse(retryStr) {
                 return max(0, date.timeIntervalSince1970 - Date().timeIntervalSince1970)
             }
         }

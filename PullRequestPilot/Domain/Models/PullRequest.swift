@@ -28,24 +28,10 @@ struct PullRequest: Identifiable, Hashable, Sendable {
 
     var linesChanged: Int { additions + deletions }
 
-    private static let ageFormatterLock = NSLock()
-    private nonisolated(unsafe) static let ageFormatter: RelativeDateTimeFormatter = {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter
-    }()
-
     var age: String { age(relativeTo: .now) }
 
     func age(relativeTo now: Date) -> String {
-        // Future createdAt (server drift, timezone bugs) would format as
-        // "in 2 min." — mirror the guard in Date.relativeTimestampText(relativeTo:).
-        if createdAt > now {
-            return "just now"
-        }
-        Self.ageFormatterLock.lock()
-        defer { Self.ageFormatterLock.unlock() }
-        return Self.ageFormatter.localizedString(for: createdAt, relativeTo: now)
+        PullRequestAge.abbreviated(since: createdAt, relativeTo: now)
     }
 }
 
@@ -78,26 +64,6 @@ struct Author: Hashable, Sendable {
 struct Label: Hashable, Sendable {
     let name: String
     let color: String
-}
-
-enum PullRequestState: String, Sendable {
-    case open = "OPEN"
-    case closed = "CLOSED"
-    case merged = "MERGED"
-}
-
-enum CheckStatus: String, Sendable {
-    case pending = "PENDING"
-    case success = "SUCCESS"
-    case failure = "FAILURE"
-    case error = "ERROR"
-    case expected = "EXPECTED"
-}
-
-enum ReviewDecision: String, Sendable {
-    case approved = "APPROVED"
-    case changesRequested = "CHANGES_REQUESTED"
-    case reviewRequired = "REVIEW_REQUIRED"
 }
 
 // MARK: - User Review
@@ -168,21 +134,6 @@ struct LastActivity: Hashable, Sendable {
 // MARK: - Shared Timestamp Formatting
 
 extension Date {
-    private static let timestampLock = NSLock()
-
-    private static let timeFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return formatter
-    }()
-
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.setLocalizedDateFormatFromTemplate("MMM d")
-        return formatter
-    }()
-
     func relativeTimestampText(relativeTo now: Date) -> String {
         let calendar = Calendar.current
 
@@ -197,19 +148,13 @@ extension Date {
         let startOfTimestamp = calendar.startOfDay(for: self)
         let dayDifference = calendar.dateComponents([.day], from: startOfTimestamp, to: startOfToday).day ?? 0
 
-        Self.timestampLock.lock()
-        let time = Self.timeFormatter.string(from: self)
-        let dateStr = dayDifference > 1 ? Self.dateFormatter.string(from: self) : nil
-        Self.timestampLock.unlock()
-
+        let time = formatted(date: .omitted, time: .shortened)
         if dayDifference <= 0 {
             return "today at \(time)"
         } else if dayDifference == 1 {
             return "yesterday at \(time)"
-        } else if let dateStr {
-            return "\(dateStr) at \(time)"
         } else {
-            return "today at \(time)"
+            return "\(formatted(.dateTime.month(.abbreviated).day())) at \(time)"
         }
     }
 }
