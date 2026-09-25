@@ -1,8 +1,7 @@
 # SwiftLint configuration for Pull Request Pilot.
 #
-# Rationale: see commit message history for todo/dev-tooling/13-swiftlint-custom-rule-ledger.md
-# (the ledger that produced this file). Every rule here exists to freeze a bug
-# class that has already shipped once — not to enforce style.
+# Every custom rule here exists to freeze a bug class that has already shipped
+# once — not to enforce style. Rationale per rule: see this file's commit history.
 
 included:
   - PullRequestPilot

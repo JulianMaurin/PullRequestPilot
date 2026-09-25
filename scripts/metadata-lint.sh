@@ -15,8 +15,8 @@
 #      Populated values are checked for <= 30 chars and forbidden brand
 #      terms from metadata/forbidden-terms.txt.
 #   4. metadata/appstore.yml keywords — <= 100 chars total (App Store
-#      hard limit). Same <unset>/empty contract as subtitle. Forbidden brand
-#      terms warn rather than fail.
+#      hard limit). Same <unset>/empty contract and forbidden brand terms
+#      as the subtitle.
 #   5. metadata/appstore.yml description — <= 4000 chars (App Store hard
 #      limit). Same <unset>/empty contract; no forbidden-terms check
 #      because product names are allowed in context.
@@ -164,16 +164,11 @@ else
   else
     ok "keywords length $KEYWORDS_LEN/100"
   fi
-  # A brand term in keywords can describe what the app works with, so it
-  # warns instead of failing — but the same terms cost two subtitle
-  # rejections, so keeping one should be a decision, not an accident.
+  # Same brand terms as the subtitle: Guideline 2.3.7 bans packing metadata
+  # with trademarks, and these terms already cost two rejections.
   IFS=',' read -ra KEYWORD_LIST <<< "$KEYWORDS"
   for keyword in "${KEYWORD_LIST[@]}"; do
-    for term in "${FORBIDDEN_TERMS[@]}"; do
-      if echo "$keyword" | grep -iqw -- "$term"; then
-        warn "keyword \"$keyword\" is the brand term \"$term\" (Guideline 2.3.7 risk) — keep only if deliberate"
-      fi
-    done
+    check_forbidden_terms "keyword" "$keyword" || true
   done
 fi
 

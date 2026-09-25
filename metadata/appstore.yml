@@ -25,7 +25,7 @@ subtitle: "The pull requests manager app"
 # Optimized for discoverability: no duplication with App Name / Subtitle
 # ("pull", "request(s)", "manager" are already indexed from those fields),
 # adds high-value adjacent terms developers actually search for.
-keywords: "pr,github,code review,reviewer,git,diff,merge,ci,check,dashboard,issue,oncall,commit,menu bar"
+keywords: "pr,code review,reviewer,git,diff,merge,ci,check,dashboard,issue,oncall,commit,menu bar"
 
 description: |
   Never miss a code review again. Pull Request Pilot lives in your Mac menu bar and keeps your GitHub pull request queue one click away — no browser tab, no context switch.

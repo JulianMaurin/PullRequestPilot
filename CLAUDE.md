@@ -17,7 +17,7 @@ make uninstall        # Remove from /Applications
 make test             # Lint + run unit tests
 make lint             # SwiftLint --strict (blocks on errors and warnings)
 make lint-errors-only # SwiftLint without --strict (dev iteration)
-make metadata-lint    # App Store subtitle/version/privacy checks
+make metadata-lint    # App Store subtitle/keywords/version/privacy checks
 make release-check    # Pre-submission gate (lint + test + metadata + build + codesign)
 make clean            # Clean build artifacts
 make clean-deep       # Wipes DerivedData + Xcode caches + NotificationCenter (ghost-error reset)
@@ -27,7 +27,7 @@ Build output is piped through `scripts/xcb-filter.sh` (falls back to `xcpretty` 
 
 **SwiftLint is required.** `brew install swiftlint`. Both `make build` and `make test` run `make lint` first — lint failures block the build. Rules live in `.swiftlint.yml` at the repo root; tests use a smaller subset via `PullRequestPilotTests/.swiftlint.yml`.
 
-In debug builds, `IdentityActor.bootstrap()` reads `GITHUB_TOKEN` from the environment (`#if DEBUG`). Create a `.env` file at the project root and `make debug` will source it automatically.
+In debug builds, `IdentityActor.readStoredToken(from:)` prefers `GITHUB_TOKEN` from the environment over the Keychain (`#if DEBUG`). Create a `.env` file at the project root and `make debug` will source it automatically.
 
 ```bash
 # Open in Xcode
@@ -55,10 +55,12 @@ Domain/Models/        — Pure data models, no dependencies
 Features/             — Feature modules (View + ViewModel pairs)
 Infrastructure/       — External service adapters (GitHub API, Keychain, Persistence)
 App/                  — App entry point, DI root (AppState), root navigation
-Shared/               — Cross-cutting constants
+Shared/               — Cross-cutting constants (app target only)
 ```
 
-**Dependency flow:** Domain ← Features ← Infrastructure. Features never import each other. Infrastructure never imports Features.
+These live under `PullRequestPilot/`. The top-level `Shared/` directory is different: it's compiled into both the app and the widget (see Widget Extension Rules).
+
+**Dependency flow:** Features → Infrastructure → Domain (arrows point at dependencies). Features never import each other. Infrastructure never imports Features. This is intent, not compiler-enforced — everything is one module — so check type references when adding code.
 
 **Dependency injection:** All wiring happens in `AppState.swift` — the single composition root. ViewModels receive their dependencies via constructor injection.
 
@@ -126,7 +128,7 @@ This has shipped one production crash: `Dictionary(uniqueKeysWithValues:)` on PR
 
 - **Swift Testing** framework (`@Suite`, `@Test`) — not XCTest for new tests.
 - Protocol-based mocking: mock implementations of protocols (e.g., `MockGitHubClient`).
-- Test files mirror source structure in `PullRequestPilotTests/`.
+- Test files live flat in `PullRequestPilotTests/`, named `<TypeUnderTest>Tests.swift`.
 - Mock files go in `PullRequestPilotTests/Mocks/`.
 - Use isolated `UserDefaults(suiteName:)` in tests — never touch real user defaults.
 - **Empty stores in tests**: `ViewsStore` with fresh `UserDefaults` returns `[]` (`defaultViews` is empty). Tests must call `viewModel.addView(...)` before accessing `views.first`. Use `try #require(...)` for unwrapping, never `!`.
@@ -140,7 +142,7 @@ This has shipped one production crash: `Dictionary(uniqueKeysWithValues:)` on PR
 - **Keychain** for token storage — never persist tokens in UserDefaults or files. `IdentityActor` owns the in-memory identity state (token + viewer login); never read Keychain on every API call (causes repeated macOS permission prompts).
 - **Status bar app** — `AppDelegate` owns the `NSStatusItem`. Window hides on close (via `WindowAccessor` intercepting `windowShouldClose`) instead of being destroyed, so the status bar icon can re-show it. Never remove the `@NSApplicationDelegateAdaptor` line.
 - **No external dependencies** — everything uses Apple frameworks (URLSession, SwiftUI, Security). Keep it this way unless there's a compelling reason.
-- **XcodeGen** for project generation — avoids `.xcodeproj` merge conflicts.
+- **XcodeGen** for project generation — `project.yml` is the source of truth. The generated `.xcodeproj` is committed, so regenerate it instead of editing it.
 
 ### GraphQL pagination safety
 
@@ -192,9 +194,9 @@ Enforced by SwiftLint (`user_defaults_standard_outside_appstate`).
 
 ### Security-scoped bookmarks
 
-Every `url.startAccessingSecurityScopedResource()` must be paired with `url.stopAccessingSecurityScopedResource()` in the same scope. Missing stops leak access counts and eventually break sandbox reads.
+Bookmarked git directories get app-lifetime access on purpose, so the periodic repo scan can read them: `AppState` starts access at launch, `SettingsViewModel` stops it when a directory is removed, and `AppState.cleanup()` stops the rest. Don't "fix" that into per-function pairing.
 
-A `LocalRepositoryService.withAccess(_:)` RAII helper is planned (see `product-roadmap/ux-improvements/10-stale-resource-recovery-ux.md`). Until it lands, pair every `startAccessing` with a `defer { stopAccessing }` in the same function.
+Any other `url.startAccessingSecurityScopedResource()` must be paired with `stopAccessingSecurityScopedResource()` in the same scope (`defer`). Missing stops leak access counts and eventually break sandbox reads.
 
 ## App Store Compliance
 
@@ -216,7 +218,7 @@ This app is distributed via the Mac App Store. **Every line of code must be sand
 - **Privacy compliance** — if adding any new data collection, add matching `NSPrivacyCollectedDataTypes` in the privacy manifest. The app currently collects no user data beyond the GitHub token.
 - **Privacy manifest required** — any new framework or SDK that Apple lists as requiring a privacy manifest must include one. Check Apple's list before adopting any dependency.
 - **No misleading metadata** — bundle display name, category, and descriptions must accurately reflect app functionality.
-- **Forbidden terms in subtitle** (App Store rejected twice on this): `macOS`, `Mac`, `iOS`, `iPhone`, `iPad`, `GitHub`, `Apple`, or any other trademarked brand. Mirror the App Store Connect subtitle in `metadata/appstore.yml` and run `make metadata-lint` — it checks forbidden terms, 30-char limit, version monotonicity, and privacy manifests.
+- **Forbidden terms in subtitle** (App Store rejected twice on this): `macOS`, `Mac`, `iOS`, `iPhone`, `iPad`, `GitHub`, `Apple`, or any other trademarked brand. The same terms are banned from keywords. Mirror the App Store Connect subtitle and keywords in `metadata/appstore.yml` and run `make metadata-lint` — it checks forbidden terms (subtitle and keywords), the 30-char limit, version monotonicity, and privacy manifests.
 - **Crash-free** — App Review tests basic flows. Any crash during review is an automatic rejection. Test all flows with real and invalid tokens, network failures, and empty states.
 - **Graceful degradation** — the app must remain usable (show meaningful UI) when: network is unavailable, token is invalid/expired, GitHub API returns errors, rate limits are hit.
 - **No deprecated API usage** — do not use APIs deprecated in macOS 14+. Use the modern replacement immediately.
@@ -232,8 +234,9 @@ This app is distributed via the Mac App Store. **Every line of code must be sand
 ### Code Signing & Versioning
 
 - **Automatic signing** with team `FNR3B372S8`. Never switch to manual signing in `project.yml`.
-- **Bump `CURRENT_PROJECT_VERSION`** (build number) for every new archive/upload. App Store Connect rejects duplicate build numbers.
-- **`MARKETING_VERSION`** follows semver. Bump appropriately for releases.
+- **Versions are declared once**, in `project.yml`'s top-level `settings.base`, so the widget always matches the app (App Store Connect rejects a mismatch).
+- **Bump `MARKETING_VERSION`** (semver) above the last git tag for every release: App Store Connect closes a version once it's approved.
+- **Bump `CURRENT_PROJECT_VERSION`** (build number) for every new archive/upload. App Store Connect rejects duplicate build numbers. `make metadata-lint` enforces both bumps.
 - **Hardened runtime is ON** — never disable it. Code must work without JIT, unsigned memory, or DYLD environment variables.
 
 ### Widget Extension Rules
@@ -247,18 +250,18 @@ This app is distributed via the Mac App Store. **Every line of code must be sand
 - **AppIntentConfiguration for configurable widgets** — use `AppEntity` + `EntityQuery` + `WidgetConfigurationIntent` for widgets the user can configure (e.g., selecting a dashboard view). Mark static properties as `let` (not `var`) for Swift 6 strict concurrency.
 - **macOS caches widget metadata aggressively** — after changing widget kinds/names, you must: clear DerivedData (`rm -rf ~/Library/Developer/Xcode/DerivedData/PullRequestPilot-*`), kill NotificationCenter (`killall NotificationCenter`), and reinstall the app. A debug build in DerivedData can register a conflicting widget extension that shadows the installed app's widgets.
 - **Widget extension has its own `Assets.xcassets`** — the widget extension needs a separate asset catalog with an `AppIcon.appiconset` so the widget gallery shows the correct icon. The `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` build setting must be set in `project.yml` for the widget target.
-- **Deep linking** — widgets use `pullrequestpilot://` URL scheme (registered in `Info.plist` via `project.yml`). `Link(destination:)` wraps PR rows for direct GitHub URL opening. `widgetURL` or `pullrequestpilot://view/<viewID>` navigates to a specific dashboard view in the app.
+- **Deep linking** — the app registers the `pullrequestpilot://` scheme (`Info.plist` via `project.yml`) and handles only `pullrequestpilot://view/<viewID>` (`DeepLinkRoute`), which selects a view. Widgets wrap PR rows in `Link(destination:)` to open GitHub; no widget emits the view link yet.
 
 ### Data & Persistence
 
-- **UserDefaults for non-sensitive preferences only** — use the app group suite (`group.com.pullrequestpilot.shared`) for data shared with the widget.
+- **UserDefaults for non-sensitive preferences only.** Data shared with the widget is a JSON file (`widget-data.json`) in the app-group container `FNR3B372S8.com.pullrequestpilot.shared` (`WidgetData.appGroupIdentifier`) — there is no shared UserDefaults suite. Adding one would also need privacy-manifest reason `1C8F.1`.
 - **Keychain for secrets** — tokens, credentials, and API keys must use the Keychain. Never log, print, or persist tokens in UserDefaults, files, or crash reports.
 - **Never log sensitive data** — no token values, no full API responses containing user data. Use `os_log` with appropriate privacy levels (`%{private}@`) for any user-identifiable information.
 
 ### Build Verification Checklist
 
 Before any PR that touches production code:
-1. `make build` succeeds with zero warnings.
+1. `make build` succeeds (warnings are errors).
 2. `make test` passes all tests.
 3. App launches and completes core flows (auth, PR list, refresh, settings) in sandbox.
 4. Widget renders correctly with both populated and empty data.
@@ -285,7 +288,7 @@ After a batch of fixes, split into one commit per user-visible category so the n
 - Good: `Fix <bug>`, `Add <feature>`, `Refactor <subsystem>`, `Update <dependency>`.
 - Bad: `Apply review feedback`, `Bugfixes`, `Misc`.
 
-Use `git add -p` to stage by category. Planned `/reshape-commits` helper: `todo/dev-tooling/15-build-and-xcodegen-tooling.md`.
+Use `git add -p` to stage by category; `scripts/reshape-commits.sh` splits a diff by file globs when categories map to whole files.
 
 ## Quality Standards
 
