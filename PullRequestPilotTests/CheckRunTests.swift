@@ -198,7 +198,7 @@ struct CheckRunDTOMappingTests {
             makeStatusContextNode(context: "CI", state: "SUCCESS"),
             makeCheckRunNode(name: "CI", status: "COMPLETED", conclusion: "FAILURE", detailsUrl: "https://example.com"),
         ])
-        let results = connection.toDomain()
+        let results = connection.toDomain().deduplicatedLatest()
         #expect(results.count == 1)
         #expect(results[0].conclusion == .failure)
         #expect(results[0].detailsURL != nil)
@@ -235,6 +235,37 @@ struct CheckRunDTOMappingTests {
         #expect(results.isEmpty)
     }
 
+    @Test("a page maps every node; duplicates stay until deduplicatedLatest")
+    func pageMappingKeepsDuplicates() {
+        let connection = makeConnection([
+            makeStatusContextNode(context: "CI", state: "SUCCESS"),
+            makeCheckRunNode(name: "CI", status: "COMPLETED", conclusion: "FAILURE"),
+        ])
+        let results = connection.toDomain(pageOffset: 7)
+        #expect(results.map(\.id) == ["check-7-CI", "status-8-CI"])
+        #expect(results.map(\.isCommitStatus) == [false, true])
+    }
+
+    @Test("a check run beats a commit status of the same name whichever page each is on")
+    func dedupeIndependentOfPageBoundaries() {
+        let statusPage = makeConnection([makeStatusContextNode(context: "CI", state: "SUCCESS")])
+        let checkRunPage = makeConnection([
+            makeCheckRunNode(name: "CI", status: "COMPLETED", conclusion: "FAILURE", detailsUrl: "https://example.com"),
+        ])
+        let onePage = makeConnection([
+            makeStatusContextNode(context: "CI", state: "SUCCESS"),
+            makeCheckRunNode(name: "CI", status: "COMPLETED", conclusion: "FAILURE", detailsUrl: "https://example.com"),
+        ]).toDomain().deduplicatedLatest()
+        let statusFirst = (statusPage.toDomain() + checkRunPage.toDomain(pageOffset: 1)).deduplicatedLatest()
+        let checkRunFirst = (checkRunPage.toDomain() + statusPage.toDomain(pageOffset: 1)).deduplicatedLatest()
+
+        for results in [onePage, statusFirst, checkRunFirst] {
+            #expect(results.count == 1)
+            #expect(results.first?.conclusion == .failure)
+            #expect(results.first?.detailsURL != nil)
+        }
+    }
+
     // MARK: - workflowRunID + startedAt dedupe
 
     @Test("two CheckRuns with same name and different workflowRunID both survive")
@@ -243,7 +274,7 @@ struct CheckRunDTOMappingTests {
             makeCheckRunNode(name: "test", status: "COMPLETED", conclusion: "SUCCESS", workflowRunID: 1001, startedAt: "2024-01-15T10:00:00Z"),
             makeCheckRunNode(name: "test", status: "COMPLETED", conclusion: "FAILURE", workflowRunID: 1002, startedAt: "2024-01-15T11:00:00Z"),
         ])
-        let results = connection.toDomain()
+        let results = connection.toDomain().deduplicatedLatest()
         #expect(results.count == 2)
         #expect(results.contains { $0.workflowRunID == 1001 && $0.conclusion == .success })
         #expect(results.contains { $0.workflowRunID == 1002 && $0.conclusion == .failure })
@@ -255,7 +286,7 @@ struct CheckRunDTOMappingTests {
             makeCheckRunNode(name: "test", status: "COMPLETED", conclusion: "SUCCESS", workflowRunID: 1001, startedAt: "2024-01-15T10:00:00Z"),
             makeCheckRunNode(name: "test", status: "COMPLETED", conclusion: "FAILURE", workflowRunID: 1001, startedAt: "2024-01-15T11:30:00Z"),
         ])
-        let results = connection.toDomain()
+        let results = connection.toDomain().deduplicatedLatest()
         #expect(results.count == 1)
         #expect(results[0].conclusion == .failure)
     }
@@ -266,7 +297,7 @@ struct CheckRunDTOMappingTests {
             makeCheckRunNode(name: "test", status: "COMPLETED", conclusion: "FAILURE", workflowRunID: 1001, startedAt: "2024-01-15T10:00:00Z"),
             makeCheckRunNode(name: "test", status: "COMPLETED", conclusion: "SUCCESS", workflowRunID: 1001, startedAt: "2024-01-15T11:30:00Z"),
         ])
-        let results = connection.toDomain()
+        let results = connection.toDomain().deduplicatedLatest()
         #expect(results.count == 1)
         #expect(results[0].conclusion == .success)
     }
@@ -277,7 +308,7 @@ struct CheckRunDTOMappingTests {
             makeCheckRunNode(name: "test", status: "COMPLETED", conclusion: "FAILURE", workflowRunID: 1001, startedAt: nil),
             makeCheckRunNode(name: "test", status: "COMPLETED", conclusion: "SUCCESS", workflowRunID: 1001, startedAt: nil),
         ])
-        let results = connection.toDomain()
+        let results = connection.toDomain().deduplicatedLatest()
         #expect(results.count == 1)
         #expect(results[0].conclusion == .success)
     }
@@ -288,7 +319,7 @@ struct CheckRunDTOMappingTests {
             makeStatusContextNode(context: "ci/build", state: "FAILURE"),
             makeStatusContextNode(context: "ci/build", state: "SUCCESS"),
         ])
-        let results = connection.toDomain()
+        let results = connection.toDomain().deduplicatedLatest()
         #expect(results.count == 1)
         // Within a group both runs have nil startedAt, so the priority
         // tie-break keeps the SUCCESS.
@@ -301,7 +332,7 @@ struct CheckRunDTOMappingTests {
             makeCheckRunNode(name: "CI", status: "COMPLETED", conclusion: "SUCCESS", workflowRunID: 1001, startedAt: "2024-01-15T10:00:00Z"),
             makeStatusContextNode(context: "CI", state: "FAILURE"),
         ])
-        let results = connection.toDomain()
+        let results = connection.toDomain().deduplicatedLatest()
         // The CheckRun keys on ("CI", 1001); the StatusContext keys on
         // ("CI", nil). Different keys → both survive.
         #expect(results.count == 2)

@@ -416,119 +416,54 @@ struct CheckRunContextNode: Decodable {
 }
 
 extension CheckRunCommitsConnection {
-    /// Maps a single page of the check-run rollup to domain `CheckRun`s and
-    /// dedupes by `(name, workflowRunID)`. Within a group, the run with the
-    /// latest `startedAt` wins. Runs with no `workflowRunID` (StatusContexts
-    /// and CheckRuns without a check suite) dedupe by name alone.
-    ///
-    /// CheckRun nodes are processed before StatusContext nodes so that when a
-    /// name exists as both (rare but possible), the richer CheckRun fields
-    /// win — the StatusContext with no workflowRunID keys on `name + nil`
-    /// which collides with a CheckRun that also has a nil `workflowRunID`,
-    /// and the priority-based tie-break keeps whichever has better state.
+    /// Maps one page of the check-run rollup to domain `CheckRun`s, check runs
+    /// before commit statuses. Deduplication happens once, over every page,
+    /// in `deduplicatedLatest()`: deduping per page made the result depend on
+    /// where the page boundaries fell.
     func toDomain(pageOffset: Int = 0) -> [CheckRun] {
         guard let rollup = nodes.first?.commit.statusCheckRollup else { return [] }
         let allNodes = rollup.contexts.nodes
+        var runs: [CheckRun] = []
 
-        let checkRunNodes = allNodes.filter { $0.typename == "CheckRun" }
-        let statusContextNodes = allNodes.filter { $0.typename == "StatusContext" }
-
-        var best: [CheckRunDedupeKey: CheckRun] = [:]
-        var order: [CheckRunDedupeKey] = []
-        // Keys claimed by CheckRun entries; used to skip a StatusContext
-        // that would collide on `(name, nil)` with a CheckRun that also
-        // happens to have a nil workflowRunID (Dependabot etc.). Tracked
-        // separately because CheckRun entries with non-nil workflowRunID
-        // key on a *different* `CheckRunDedupeKey` — we don't want to skip
-        // the StatusContext in that case.
-        var checkRunClaimedKeys: Set<CheckRunDedupeKey> = []
-        var nextIndex = pageOffset
-
-        func upsert(_ run: CheckRun) {
-            let key = CheckRunDedupeKey(name: run.name, workflowRunID: run.workflowRunID)
-            if let existing = best[key] {
-                if Self.isLater(run, than: existing) {
-                    best[key] = run
-                }
-            } else {
-                order.append(key)
-                best[key] = run
-            }
-        }
-
-        for node in checkRunNodes {
+        for node in allNodes where node.typename == "CheckRun" {
             guard let name = node.name else { continue }
-            let globalIndex = nextIndex
-            nextIndex += 1
-            let status = node.status.flatMap { CheckRunStatus(rawValue: $0) } ?? .queued
-            let conclusion = node.conclusion.flatMap { CheckRunConclusion(rawValue: $0) }
-            let url = node.detailsUrl.flatMap { URL(string: $0) }
             let workflowRunID = node.checkSuite?.workflowRun?.databaseId
-            let startedAt = node.startedAt.flatMap(parseISO8601Date)
             // Include workflowRunID in the synthesized ID so SwiftUI `ForEach`
-            // keeps distinct `(name, workflowRunID)` entries distinct even
-            // when they share an index bucket.
+            // keeps distinct `(name, workflowRunID)` entries distinct.
             let idSuffix = workflowRunID.map { "-\($0)" } ?? ""
-            let run = CheckRun(
-                id: "check-\(globalIndex)-\(name)\(idSuffix)",
+            runs.append(CheckRun(
+                id: "check-\(pageOffset + runs.count)-\(name)\(idSuffix)",
                 name: name,
-                status: status,
-                conclusion: conclusion,
-                detailsURL: url,
+                status: node.status.flatMap { CheckRunStatus(rawValue: $0) } ?? .queued,
+                conclusion: node.conclusion.flatMap { CheckRunConclusion(rawValue: $0) },
+                detailsURL: node.detailsUrl.flatMap { URL(string: $0) },
                 isRequired: node.isRequired ?? false,
                 workflowRunID: workflowRunID,
-                startedAt: startedAt
-            )
-            checkRunClaimedKeys.insert(CheckRunDedupeKey(name: run.name, workflowRunID: run.workflowRunID))
-            upsert(run)
+                startedAt: node.startedAt.flatMap(parseISO8601Date)
+            ))
         }
 
-        for node in statusContextNodes {
+        for node in allNodes where node.typename == "StatusContext" {
             guard let context = node.context else { continue }
-            let key = CheckRunDedupeKey(name: context, workflowRunID: nil)
-            // If a CheckRun with nil workflowRunID already claimed this key,
-            // prefer the richer CheckRun data and drop the StatusContext.
-            if checkRunClaimedKeys.contains(key) { continue }
-            let globalIndex = nextIndex
-            nextIndex += 1
-            let conclusion: CheckRunConclusion? = node.state.flatMap {
-                switch $0 {
-                case "SUCCESS": return .success
-                case "FAILURE": return .failure
-                case "ERROR": return .failure
-                case "PENDING": return nil
-                default: return nil
-                }
+            let conclusion: CheckRunConclusion? = switch node.state {
+            case "SUCCESS": .success
+            case "FAILURE", "ERROR": .failure
+            default: nil
             }
-            let status: CheckRunStatus = node.state == "PENDING" ? .pending : .completed
-            let url = node.targetUrl.flatMap { URL(string: $0) }
-            let run = CheckRun(
-                id: "status-\(globalIndex)-\(context)",
+            runs.append(CheckRun(
+                id: "status-\(pageOffset + runs.count)-\(context)",
                 name: context,
-                status: status,
+                status: node.state == "PENDING" ? .pending : .completed,
                 conclusion: conclusion,
-                detailsURL: url,
+                detailsURL: node.targetUrl.flatMap { URL(string: $0) },
                 isRequired: false,
                 workflowRunID: nil,
-                startedAt: nil
-            )
-            upsert(run)
+                startedAt: nil,
+                isCommitStatus: true
+            ))
         }
 
-        return order.compactMap { best[$0] }
-    }
-
-    private static func isLater(_ candidate: CheckRun, than current: CheckRun) -> Bool {
-        switch (candidate.startedAt, current.startedAt) {
-        case let (.some(a), .some(b)) where a != b:
-            return a > b
-        case (.some, .none):
-            return true
-        case (.none, .some):
-            return false
-        default:
-            return candidate.conclusionPriority > current.conclusionPriority
-        }
+        return runs
     }
 }
 

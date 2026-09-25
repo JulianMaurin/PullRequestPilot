@@ -16,6 +16,31 @@ struct CheckRun: Identifiable, Hashable, Sendable {
     /// within a `(name, workflowRunID)` group. `nil` falls back to
     /// `conclusionPriority`.
     let startedAt: Date?
+    /// A commit status (`StatusContext`, from a CI outside GitHub Actions)
+    /// rather than a check run.
+    let isCommitStatus: Bool
+
+    init(
+        id: String,
+        name: String,
+        status: CheckRunStatus,
+        conclusion: CheckRunConclusion?,
+        detailsURL: URL?,
+        isRequired: Bool,
+        workflowRunID: Int?,
+        startedAt: Date?,
+        isCommitStatus: Bool = false
+    ) {
+        self.id = id
+        self.name = name
+        self.status = status
+        self.conclusion = conclusion
+        self.detailsURL = detailsURL
+        self.isRequired = isRequired
+        self.workflowRunID = workflowRunID
+        self.startedAt = startedAt
+        self.isCommitStatus = isCommitStatus
+    }
 
     /// Priority for deduplication fallback: higher = preferred when two runs
     /// in the same group have equal / missing `startedAt`.
@@ -95,21 +120,24 @@ struct CheckRunDedupeKey: Hashable {
 }
 
 extension Array where Element == CheckRun {
-    /// Dedupes check runs by `(name, workflowRunID)`. Within a group, the run
-    /// with the latest `startedAt` wins — if timestamps tie or are missing,
-    /// falls back to `conclusionPriority`. This collapses workflow re-runs to
-    /// their latest attempt while keeping distinct workflows that share a job
-    /// name as separate entries.
+    /// Dedupes check runs by `(name, workflowRunID)`, across every page of a
+    /// pull request's checks at once. Within a group, the run with the latest
+    /// `startedAt` wins — if timestamps tie or are missing, falls back to
+    /// `conclusionPriority`. This collapses workflow re-runs to their latest
+    /// attempt while keeping distinct workflows that share a job name as
+    /// separate entries.
     ///
-    /// Entries with `workflowRunID == nil` (StatusContexts, orphan CheckRuns)
-    /// dedupe by name alone, matching the prior behaviour for those cases.
+    /// Entries with `workflowRunID == nil` (commit statuses, orphan check
+    /// runs) dedupe by name alone. A check run and a commit status in one
+    /// group are the same check reported twice: the check run wins, for its
+    /// details link and required flag.
     func deduplicatedLatest() -> [CheckRun] {
         var best: [CheckRunDedupeKey: CheckRun] = [:]
         var order: [CheckRunDedupeKey] = []
         for run in self {
             let key = CheckRunDedupeKey(name: run.name, workflowRunID: run.workflowRunID)
             if let existing = best[key] {
-                if Self.isLater(run, than: existing) {
+                if Self.replaces(run, existing) {
                     best[key] = run
                 }
             } else {
@@ -118,6 +146,13 @@ extension Array where Element == CheckRun {
             }
         }
         return order.compactMap { best[$0] }
+    }
+
+    private static func replaces(_ candidate: CheckRun, _ current: CheckRun) -> Bool {
+        if candidate.isCommitStatus != current.isCommitStatus {
+            return !candidate.isCommitStatus
+        }
+        return isLater(candidate, than: current)
     }
 
     private static func isLater(_ candidate: CheckRun, than current: CheckRun) -> Bool {
