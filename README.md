@@ -74,7 +74,7 @@ Matching priority: exact branch name > worktree branch > commit SHA.
 ## Getting started
 
 ```bash
-git clone https://github.com/JulianMaurin/pull-request-pilot.git
+git clone https://github.com/JulianMaurin/PullRequestPilot.git
 cd PullRequestPilot
 make build
 make run
@@ -136,4 +136,4 @@ Pull Request Pilot collects no user data. Your GitHub token is stored exclusivel
 
 ## License
 
-All rights reserved. This source code is proprietary and not licensed for redistribution.
+[MIT](LICENSE)
