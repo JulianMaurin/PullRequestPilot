@@ -15,7 +15,11 @@ if [[ ! -d "$RESULTS" ]]; then
   exit 0
 fi
 
-SUMMARY=$(xcrun xcresulttool get test-results summary --path "$RESULTS")
+# A bundle from a build that failed holds no test results or coverage.
+if ! SUMMARY=$(xcrun xcresulttool get test-results summary --path "$RESULTS" 2>/dev/null); then
+  echo "No test results in \`$RESULTS\`: the build failed before tests ran."
+  exit 0
+fi
 
 jq -r '
   (if .result == "Passed" then "✅ **Passed**" else "❌ **\(.result)**" end)
@@ -34,13 +38,16 @@ if [[ "$(jq '.testFailures | length' <<< "$SUMMARY")" != "0" ]]; then
   ' <<< "$SUMMARY"
 fi
 
+if ! COVERAGE=$(xcrun xccov view --report --json "$RESULTS" 2>/dev/null); then
+  exit 0
+fi
 echo
 echo "### Line coverage"
 echo
 echo "| Target | Coverage | Lines |"
 echo "|---|--:|--:|"
-xcrun xccov view --report --json "$RESULTS" | jq -r '
+jq -r '
   .targets[]
   | select(.name | endswith(".xctest") | not)
   | "| \(.name) | \(.lineCoverage * 1000 | round / 10) % | \(.coveredLines) / \(.executableLines) |"
-'
+' <<< "$COVERAGE"

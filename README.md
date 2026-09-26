@@ -126,7 +126,7 @@ make secrets-scan     # Scan the git history for secrets (gitleaks)
 
 Every push to `main` and every pull request runs:
 
-- **CI**: SwiftLint; ShellCheck and actionlint; a Release build, ad-hoc signed, checked for the hardened runtime, the sandbox and the widget's entitlements; App Store metadata checks; the unit tests, with a coverage summary; and a check that the committed Xcode project matches `project.yml`.
+- **CI**: SwiftLint; ShellCheck and actionlint; a build in the Release configuration, ad-hoc signed and checked for the hardened runtime, the sandbox and the widget's entitlements; App Store metadata checks; the unit tests, with a coverage summary; and a check that the committed Xcode project matches `project.yml`.
 - **Security**: gitleaks over the whole history, and zizmor over the workflows.
 - **CodeQL**: security analysis of the Swift code and the workflows.
 - **OpenSSF Scorecard**: supply-chain checks, published to the badge above.

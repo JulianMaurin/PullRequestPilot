@@ -52,7 +52,7 @@ jobs:
         run: make actionlint
 
   build:
-    name: Release build
+    name: Build
     runs-on: macos-26
     timeout-minutes: 30
     permissions:
@@ -80,7 +80,9 @@ jobs:
         run: make metadata-lint
         env:
           ALLOW_RELEASED_MARKETING_VERSION: "1"
-      - name: Build (Release, ad-hoc signed)
+      # Compiles the Release configuration like `make build`; nothing is
+      # archived, uploaded or tagged.
+      - name: Build (Release configuration, ad-hoc signed)
         run: >-
           make build
           XCODEBUILD_FLAGS="CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual"

@@ -65,8 +65,9 @@ install_swiftlint() {
   unzip -q -o "$archive" swiftlint -d "$BIN_DIR"
 }
 
-# XcodeGen resolves its setting presets relative to the binary, so the whole
-# archive stays together and bin/ gets a symlink.
+# XcodeGen looks for its setting presets in ../share/xcodegen next to the path
+# it was invoked by, symlinks unresolved; without them it silently generates a
+# project missing the preset settings (TEST_HOST among them).
 install_xcodegen() {
   local archive
   if [[ "$PLATFORM" != darwin ]]; then
@@ -74,9 +75,11 @@ install_xcodegen() {
     exit 1
   fi
   archive=$(download "https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip" "$XCODEGEN_SHA256_DARWIN")
-  rm -rf "$TOOLS_DIR/xcodegen"
-  unzip -q -o "$archive" -d "$TOOLS_DIR"
-  ln -sf "$TOOLS_DIR/xcodegen/bin/xcodegen" "$BIN_DIR/xcodegen"
+  unzip -q -o "$archive" -d "$DOWNLOAD_DIR"
+  rm -rf "$TOOLS_DIR/share/xcodegen"
+  mkdir -p "$TOOLS_DIR/share"
+  mv "$DOWNLOAD_DIR/xcodegen/share/xcodegen" "$TOOLS_DIR/share/xcodegen"
+  mv "$DOWNLOAD_DIR/xcodegen/bin/xcodegen" "$BIN_DIR/xcodegen"
 }
 
 install_gitleaks() {
