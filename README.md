@@ -157,6 +157,10 @@ Shared/               Cross-target constants and widget data models
 
 Pull Request Pilot collects no user data. Your GitHub token is stored exclusively in the macOS Keychain and never leaves your machine. See the [privacy policy](https://julianmaurin.github.io/PullRequestPilot/privacy).
 
+## Contributing
+
+Bug reports, ideas and pull requests are welcome: see [CONTRIBUTING](.github/CONTRIBUTING.md). Report security issues privately, as the [security policy](.github/SECURITY.md) describes.
+
 ## License
 
 [MIT](LICENSE)
