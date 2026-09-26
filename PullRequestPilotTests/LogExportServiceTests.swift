@@ -47,7 +47,9 @@ struct LogExportServiceExportTests {
         #expect(contents.contains("[error] [EventCenter] event: boom"))
 
         let reveals = await workspace.recordedReveals()
-        #expect(reveals == [logFile])
+        // Unsandboxed (CI), the temporary directory is under the /var symlink,
+        // which contentsOfDirectory resolves and the service doesn't.
+        #expect(reveals.map { $0.resolvingSymlinksInPath() } == [logFile.resolvingSymlinksInPath()])
 
         #expect(recorder.events.count == 1)
         if case .info(let text) = recorder.events.first?.payload {
