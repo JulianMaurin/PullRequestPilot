@@ -56,6 +56,10 @@ opt_in_rules:
 
 custom_rules:
 
+  # `included` and `excluded` are regexes matched against absolute paths, and
+  # a checkout directory named PullRequestPilot matches `PullRequestPilot/.*`
+  # for every file: rules that spare the tests exclude them explicitly.
+
   # -------------------------------------------------------------------------
   # Crash-safety rules (shipped bugs → error)
   # -------------------------------------------------------------------------
@@ -65,6 +69,8 @@ custom_rules:
       - "PullRequestPilot/.*\\.swift"
       - "PullRequestPilotWidget/.*\\.swift"
       - "Shared/.*\\.swift"
+    excluded:
+      - "PullRequestPilotTests/"
     name: "fatalError() forbidden in production"
     regex: '\bfatalError\s*\('
     message: "No fatalError() in production. Throw a typed error or surface via EventCenter."
@@ -75,6 +81,8 @@ custom_rules:
       - "PullRequestPilot/.*\\.swift"
       - "PullRequestPilotWidget/.*\\.swift"
       - "Shared/.*\\.swift"
+    excluded:
+      - "PullRequestPilotTests/"
     name: "preconditionFailure() forbidden in production"
     regex: '\bpreconditionFailure\s*\('
     message: "No preconditionFailure() — it hides crashes in lazy closures (CLAUDE.md)."
@@ -95,6 +103,8 @@ custom_rules:
       - "PullRequestPilot/.*\\.swift"
       - "PullRequestPilotWidget/.*\\.swift"
       - "Shared/.*\\.swift"
+    excluded:
+      - "PullRequestPilotTests/"
     name: "@unchecked Sendable forbidden in production"
     regex: '@unchecked\s+Sendable'
     message: "No @unchecked Sendable. Use actor, @MainActor, or a lock-backed Sendable."
@@ -109,6 +119,8 @@ custom_rules:
       - "PullRequestPilot/.*\\.swift"
       - "PullRequestPilotWidget/.*\\.swift"
       - "Shared/.*\\.swift"
+    excluded:
+      - "PullRequestPilotTests/"
     name: "Bare catch {} swallows errors"
     # Also `catch { return nil }` and friends: the same swallow with a default.
     # A plain `catch { return }` stays legal: it's how a Task.sleep loop exits
@@ -144,6 +156,8 @@ custom_rules:
       - "PullRequestPilot/.*\\.swift"
       - "PullRequestPilotWidget/.*\\.swift"
       - "Shared/.*\\.swift"
+    excluded:
+      - "PullRequestPilotTests/"
     name: "Do not hard-code is:pr"
     # A standalone literal, or one appended to a query (`" is:pr"`, `\(query) is:pr`).
     regex: '"\s*is:\s*pr\s*"|"\s+is:\s*pr\b|\)\s+is:\s*pr\b'
@@ -156,6 +170,7 @@ custom_rules:
       - "PullRequestPilotWidget/.*\\.swift"
       - "Shared/.*\\.swift"
     excluded:
+      - "PullRequestPilotTests/"
       - "Shared/Logger\\+Category\\.swift"
     name: "Logger outside the bundle-ID subsystem"
     regex: 'Logger\(\s*subsystem:|\bos_log\('
@@ -232,6 +247,8 @@ custom_rules:
       - "PullRequestPilot/.*\\.swift"
       - "PullRequestPilotWidget/.*\\.swift"
       - "Shared/.*\\.swift"
+    excluded:
+      - "PullRequestPilotTests/"
     name: "Hardcoded sandbox-unsafe path"
     regex: '"(~/|/tmp/|/usr/local/|/Users/)'
     message: "Sandbox-unsafe hardcoded path. Use NSOpenPanel or the app group container."
