@@ -31,6 +31,7 @@ PullRequestPilot/
 Shared/             compiled into the app AND the widget (WidgetData)
 PullRequestPilotWidget/
 PullRequestPilotTests/   flat, <TypeUnderTest>Tests.swift; Mocks/, Helpers/
+docs/               public website (GitHub Pages serves main:/docs); everything here is published
 ```
 
 - Dependencies point Features → Infrastructure → Domain; features don't reference each other. SwiftLint's layering rules enforce it. `ReviewQueueViewModel` is the one composite: it drives `DashboardViewModel` and `PRDetailViewModel`. A feature that needs another's capability declares a protocol; `AppState` conforms (`DashboardActionsProtocol`).
