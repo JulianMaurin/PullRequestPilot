@@ -4,59 +4,194 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Support — Pull Request Pilot</title>
-    <style>
-        :root { color-scheme: light dark; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            max-width: 640px;
-            margin: 40px auto;
-            padding: 0 20px;
-            line-height: 1.6;
-            color: #1d1d1f;
-            background: #fff;
-        }
-        @media (prefers-color-scheme: dark) {
-            body { color: #f5f5f7; background: #1d1d1f; }
-            a { color: #6cb4ee; }
-        }
-        h1 { font-size: 1.6em; }
-        h2 { font-size: 1.2em; margin-top: 1.5em; }
-        .back { font-size: 0.9em; margin-bottom: 1.5em; display: inline-block; }
-        code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
-        @media (prefers-color-scheme: dark) {
-            code { background: #333; }
-        }
-        nav { margin: 2em 0; border-top: 1px solid #e5e5e5; padding-top: 1.5em; }
-        @media (prefers-color-scheme: dark) { nav { border-color: #333; } }
-        nav a { margin-right: 1.5em; }
-    </style>
+    <meta name="description" content="Get started with Pull Request Pilot, find answers to common questions, and report a bug or request a feature.">
+    <link rel="canonical" href="https://julianmaurin.github.io/PullRequestPilot/support">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#070a12" media="(prefers-color-scheme: dark)">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <meta property="og:title" content="Pull Request Pilot support">
+    <meta property="og:description" content="Get started, find answers to common questions, and report a bug or request a feature.">
+    <meta property="og:image" content="https://julianmaurin.github.io/PullRequestPilot/images/og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <a class="back" href="./">&larr; Pull Request Pilot</a>
-    <h1>Support</h1>
+    <a class="skip-link" href="#main">Skip to content</a>
 
-    <h2>Report a Bug or Request a Feature</h2>
-    <p>Please open an issue on GitHub:</p>
-    <p><a href="https://github.com/JulianMaurin/PullRequestPilot/issues">github.com/JulianMaurin/PullRequestPilot/issues</a></p>
+    <header class="site-header">
+        <div class="container">
+            <a class="brand" href="./">
+                <img src="icon.png" alt="" width="30" height="30">
+                Pull Request Pilot
+            </a>
+            <nav class="site-nav" aria-label="Main">
+                <a href="./#features">Features</a>
+                <a href="./#widgets">Widgets</a>
+                <a href="./#privacy">Privacy</a>
+                <a href="changelog">Changelog</a>
+                <a href="support" aria-current="page">Support</a>
+            </nav>
+            <a class="button button-primary" href="https://apps.apple.com/app/pull-request-pilot/id6760570544">Get the app</a>
+        </div>
+    </header>
 
-    <h2>Getting Started</h2>
-    <p>Pull Request Pilot requires a GitHub personal access token with <code>repo</code> scope. You can create one at <a href="https://github.com/settings/tokens">github.com/settings/tokens</a>. Enter the token in the App's Settings to get started.</p>
+    <main id="main">
+        <div class="page-hero">
+            <div class="container">
+                <span class="eyebrow">Support</span>
+                <h1>How can we help?</h1>
+                <p>Set up the app in a minute, find answers to common questions, or get in touch.</p>
+            </div>
+        </div>
 
-    <h2>Common Questions</h2>
+        <div class="prose">
+            <div class="contact-grid">
+                <a class="contact-card" href="https://github.com/JulianMaurin/PullRequestPilot/issues/new">
+                    <strong>
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16.5h.01"/></svg>
+                        Report a bug
+                    </strong>
+                    Open an issue on GitHub. Attaching a log from Help › Export Logs… makes it much faster to fix.
+                </a>
+                <a class="contact-card" href="https://github.com/JulianMaurin/PullRequestPilot/issues">
+                    <strong>
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>
+                        Suggest a feature
+                    </strong>
+                    Browse what's already planned or requested, and add your idea to the list.
+                </a>
+            </div>
 
-    <h3>Where is my token stored?</h3>
-    <p>Your GitHub token is stored securely in the macOS Keychain. It is never sent anywhere except to GitHub's API.</p>
+            <h2 id="getting-started">Getting started</h2>
+            <ol class="steps">
+                <li><strong>Install the app</strong> from the <a href="https://apps.apple.com/app/pull-request-pilot/id6760570544">Mac App Store</a> and open it. The token setup appears on first launch.</li>
+                <li><strong>Create a GitHub token.</strong> The quickest option is a <a href="https://github.com/settings/tokens/new?scopes=repo&amp;description=Pull%20Request%20Pilot">classic token with the <code>repo</code> scope</a>. A fine-grained token works too; see <a href="#tokens">which token to create</a>.</li>
+                <li><strong>Paste it and click Save &amp; Validate</strong>, then Get Started.</li>
+                <li><strong>Add your views.</strong> Create the four preset views in one click, or press <kbd>⌘</kbd><kbd>N</kbd> to write your own search.</li>
+            </ol>
 
-    <h3>How do I remove my data?</h3>
-    <p>Go to Settings and click "Clear" next to your saved token. This removes the token from the Keychain and clears all cached data.</p>
+            <h2 id="faq">Common questions</h2>
+            <div class="faq">
+                <details id="tokens" open>
+                    <summary>Which token should I create?</summary>
+                    <div class="answer">
+                        <p>Either kind works:</p>
+                        <ul>
+                            <li><strong>Classic token</strong>: select the <code>repo</code> scope. Without it, pull requests from private repositories won't appear, and the app warns you about it.</li>
+                            <li><strong>Fine-grained token</strong>: give it read access to <em>Pull requests</em>, <em>Checks</em> and <em>Commit statuses</em> on the repositories you review, plus write access to <em>Pull requests</em> if you want to convert pull requests to drafts or mark them ready.</li>
+                        </ul>
+                    </div>
+                </details>
 
-    <h3>How often does the app refresh?</h3>
-    <p>By default, every 60 seconds. You can adjust this in Settings from 30 seconds to 30 minutes.</p>
+                <details>
+                    <summary>Pull requests from my organization are missing</summary>
+                    <div class="answer">
+                        <p>If your organization uses SAML single sign-on, GitHub withholds its results until the token is authorized for it. On <a href="https://github.com/settings/tokens">github.com/settings/tokens</a>, open the token's <em>Configure SSO</em> menu and authorize the organization. The app tells you when results were withheld.</p>
+                        <p>Organizations can also restrict fine-grained tokens; an owner may need to approve yours.</p>
+                    </div>
+                </details>
 
-    <nav>
-        <a href="changelog">Changelog</a>
-        <a href="privacy">Privacy Policy</a>
-        <a href="github-api-usage">GitHub API Usage</a>
-    </nav>
+                <details>
+                    <summary>Where is my token stored?</summary>
+                    <div class="answer">
+                        <p>In the macOS Keychain. It is only ever sent to GitHub's API. See the <a href="privacy">privacy policy</a> for everything the app stores.</p>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>How often does the app refresh?</summary>
+                    <div class="answer">
+                        <p>Every minute by default. You can choose anything from 30 seconds to 30 minutes in Settings, or press <kbd>⌘</kbd><kbd>R</kbd> to refresh now. Refreshing pauses while your Mac sleeps or is offline, and slows down when GitHub asks it to.</p>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>How do I add a widget?</summary>
+                    <div class="answer">
+                        <ol>
+                            <li>Right-click the desktop and choose <em>Edit Widgets…</em>, or open Notification Center and click <em>Edit Widgets</em>.</li>
+                            <li>Search for Pull Request Pilot and drag <em>PR Overview</em> or <em>PR View</em> into place.</li>
+                            <li>For PR View, right-click the widget, choose <em>Edit “PR View”</em> and pick the view to show.</li>
+                        </ol>
+                        <p>Widgets show the data from the app's last refresh, so keep the app running (it lives in the menu bar). Settings can launch it at login.</p>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>I don't get notifications</summary>
+                    <div class="answer">
+                        <p>Turn on the bell next to the view you want to follow. If the bell shows a warning, notifications are turned off for the app: open System Settings › Notifications › Pull Request Pilot and allow them.</p>
+                        <p>Only pull requests that are new to a view are announced. Changing a view's search starts over, so existing results aren't announced as new.</p>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>“Open in VS Code, iTerm or cmux” doesn't appear</summary>
+                    <div class="answer">
+                        <p>In Settings › Git Directories, add the folder that holds your clones. The app scans it in the background and offers the Open in items when a pull request's branch is checked out locally, in a worktree, or when its head commit is present. The item for an app appears only if that app is installed.</p>
+                        <p>Pull requests from forks aren't matched by branch name, since a fork's branch name says nothing about your local clones.</p>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>Can I track issues too?</summary>
+                    <div class="answer">
+                        <p>Yes. A view is any GitHub search, so <code>is:issue assignee:@me</code> works just like a pull request search.</p>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>How do I remove my data?</summary>
+                    <div class="answer">
+                        <p>In Settings, click Sign Out. This deletes the token from the Keychain and clears the pull request data, including what the widgets show. The <a href="privacy#data-deletion">privacy policy</a> explains how to remove everything else.</p>
+                    </div>
+                </details>
+            </div>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <div class="footer-grid">
+                <div>
+                    <a class="brand" href="./">
+                        <img src="icon.png" alt="" width="30" height="30">
+                        Pull Request Pilot
+                    </a>
+                    <p>A native Mac app for your pull request review queue, made by Julian Maurin.</p>
+                </div>
+                <div>
+                    <h2>Product</h2>
+                    <ul>
+                        <li><a href="./#features">Features</a></li>
+                        <li><a href="./#widgets">Widgets</a></li>
+                        <li><a href="changelog">Changelog</a></li>
+                        <li><a href="https://apps.apple.com/app/pull-request-pilot/id6760570544">Mac App Store</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h2>Help</h2>
+                    <ul>
+                        <li><a href="support">Support</a></li>
+                        <li><a href="privacy">Privacy Policy</a></li>
+                        <li><a href="github-api-usage">GitHub API Usage</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h2>Source</h2>
+                    <ul>
+                        <li><a href="https://github.com/JulianMaurin/PullRequestPilot">Repository</a></li>
+                        <li><a href="https://github.com/JulianMaurin/PullRequestPilot/issues">Report an issue</a></li>
+                        <li><a href="https://github.com/JulianMaurin/PullRequestPilot/blob/main/LICENSE">MIT License</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <span>© 2026 Julian Maurin</span>
+                <span>Not affiliated with GitHub, Inc. Mac and App Store are trademarks of Apple Inc.</span>
+            </div>
+        </div>
+    </footer>
 </body>
 </html>

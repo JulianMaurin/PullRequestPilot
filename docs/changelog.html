@@ -4,114 +4,207 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Changelog — Pull Request Pilot</title>
-    <style>
-        :root { color-scheme: light dark; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            max-width: 640px;
-            margin: 40px auto;
-            padding: 0 20px;
-            line-height: 1.6;
-            color: #1d1d1f;
-            background: #fff;
-        }
-        @media (prefers-color-scheme: dark) {
-            body { color: #f5f5f7; background: #1d1d1f; }
-            a { color: #6cb4ee; }
-            .release { border-color: #333; }
-        }
-        h1 { font-size: 1.8em; margin-bottom: 0.2em; }
-        h2 { font-size: 1.3em; margin-top: 2em; margin-bottom: 0.5em; }
-        .back { font-size: 0.9em; margin-bottom: 1.5em; display: inline-block; }
-        .note {
-            border: 1px solid #e5e5e5;
-            border-radius: 10px;
-            padding: 14px 16px;
-            margin: 1.5em 0;
-            background: #f0f0f0;
-            font-size: 0.95em;
-            color: #333;
-        }
-        .note strong { display: block; margin-bottom: 4px; }
-        .note p { margin: 0; }
-        @media (prefers-color-scheme: dark) {
-            .note { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
-        }
-        .release {
-            border-top: 1px solid #e5e5e5;
-            padding-top: 1em;
-        }
-        .release .date { font-size: 0.85em; color: #86868b; }
-        .release ul { padding-left: 1.2em; margin-top: 0.5em; }
-        .release li { margin-bottom: 0.4em; font-size: 0.95em; }
-        nav { margin: 2em 0; border-top: 1px solid #e5e5e5; padding-top: 1.5em; }
-        @media (prefers-color-scheme: dark) { nav { border-color: #333; } }
-        nav a { margin-right: 1.5em; }
-    </style>
+    <meta name="description" content="What's new in each version of Pull Request Pilot, the Mac menu bar app for your pull request review queue.">
+    <link rel="canonical" href="https://julianmaurin.github.io/PullRequestPilot/changelog">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#070a12" media="(prefers-color-scheme: dark)">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <meta property="og:title" content="Pull Request Pilot changelog">
+    <meta property="og:description" content="What's new in each version of Pull Request Pilot.">
+    <meta property="og:image" content="https://julianmaurin.github.io/PullRequestPilot/images/og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <a class="back" href="./">&larr; Pull Request Pilot</a>
-    <h1>Changelog</h1>
+    <a class="skip-link" href="#main">Skip to content</a>
 
-    <div class="note">
-        <strong>About updates</strong>
-        <p>Pull Request Pilot is distributed via the Mac App Store. Updates are delivered automatically through the App Store — no manual downloads needed. Make sure automatic updates are enabled in System Settings.</p>
-    </div>
+    <header class="site-header">
+        <div class="container">
+            <a class="brand" href="./">
+                <img src="icon.png" alt="" width="30" height="30">
+                Pull Request Pilot
+            </a>
+            <nav class="site-nav" aria-label="Main">
+                <a href="./#features">Features</a>
+                <a href="./#widgets">Widgets</a>
+                <a href="./#privacy">Privacy</a>
+                <a href="changelog" aria-current="page">Changelog</a>
+                <a href="support">Support</a>
+            </nav>
+            <a class="button button-primary" href="https://apps.apple.com/app/pull-request-pilot/id6760570544">Get the app</a>
+        </div>
+    </header>
 
-    <div class="release">
-        <h2>v1.2.1</h2>
-        <span class="date">March 31, 2026</span>
-        <ul>
-            <li><strong>Notification fix</strong> — notification toggles now persist correctly across window hide/show</li>
-            <li><strong>Notification setup fix</strong> — the app now requests notification permission before opening System Settings, ensuring it appears in the Notifications list</li>
-            <li><strong>Check run interactions</strong> — double-click or right-click check runs to open in browser or copy URL</li>
-            <li><strong>UI polish</strong> — smaller pending check icons for a cleaner look</li>
-        </ul>
-    </div>
+    <main id="main">
+        <div class="page-hero">
+            <div class="container">
+                <span class="eyebrow">Changelog</span>
+                <h1>What's new</h1>
+                <p>Every release of Pull Request Pilot, newest first.</p>
+            </div>
+        </div>
 
-    <div class="release">
-        <h2>v1.2.0</h2>
-        <span class="date">March 30, 2026</span>
-        <ul>
-            <li><strong>Window menu</strong> — reopen PR views from the Window menu with ⌘1/2/3 shortcuts</li>
-            <li><strong>Single-click to open</strong> — left-click the status bar icon to show the window, right-click for the context menu</li>
-            <li><strong>Network error UI</strong> — dedicated disconnected icon for network errors instead of generic error triangle</li>
-            <li><strong>Crash fix</strong> — fixed a crash caused by NSOutlineView in the PR list</li>
-            <li><strong>Detail panel fix</strong> — detail panel now closes when the selected PR disappears after refresh</li>
-        </ul>
-    </div>
+        <div class="prose">
+            <div class="callout">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+                <div>
+                    <strong>Updates come from the Mac App Store</strong>
+                    <p>There is nothing to download by hand. Keep automatic updates on in the App Store settings to get new versions as soon as they're out.</p>
+                </div>
+            </div>
 
-    <div class="release">
-        <h2>v1.1.0</h2>
-        <span class="date">March 16, 2026</span>
-        <ul>
-            <li><strong>PR detail panel</strong> — single-click a PR to see its activity timeline and individual CI check run details</li>
-            <li><strong>GitHub-style icons</strong> — replaced status badges with PR state icons and CI indicators</li>
-            <li><strong>Context menu filters</strong> — quickly filter by org, repo, author, or label</li>
-            <li><strong>Network resilience</strong> — quick retry on startup when network fails</li>
-            <li><strong>Widget improvements</strong> — aligned with app experience, action buttons moved to footer, subtle accent bars</li>
-            <li><strong>Copy improvement</strong> — full PR URLs in copied list format</li>
-        </ul>
-    </div>
+            <article class="release" id="v1-3-0">
+                <div class="release-meta">
+                    <h2><a href="#v1-3-0">1.3.0</a></h2>
+                    <time datetime="2026-09-25">September 25, 2026</time>
+                    <span class="latest">Latest</span>
+                </div>
+                <div class="release-body">
+                    <p class="summary">Act on pull requests without leaving the app, and get to the right view from anywhere.</p>
+                    <h3>New</h3>
+                    <ul>
+                        <li><strong>Drafts</strong>: convert a pull request to a draft, or mark it ready for review, from its right-click menu.</li>
+                        <li><strong>Exclude from a view</strong>: right-click a pull request, repository or organization to exclude its author, label, repository or organization from the view.</li>
+                        <li><strong>Straight to the view</strong>: clicking a widget opens its view, and clicking a notification opens the view and the pull request it announced.</li>
+                        <li><strong>New pull request count</strong>: the menu bar icon shows how many pull requests are new, and each view has its own bell for notifications.</li>
+                        <li><strong>Required checks</strong>: the detail panel marks the checks required to merge, and the reviewers section can be collapsed.</li>
+                        <li><strong>Narrow windows</strong>: below a certain width the list uses a single pane, with the detail panel underneath.</li>
+                        <li><strong>Open in cmux</strong>, next to VS Code and iTerm, all grouped under a new “Open in” submenu.</li>
+                        <li><strong>Menu commands</strong>: New View (⌘N), Delete View, Refresh (⌘R), and Show Next or Previous View (⌘] and ⌘[).</li>
+                        <li><strong>Diagnostics</strong>: Help › Export Logs… saves a log file to attach to a bug report.</li>
+                    </ul>
+                    <h3>Improved</h3>
+                    <ul>
+                        <li>Errors show as short notices, and problems that need you stay on a banner until they're fixed. The banner clears itself once things recover.</li>
+                        <li>Refresh pauses while your Mac sleeps or is offline and resumes when it's back, and it keeps every page of results you've loaded.</li>
+                        <li>GitHub rate limits are waited out, with your results left on screen.</li>
+                        <li>Token setup explains what a fine-grained token needs and warns when a classic token lacks the <code>repo</code> scope.</li>
+                        <li>A git folder on a disconnected disk is kept and used again once the disk is back.</li>
+                        <li>Faster avatars, timelines and repository scans.</li>
+                    </ul>
+                    <h3>Fixed</h3>
+                    <ul>
+                        <li>A single request rejected by GitHub no longer signs you out. A revoked token asks for a new one and keeps your views.</li>
+                        <li>Results that GitHub withholds, for example behind SAML single sign-on, are explained instead of stalling the list.</li>
+                        <li>Review states match GitHub: a later comment no longer hides an approval, and a re-requested review shows as awaiting.</li>
+                        <li>Re-run checks show their latest attempt.</li>
+                        <li>Stacked pull requests are no longer dropped when branches form a loop.</li>
+                        <li>Exclude author works for bots, and pull requests from forks are no longer matched to a local branch with the same name.</li>
+                    </ul>
+                </div>
+            </article>
 
-    <div class="release">
-        <h2>v1.0.0</h2>
-        <span class="date">March 15, 2026</span>
-        <ul>
-            <li>Custom dashboard views with GitHub search queries</li>
-            <li>Desktop widgets in small, medium, and large sizes</li>
-            <li>Desktop notifications for new pull requests</li>
-            <li>Local git directory scanning with VS Code and iTerm integration</li>
-            <li>Auto-refresh with configurable intervals</li>
-            <li>Secure GitHub token storage via Keychain</li>
-            <li>PR stack detection</li>
-        </ul>
-    </div>
+            <article class="release" id="v1-2-1">
+                <div class="release-meta">
+                    <h2><a href="#v1-2-1">1.2.1</a></h2>
+                    <time datetime="2026-03-31">March 31, 2026</time>
+                </div>
+                <div class="release-body">
+                    <ul>
+                        <li><strong>Notifications</strong>: notification toggles persist when the window is hidden and shown again.</li>
+                        <li><strong>Notification setup</strong>: the app asks for permission before opening System Settings, so it appears in the Notifications list.</li>
+                        <li><strong>Checks</strong>: double-click or right-click a check to open it in the browser or copy its URL.</li>
+                        <li><strong>Polish</strong>: smaller pending-check icons.</li>
+                    </ul>
+                </div>
+            </article>
 
-    <nav>
-        <a href="privacy">Privacy Policy</a>
-        <a href="support">Support</a>
-        <a href="github-api-usage">GitHub API Usage</a>
-    </nav>
+            <article class="release" id="v1-2-0">
+                <div class="release-meta">
+                    <h2><a href="#v1-2-0">1.2.0</a></h2>
+                    <time datetime="2026-03-30">March 30, 2026</time>
+                </div>
+                <div class="release-body">
+                    <ul>
+                        <li><strong>Window menu</strong>: reopen a view from the Window menu, with ⌘1, ⌘2, ⌘3 and so on.</li>
+                        <li><strong>Single click to open</strong>: click the menu bar icon to show the window, right-click for its menu.</li>
+                        <li><strong>Offline state</strong>: a dedicated icon for network errors instead of the generic warning.</li>
+                        <li><strong>Crash fix</strong> in the pull request list.</li>
+                        <li><strong>Detail panel</strong>: closes when the selected pull request leaves the view after a refresh.</li>
+                    </ul>
+                </div>
+            </article>
+
+            <article class="release" id="v1-1-0">
+                <div class="release-meta">
+                    <h2><a href="#v1-1-0">1.1.0</a></h2>
+                    <time datetime="2026-03-16">March 16, 2026</time>
+                </div>
+                <div class="release-body">
+                    <ul>
+                        <li><strong>Detail panel</strong>: click a pull request to see its activity timeline and each check run.</li>
+                        <li><strong>New icons</strong>: pull request state and CI icons in GitHub's style replace the status badges.</li>
+                        <li><strong>Quick filters</strong>: filter by organization, repository, author or label from the context menu.</li>
+                        <li><strong>Network resilience</strong>: a quick retry at launch when the network isn't ready.</li>
+                        <li><strong>Widgets</strong>: aligned with the app, with actions in the footer and subtle accent bars.</li>
+                        <li><strong>Copy</strong>: copied lists include full pull request URLs.</li>
+                    </ul>
+                </div>
+            </article>
+
+            <article class="release" id="v1-0-0">
+                <div class="release-meta">
+                    <h2><a href="#v1-0-0">1.0.0</a></h2>
+                    <time datetime="2026-03-15">March 15, 2026</time>
+                </div>
+                <div class="release-body">
+                    <p class="summary">The first release.</p>
+                    <ul>
+                        <li>Custom views built from GitHub search queries</li>
+                        <li>Desktop widgets in small, medium and large sizes</li>
+                        <li>Notifications for new pull requests</li>
+                        <li>Local git folder scanning, with VS Code and iTerm integration</li>
+                        <li>Auto-refresh on a configurable interval</li>
+                        <li>Token stored securely in the Keychain</li>
+                        <li>Stacked pull request detection</li>
+                    </ul>
+                </div>
+            </article>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <div class="footer-grid">
+                <div>
+                    <a class="brand" href="./">
+                        <img src="icon.png" alt="" width="30" height="30">
+                        Pull Request Pilot
+                    </a>
+                    <p>A native Mac app for your pull request review queue, made by Julian Maurin.</p>
+                </div>
+                <div>
+                    <h2>Product</h2>
+                    <ul>
+                        <li><a href="./#features">Features</a></li>
+                        <li><a href="./#widgets">Widgets</a></li>
+                        <li><a href="changelog">Changelog</a></li>
+                        <li><a href="https://apps.apple.com/app/pull-request-pilot/id6760570544">Mac App Store</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h2>Help</h2>
+                    <ul>
+                        <li><a href="support">Support</a></li>
+                        <li><a href="privacy">Privacy Policy</a></li>
+                        <li><a href="github-api-usage">GitHub API Usage</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h2>Source</h2>
+                    <ul>
+                        <li><a href="https://github.com/JulianMaurin/PullRequestPilot">Repository</a></li>
+                        <li><a href="https://github.com/JulianMaurin/PullRequestPilot/issues">Report an issue</a></li>
+                        <li><a href="https://github.com/JulianMaurin/PullRequestPilot/blob/main/LICENSE">MIT License</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <span>© 2026 Julian Maurin</span>
+                <span>Not affiliated with GitHub, Inc. Mac and App Store are trademarks of Apple Inc.</span>
+            </div>
+        </div>
+    </footer>
 </body>
 </html>

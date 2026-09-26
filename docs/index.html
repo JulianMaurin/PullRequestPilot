@@ -3,76 +3,393 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pull Request Pilot</title>
-    <style>
-        :root { color-scheme: light dark; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            max-width: 960px;
-            margin: 40px auto;
-            padding: 0 20px;
-            line-height: 1.6;
-            color: #1d1d1f;
-            background: #fff;
-        }
-        @media (prefers-color-scheme: dark) {
-            body { color: #f5f5f7; background: #1d1d1f; }
-            a { color: #6cb4ee; }
-        }
-        h1 { font-size: 1.8em; margin-bottom: 0.2em; }
-        h2 { font-size: 1.3em; margin-top: 2em; }
-        p.tagline { color: #86868b; margin-top: 0; font-size: 1.1em; }
-        .hero { display: flex; align-items: center; gap: 16px; margin-top: 1em; }
-        .hero img { width: 80px; height: 80px; border-radius: 18px; }
-        .badge { margin-top: 0.5em; }
-        .badge span {
-            display: inline-block;
-            font-size: 0.75em;
-            padding: 2px 8px;
-            border-radius: 4px;
-            background: #f0f0f0;
-            color: #555;
-            margin-right: 6px;
-        }
-        @media (prefers-color-scheme: dark) {
-            .badge span { background: #333; color: #aaa; }
-        }
-        .screenshot { width: 100%; height: auto; border-radius: 10px; margin: 1.5em 0; }
-        nav { margin: 2em 0; border-top: 1px solid #e5e5e5; padding-top: 1.5em; }
-        @media (prefers-color-scheme: dark) { nav { border-color: #333; } }
-        nav a { margin-right: 1.5em; }
-        .requirements { font-size: 0.9em; color: #86868b; margin-top: 1.5em; }
-    </style>
+    <title>Pull Request Pilot — your pull request review queue, one glance away</title>
+    <meta name="description" content="A native Mac menu bar app for your GitHub pull request review queue: live views from any search, desktop widgets and notifications. Free on the Mac App Store.">
+    <link rel="canonical" href="https://julianmaurin.github.io/PullRequestPilot/">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#070a12" media="(prefers-color-scheme: dark)">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Pull Request Pilot">
+    <meta property="og:url" content="https://julianmaurin.github.io/PullRequestPilot/">
+    <meta property="og:title" content="Pull Request Pilot — your review queue, one glance away">
+    <meta property="og:description" content="A native Mac menu bar app for your GitHub pull request review queue: live views from any search, desktop widgets and notifications.">
+    <meta property="og:image" content="https://julianmaurin.github.io/PullRequestPilot/images/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Pull Request Pilot: the review queue window with pull requests grouped by repository">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="stylesheet" href="style.css">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Pull Request Pilot",
+        "operatingSystem": "macOS 14 or later",
+        "applicationCategory": "DeveloperApplication",
+        "softwareVersion": "1.3.0",
+        "url": "https://julianmaurin.github.io/PullRequestPilot/",
+        "downloadUrl": "https://apps.apple.com/app/pull-request-pilot/id6760570544",
+        "image": "https://julianmaurin.github.io/PullRequestPilot/icon.png",
+        "screenshot": "https://julianmaurin.github.io/PullRequestPilot/images/dashboard.png",
+        "license": "https://opensource.org/licenses/MIT",
+        "author": { "@type": "Person", "name": "Julian Maurin" },
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+    }
+    </script>
 </head>
 <body>
-    <div class="hero">
-        <img src="icon.png" alt="Pull Request Pilot icon" width="80" height="80">
-        <div>
-            <h1>Pull Request Pilot</h1>
-            <p class="tagline">Stay on top of your GitHub pull request review queue.</p>
-            <div class="badge">
-                <span>macOS 14+</span>
-                <span>SwiftUI</span>
-                <span>No dependencies</span>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+        <div class="container">
+            <a class="brand" href="./">
+                <img src="icon.png" alt="" width="30" height="30">
+                Pull Request Pilot
+            </a>
+            <nav class="site-nav" aria-label="Main">
+                <a href="#features">Features</a>
+                <a href="#widgets">Widgets</a>
+                <a href="#privacy">Privacy</a>
+                <a href="changelog">Changelog</a>
+                <a href="support">Support</a>
+            </nav>
+            <a class="button button-primary" href="https://apps.apple.com/app/pull-request-pilot/id6760570544">Get the app</a>
+        </div>
+    </header>
+
+    <main id="main">
+        <section class="hero">
+            <div class="container hero-copy">
+                <a class="announcement" href="changelog#v1-3-0">
+                    <span class="announcement-tag">New in 1.3</span>
+                    <span>Convert to draft, exclude with a right-click, and more</span>
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+                </a>
+                <h1>Your review queue, <span class="gradient-text">one glance away.</span></h1>
+                <p class="lede">Pull Request Pilot turns GitHub searches into live views of the pull requests that need you: in your menu bar, on your desktop and in your notifications. Native, fast and private by design.</p>
+                <div class="cta-row">
+                    <a class="button button-primary" href="https://apps.apple.com/app/pull-request-pilot/id6760570544">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+                        Download on the Mac App Store
+                    </a>
+                    <a class="button button-secondary" href="https://github.com/JulianMaurin/PullRequestPilot">
+                        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+                        View the source
+                    </a>
+                </div>
+                <p class="fine-print">Free · Requires macOS 14 Sonoma or later</p>
+            </div>
+
+            <div class="container hero-visual">
+                <div class="screenshot">
+                    <picture>
+                        <source srcset="images/dashboard.webp" type="image/webp">
+                        <img src="images/dashboard.png" alt="The Pull Request Pilot window: view tabs, the search query of the selected view, and pull requests grouped by organization and repository, each with its labels, latest activity, age and diff size" width="2200" height="1336" fetchpriority="high">
+                    </picture>
+                    <div class="status-item" aria-hidden="true">
+                        <svg class="icon" viewBox="0 0 24 24"><circle cx="6" cy="5.5" r="2.5"/><circle cx="6" cy="18.5" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M6 8v8"/><path d="M18 16v-6a3 3 0 0 0-3-3h-4"/><path d="M13.5 4.5 11 7l2.5 2.5"/></svg>
+                        3
+                        <span class="caption">new in your views</span>
+                    </div>
+                    <div class="notification" aria-hidden="true">
+                        <img src="icon.png" alt="" width="38" height="38">
+                        <strong>Needs my review</strong>
+                        <span class="time">now</span>
+                        <span class="subtitle">PullRequestPilot/weather-api</span>
+                        <span class="body">#7 Implement API versioning via Accept header</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="container">
+                <ul class="highlights" aria-label="Highlights">
+                    <li>
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/></svg>
+                        Native SwiftUI app
+                    </li>
+                    <li>
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z"/><path d="m9 12 2 2 4-4"/></svg>
+                        No account, no tracking
+                    </li>
+                    <li>
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg>
+                        Token kept in your Keychain
+                    </li>
+                    <li>
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5"/><path d="m16 7 5 5-5 5"/></svg>
+                        Open source, MIT licensed
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="section" id="features">
+            <div class="container">
+                <div class="section-header reveal">
+                    <span class="eyebrow">Features</span>
+                    <h2>Built for the way you review.</h2>
+                    <p>Every view is a search you already know how to write. Pull Request Pilot keeps it fresh, tells you what's new and lets you act without opening another browser tab.</p>
+                </div>
+
+                <div class="feature-grid">
+                    <article class="card card-wide reveal">
+                        <span class="card-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg></span>
+                        <h3>Views are GitHub searches</h3>
+                        <p>Start from four presets or write any search, issues included. Results are grouped by organization and repository, with review state, checks, labels, open threads and diff size on every row. Switch on hide-reviewed to drop what you've already looked at.</p>
+                        <div class="card-visual">
+                            <div class="query-mock" aria-hidden="true">
+                                <div class="query-tabs">
+                                    <span class="active">Needs my review</span>
+                                    <span>My PRs</span>
+                                    <span>My drafts</span>
+                                    <span>Recently merged</span>
+                                    <span class="add">+</span>
+                                </div>
+                                <div class="query-field">
+                                    <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
+                                    <span class="qualifier"><b>is:</b>open</span>
+                                    <span class="qualifier"><b>is:</b>pr</span>
+                                    <span class="qualifier"><b>review-requested:</b>@me</span>
+                                    <span class="qualifier"><b>draft:</b>false</span>
+                                </div>
+                            </div>
+                            <div class="query-examples" aria-label="More example searches">
+                                <code>org:acme label:bug</code>
+                                <code>team-review-requested:acme/web</code>
+                                <code>author:app/dependabot</code>
+                                <code>is:issue assignee:@me</code>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="card card-medium reveal">
+                        <span class="card-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5 10.5 20l2.3-6.7L19.5 11z"/></svg></span>
+                        <h3>Act with a right-click</h3>
+                        <p>Open a pull request in your browser, VS Code, iTerm or cmux, copy its branch, turn it into a draft or mark it ready, and narrow a view to an author, label or repository, or exclude them.</p>
+                        <div class="card-visual menu-stage">
+                            <div class="menu-mock" aria-hidden="true">
+                                <div class="item">Open in <svg class="icon chevron" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></div>
+                                <hr>
+                                <div class="item">Copy URL</div>
+                                <div class="item">Copy Branch</div>
+                                <hr>
+                                <div class="item selected">Convert to Draft</div>
+                                <hr>
+                                <div class="item"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M7.5 9h9M9 12h6M10.5 15h3"/></svg>Filter by author "mona"</div>
+                                <div class="item"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>Exclude author "mona"</div>
+                                <div class="item"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M7.5 9h9M9 12h6M10.5 15h3"/></svg>Filter by label "bug"</div>
+                                <div class="item"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>Exclude label "bug"</div>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="card reveal">
+                        <span class="card-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M14 4v16"/><path d="M16.5 8.5h2M16.5 12h2"/></svg></span>
+                        <h3>The whole story in one panel</h3>
+                        <p>Click a pull request for its timeline, comments, reviewers and checks, with the ones required to merge marked. Double-click to open it on GitHub.</p>
+                        <div class="card-visual">
+                            <ul class="check-list" aria-label="Example checks">
+                                <li class="passed"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>build<span class="required">Required</span></li>
+                                <li class="passed"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>unit-tests<span class="required">Required</span></li>
+                                <li class="running"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>integration-tests</li>
+                            </ul>
+                        </div>
+                    </article>
+
+                    <article class="card reveal">
+                        <span class="card-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg></span>
+                        <h3>Stacks, folded together</h3>
+                        <p>When a pull request targets another one's branch, the whole stack shows up as a single chain you can expand.</p>
+                        <div class="card-visual stack-mock" aria-hidden="true">
+                            <div class="stack-row">
+                                <svg class="icon" viewBox="0 0 24 24"><circle cx="6" cy="5.5" r="2.5"/><circle cx="6" cy="18.5" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M6 8v8"/><path d="M18 16v-6a3 3 0 0 0-3-3h-4"/><path d="M13.5 4.5 11 7l2.5 2.5"/></svg>
+                                Add query parser <span class="number">#41</span><span class="count">3</span>
+                            </div>
+                            <div class="stack-row child"><span class="branch-arrow">↳</span> Evaluate filters <span class="number">#42</span></div>
+                            <div class="stack-row grandchild"><span class="branch-arrow">↳</span> Wire up the CLI <span class="number">#43</span></div>
+                        </div>
+                    </article>
+
+                    <article class="card reveal">
+                        <span class="card-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="m7.5 10 3 2.5-3 2.5"/><path d="M13 15h4"/></svg></span>
+                        <h3>Straight to your checkout</h3>
+                        <p>Point it at the folders where you clone. It indexes branches and worktrees in the background and opens the matching checkout in one click.</p>
+                        <div class="card-visual">
+                            <div class="chip-row" aria-label="Supported apps">
+                                <span class="chip"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5"/><path d="m16 7 5 5-5 5"/></svg>VS Code</span>
+                                <span class="chip"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="m7.5 10 3 2.5-3 2.5"/><path d="M13 15h4"/></svg>iTerm</span>
+                                <span class="chip"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="m7.5 10 3 2.5-3 2.5"/><path d="M13 15h4"/></svg>cmux</span>
+                            </div>
+                            <p class="match-order">Matched by branch name, then worktree, then commit.</p>
+                        </div>
+                    </article>
+
+                    <article class="card reveal">
+                        <span class="card-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg></span>
+                        <h3>Know what's new</h3>
+                        <p>Ring the bell on a view to get a notification when a pull request lands in it. Click the notification to go straight there. The menu bar icon counts what you haven't seen yet.</p>
+                    </article>
+
+                    <article class="card reveal">
+                        <span class="card-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg></span>
+                        <h3>Made for the keyboard</h3>
+                        <ul class="shortcut-list card-visual">
+                            <li>Jump to a view <span class="keys"><kbd>⌘</kbd><kbd>1</kbd>…<kbd>9</kbd></span></li>
+                            <li>Previous or next view <span class="keys"><kbd>⌘</kbd><kbd>[</kbd><kbd>]</kbd></span></li>
+                            <li>Refresh <span class="keys"><kbd>⌘</kbd><kbd>R</kbd></span></li>
+                            <li>New view <span class="keys"><kbd>⌘</kbd><kbd>N</kbd></span></li>
+                        </ul>
+                    </article>
+
+                    <article class="card reveal">
+                        <span class="card-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
+                        <h3>Steady when GitHub isn't</h3>
+                        <ul class="status-list card-visual">
+                            <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5a10 10 0 0 1 14 0"/><path d="M8.5 16a5 5 0 0 1 7 0"/><path d="M12 19.5h.01"/><path d="M3 3l18 18"/></svg>Offline or asleep: pauses, then catches up</li>
+                            <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3h11M6.5 21h11"/><path d="M8 3v3.5L12 12l4-5.5V3"/><path d="M8 21v-3.5L12 12l4 5.5V21"/></svg>Rate-limited: waits it out, results stay</li>
+                            <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 8.5-8.5M16 7l2.5 2.5M18.5 4.5 21 7"/></svg>Revoked token: asks for a new one, views stay</li>
+                        </ul>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="section section-subtle" id="widgets">
+            <div class="container split">
+                <div class="reveal">
+                    <div class="section-header">
+                        <span class="eyebrow">Widgets</span>
+                        <h2>Your queue, right on the desktop.</h2>
+                        <p>Two widgets, each in small, medium and large. Click one to open its view in the app.</p>
+                    </div>
+                    <ul class="feature-list">
+                        <li>
+                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="17" height="7" rx="2"/></svg>
+                            <span><strong>PR Overview</strong> puts the count of every view side by side, with how many still wait on a review.</span>
+                        </li>
+                        <li>
+                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg>
+                            <span><strong>PR View</strong> lists the pull requests of the view you pick, with their review and check status.</span>
+                        </li>
+                        <li>
+                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4.5h-4.5"/></svg>
+                            <span><strong>Always current.</strong> The app refreshes them whenever their content changes, and leaves them alone otherwise.</span>
+                        </li>
+                    </ul>
+                </div>
+                <div class="desktop reveal">
+                    <img class="widget-lead" src="images/widget-overview.png" alt="The PR Overview widget, medium size: 18 pull requests across Needs my review, My PRs, My drafts and Recently merged" width="692" height="346" loading="lazy">
+                    <img class="widget-offset" src="images/widget-detail.png" alt="The PR View widget, medium size, showing two pull requests that need a review" width="692" height="346" loading="lazy">
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="container">
+                <div class="section-header reveal">
+                    <span class="eyebrow">Under the hood</span>
+                    <h2>Small, native and open.</h2>
+                    <p>Written in Swift with SwiftUI and WidgetKit, sandboxed, and reviewed for the Mac App Store. The complete source is on GitHub.</p>
+                </div>
+                <div class="stats reveal">
+                    <div class="stat"><span class="value">0</span><span class="label">third-party dependencies</span></div>
+                    <div class="stat"><span class="value">Swift 6</span><span class="label">with strict concurrency checking</span></div>
+                    <div class="stat"><span class="value">14+</span><span class="label">macOS Sonoma or later</span></div>
+                    <div class="stat"><span class="value">MIT</span><span class="label">open-source license</span></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section section-flush-top" id="privacy">
+            <div class="container">
+                <div class="privacy-panel reveal">
+                    <span class="eyebrow">Privacy</span>
+                    <h2>Between you and GitHub. Nobody else.</h2>
+                    <p class="intro">There is no account to create and no server behind the app. It talks to GitHub with your token and to nothing else: no analytics, no crash reporting, no ads.</p>
+                    <div class="privacy-grid">
+                        <div>
+                            <span class="card-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg></span>
+                            <h3>Locked in your Keychain</h3>
+                            <p>Your token is stored in the macOS Keychain and only ever sent to <code>api.github.com</code>.</p>
+                        </div>
+                        <div>
+                            <span class="card-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4.5" width="16" height="11" rx="2"/><path d="M2 19.5h20"/></svg></span>
+                            <h3>Kept on your Mac</h3>
+                            <p>Views, settings and the widgets' snapshot stay inside the app's sandbox.</p>
+                        </div>
+                        <div>
+                            <span class="card-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5"/><path d="m16 7 5 5-5 5"/></svg></span>
+                            <h3>Open to inspection</h3>
+                            <p>Every line is public under the MIT license, so you can check all of this for yourself.</p>
+                        </div>
+                    </div>
+                    <a class="text-link" href="privacy">
+                        Read the privacy policy
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="closing">
+            <div class="container reveal">
+                <img src="icon.png" alt="" width="112" height="112" loading="lazy">
+                <h2>Clear your review queue.</h2>
+                <p>Free on the Mac App Store. Requires macOS 14 Sonoma or later.</p>
+                <div class="cta-row">
+                    <a class="button button-primary" href="https://apps.apple.com/app/pull-request-pilot/id6760570544">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
+                        Download on the Mac App Store
+                    </a>
+                    <a class="button button-secondary" href="changelog">What's new in 1.3</a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <div class="footer-grid">
+                <div>
+                    <a class="brand" href="./">
+                        <img src="icon.png" alt="" width="30" height="30">
+                        Pull Request Pilot
+                    </a>
+                    <p>A native Mac app for your pull request review queue, made by Julian Maurin.</p>
+                </div>
+                <div>
+                    <h2>Product</h2>
+                    <ul>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#widgets">Widgets</a></li>
+                        <li><a href="changelog">Changelog</a></li>
+                        <li><a href="https://apps.apple.com/app/pull-request-pilot/id6760570544">Mac App Store</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h2>Help</h2>
+                    <ul>
+                        <li><a href="support">Support</a></li>
+                        <li><a href="privacy">Privacy Policy</a></li>
+                        <li><a href="github-api-usage">GitHub API Usage</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h2>Source</h2>
+                    <ul>
+                        <li><a href="https://github.com/JulianMaurin/PullRequestPilot">Repository</a></li>
+                        <li><a href="https://github.com/JulianMaurin/PullRequestPilot/issues">Report an issue</a></li>
+                        <li><a href="https://github.com/JulianMaurin/PullRequestPilot/blob/main/LICENSE">MIT License</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <span>© 2026 Julian Maurin</span>
+                <span>Not affiliated with GitHub, Inc. Mac and App Store are trademarks of Apple Inc.</span>
             </div>
         </div>
-    </div>
-
-    <p>Create custom views to organize PRs the way you work — needs my review, my PRs, my drafts, recently merged, or build your own with GitHub search filters. See PR details, labels, review status, and recent activity at a glance.</p>
-
-    <p>Add desktop widgets to keep your review queue visible at all times — from a simple count to a full PR list, in multiple sizes.</p>
-
-    <p>Get notified when new pull requests appear in any of your views so you never miss an update.</p>
-
-    <img class="screenshot" src="screenshot.png" alt="Pull Request Pilot — PR list with detail panel" width="2880" height="1800">
-
-    <p class="requirements">Built natively with SwiftUI. No external dependencies, no tracking, no data collection.<br>Requires macOS 14 (Sonoma) or later.</p>
-
-    <nav>
-        <a href="changelog">Changelog</a>
-        <a href="privacy">Privacy Policy</a>
-        <a href="support">Support</a>
-        <a href="github-api-usage">GitHub API Usage</a>
-    </nav>
+    </footer>
 </body>
 </html>

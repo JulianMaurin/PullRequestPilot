@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://julianmaurin.github.io/PullRequestPilot/sitemap.xml
