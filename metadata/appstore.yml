@@ -27,32 +27,32 @@ subtitle: "The pull requests manager app"
 # adds high-value adjacent terms developers actually search for.
 keywords: "pr,code review,reviewer,git,diff,merge,ci,check,dashboard,issue,oncall,commit,menu bar"
 
+# Promotional text: <= 170 chars, editable in App Store Connect without a new version.
+promotional_text: "New in 1.3: convert pull requests to drafts or mark them ready, exclude noise with a right-click, and jump from a widget or notification straight to its view."
+
 description: |
-  Never miss a code review again. Pull Request Pilot lives in your Mac menu bar and keeps your GitHub pull request queue one click away — no browser tab, no context switch.
+  Pull Request Pilot puts your GitHub pull request queue right in your Mac menu bar. Stay on top of code reviews without switching to the browser.
 
-  ORGANIZE YOUR WAY
-  Build custom views with the full power of GitHub search: PRs needing your review, ones you authored, recent drafts, anything merged last week — any query works, including issues. Each view gets its own tab, its own notification settings, and its own menu-bar badge.
+  Create custom views to organize pull requests the way you work: needs my review, my PRs, my drafts, recently merged, or build your own with any GitHub search query, issues included. See labels, review status, checks and recent activity at a glance, and act from the list: open in the browser, convert to draft or mark ready for review, or exclude a repository, author or label from a view.
 
-  KEEP IT VISIBLE
-  Desktop widgets in small, medium, and large sizes put your review queue on your wallpaper. Pick a compact count or a list of your top open PRs — whichever matches your workflow.
+  Add desktop widgets to keep your review queue visible at all times, from a simple count to a list of your top open pull requests, in several sizes. Click a widget to jump straight to its view.
 
-  STAY IN FLOW
-  Click a PR to see its activity timeline, reviewer status, check results, labels, and last update at a glance — all without leaving the app. If the repository is cloned locally, open it directly in VS Code or iTerm with a single click.
+  Get notified when new pull requests appear in any of your views, and click the notification to open them.
 
-  NEVER MISS A REVIEW
-  Get native desktop notifications the moment a new pull request matches one of your views. Auto-refresh runs on your configured interval, so fresh PRs surface on their own. A menu-bar badge counts unread items at a glance.
-
-  FEATURES
-  - Menu bar app with one-click access to your PR queue
-  - Custom views backed by full GitHub search (pull requests and issues)
-  - Detail panel with activity timeline, check statuses, and reviewer state
-  - Desktop widgets in small, medium, and large sizes
-  - Native notifications per view
+  Features:
+  - Menu bar app with quick access to your review queue
+  - Custom views with full GitHub search support, for pull requests and issues
+  - Detail panel with activity timeline, comments, reviewers and check statuses, including required checks
+  - Convert a pull request to draft or mark it ready for review
+  - Exclude repositories, authors or labels from a view with a right-click
+  - Hide pull requests you have already reviewed
+  - Desktop widgets in small, medium and large sizes
+  - Notifications per view
   - Auto-refresh on a configurable interval
-  - Local repo scanning — open PRs in VS Code or iTerm with one click
-  - Hide-reviewed filter for ruthless inbox zero
-  - Keyboard shortcuts for view switching (Cmd+[ and Cmd+])
-  - Token stored in macOS Keychain
-  - Launches at login, lives quietly in the background
+  - Local git directory scanning to open pull requests in VS Code, iTerm or cmux
+  - Keyboard shortcuts and menu commands for views and refresh
+  - Secure authentication via a token stored in the Keychain
+  - Launch at login
+  - No account required
 
-  Built natively with SwiftUI. No external dependencies, no tracking, no analytics, no account required.
+  No external dependencies, no tracking, no data collection.
