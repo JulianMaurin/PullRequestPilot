@@ -77,7 +77,7 @@ sleep 1
 # Purge with one retry: launchd may respawn usernoted fast enough that it
 # re-registers the bundle (via codesign / DR match against BTM's stale
 # login-item record) before our edit lands. One verify-and-retry catches it.
-for attempt in 1 2; do
+for _ in 1 2; do
     echo "Pruning ncprefs.plist (System Settings › Notifications list)..."
     prune_apps_plist "$NCPREFS" "${BUNDLES[@]}"
 

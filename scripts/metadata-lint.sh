@@ -25,8 +25,11 @@
 #      no collected data, and declare a reason for every required-reason
 #      API category their target's sources call
 #
-# Env overrides (for tests):
-#   SUBTITLE_OVERRIDE  — override subtitle (bypass metadata/appstore.yml)
+# Env overrides:
+#   SUBTITLE_OVERRIDE                   — override subtitle (bypass metadata/appstore.yml)
+#   ALLOW_RELEASED_MARKETING_VERSION=1  — a MARKETING_VERSION equal to the last
+#                                         tag warns instead of failing (CI, between
+#                                         releases); a lower one still fails
 
 set -euo pipefail
 
@@ -87,7 +90,9 @@ elif git tag --points-at HEAD | grep -qx "$LAST_TAG"; then
 else
   LAST_RELEASED="${LAST_TAG#v}"
   HIGHEST=$(printf '%s\n%s\n' "$LAST_RELEASED" "$MARKETING_VERSION" | sort -V | tail -1)
-  if [[ "$MARKETING_VERSION" == "$LAST_RELEASED" || "$HIGHEST" != "$MARKETING_VERSION" ]]; then
+  if [[ "$MARKETING_VERSION" == "$LAST_RELEASED" && "${ALLOW_RELEASED_MARKETING_VERSION:-}" == "1" ]]; then
+    warn "MARKETING_VERSION $MARKETING_VERSION matches released $LAST_TAG — bump before the next release"
+  elif [[ "$MARKETING_VERSION" == "$LAST_RELEASED" || "$HIGHEST" != "$MARKETING_VERSION" ]]; then
     fail "MARKETING_VERSION $MARKETING_VERSION must be higher than released $LAST_TAG — App Store Connect rejects uploads to an approved version (ITMS-90062)"
   else
     ok "MARKETING_VERSION $MARKETING_VERSION > $LAST_TAG"

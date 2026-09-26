@@ -10,8 +10,18 @@
 </p>
 
 <p align="center">
+  <a href="https://apps.apple.com/app/pull-request-pilot/id6760570544"><img src="assets/download-on-the-mac-app-store.svg" height="44" alt="Download on the Mac App Store"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/JulianMaurin/PullRequestPilot/actions/workflows/ci.yml"><img src="https://github.com/JulianMaurin/PullRequestPilot/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/JulianMaurin/PullRequestPilot/actions/workflows/codeql.yml"><img src="https://github.com/JulianMaurin/PullRequestPilot/actions/workflows/codeql.yml/badge.svg?branch=main" alt="CodeQL"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/JulianMaurin/PullRequestPilot"><img src="https://api.scorecard.dev/projects/github.com/JulianMaurin/PullRequestPilot/badge" alt="OpenSSF Scorecard"></a>
+  <br>
+  <a href="https://apps.apple.com/app/pull-request-pilot/id6760570544"><img src="https://img.shields.io/itunes/v/6760570544?label=App%20Store&color=blue" alt="App Store version"></a>
   <a href="https://developer.apple.com/swift/"><img src="https://img.shields.io/badge/Swift-6-orange.svg" alt="Swift 6"></a>
   <a href="https://developer.apple.com/macos/"><img src="https://img.shields.io/badge/macOS-14%2B-blue.svg" alt="macOS 14+"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT license"></a>
 </p>
 
 ---
@@ -104,11 +114,24 @@ make debug            # Debug build + run (sources .env)
 make run              # Release build + run
 make install          # Build + copy to /Applications
 make uninstall        # Remove from /Applications
-make test             # Lint + run unit tests (235 tests)
+make test             # Lint + run unit tests
 make lint             # SwiftLint, strict (errors + warnings block)
 make lint-errors-only # SwiftLint, errors only (dev iteration)
 make clean            # Clean build artifacts
+make hooks            # Enable the pre-commit hook that blocks committed secrets
+make secrets-scan     # Scan the git history for secrets (gitleaks)
 ```
+
+## Continuous integration
+
+Every push to `main` and every pull request runs:
+
+- **CI**: SwiftLint; ShellCheck and actionlint; a Release build, ad-hoc signed, checked for the hardened runtime, the sandbox and the widget's entitlements; App Store metadata checks; the unit tests, with a coverage summary; and a check that the committed Xcode project matches `project.yml`.
+- **Security**: gitleaks over the whole history, and zizmor over the workflows.
+- **CodeQL**: security analysis of the Swift code and the workflows.
+- **OpenSSF Scorecard**: supply-chain checks, published to the badge above.
+
+Actions are pinned by commit and the tools by version and checksum (`scripts/install-tools.sh`); Dependabot keeps the actions current. GitHub secret scanning with push protection is on for the repository.
 
 ## Architecture
 

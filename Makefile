@@ -8,10 +8,17 @@ INSTALL_DIR  := /Applications
 BUILD_DIR    := .build
 CONFIG       := Release
 
-export DEVELOPER_DIR := /Applications/Xcode.app/Contents/Developer
+# CI pins its Xcode by setting DEVELOPER_DIR.
+DEVELOPER_DIR ?= /Applications/Xcode.app/Contents/Developer
+export DEVELOPER_DIR
+
+# Extra build settings, e.g. CI's `CODE_SIGNING_ALLOWED=NO`.
+XCODEBUILD_FLAGS ?=
+# Extra SwiftLint options, e.g. CI's `--reporter github-actions-logging`.
+SWIFTLINT_FLAGS ?=
 
 XCODEBUILD_BASE := xcodebuild -scheme $(SCHEME) -project $(PROJECT) \
-	-destination 'generic/platform=macOS'
+	-destination 'generic/platform=macOS' $(XCODEBUILD_FLAGS)
 XCODEBUILD := $(XCODEBUILD_BASE) -configuration $(CONFIG)
 
 # Recipes that pipe xcodebuild through the filter start with `set -o pipefail;`
@@ -22,7 +29,7 @@ XCB_FILTER := scripts/xcb-filter.sh
 SWIFT_SOURCES := $(sort $(shell find PullRequestPilot Shared PullRequestPilotTests PullRequestPilotWidget -type f -name '*.swift' 2>/dev/null))
 SWIFT_SOURCES_STAMP := $(BUILD_DIR)/.swift-sources.stamp
 
-.PHONY: all generate lint lint-errors-only build install uninstall clean clean-deep test run debug reinstall nuke metadata-lint release-check FORCE
+.PHONY: all generate lint lint-errors-only build install uninstall clean clean-deep test run debug reinstall nuke metadata-lint bundle-check release-check secrets-scan hooks shellcheck actionlint FORCE
 
 all: build
 
@@ -46,7 +53,7 @@ generate: $(PROJECT)/project.pbxproj
 # Requires: brew install swiftlint
 lint:
 	@command -v swiftlint >/dev/null || { echo "swiftlint not installed — run: brew install swiftlint"; exit 1; }
-	swiftlint lint --strict --quiet
+	swiftlint lint --strict --quiet $(SWIFTLINT_FLAGS)
 
 # Lint but suppress warnings (developer iteration loop)
 lint-errors-only:
@@ -86,10 +93,14 @@ run: build
 
 # Run tests — Xcode requires a concrete device for `test`, not `generic/platform`.
 # arch disambiguates when multiple macOS destinations match (Catalyst, Designed for iPad).
+# The result bundle (failures, coverage) feeds scripts/test-summary.sh.
 HOST_ARCH := $(shell uname -m)
+TEST_RESULTS := $(BUILD_DIR)/TestResults.xcresult
 test: $(PROJECT)/project.pbxproj lint
+	@rm -rf $(TEST_RESULTS)
 	set -o pipefail; xcodebuild -scheme $(SCHEME) -project $(PROJECT) \
-		-destination 'platform=macOS,arch=$(HOST_ARCH)' -configuration Debug test 2>&1 | $(XCB_FILTER)
+		-destination 'platform=macOS,arch=$(HOST_ARCH)' -configuration Debug \
+		-resultBundlePath $(TEST_RESULTS) $(XCODEBUILD_FLAGS) test 2>&1 | $(XCB_FILTER)
 
 # Clean build artifacts
 clean:
@@ -112,9 +123,33 @@ clean-deep: clean
 metadata-lint:
 	@scripts/metadata-lint.sh
 
+# Signature, hardened runtime, sandbox and entitlements of the built app and widget
+bundle-check:
+	@scripts/bundle-check.sh $(BUILD_DIR)/$(CONFIG)/$(BUNDLE_NAME)
+
 # Pre-submission gate — runs everything and reports a manual checklist at the end
 release-check:
 	@scripts/release-check.sh
+
+# Secrets in the git history; --redact keeps them out of the (public) CI log
+secrets-scan:
+	@command -v gitleaks >/dev/null || { echo "gitleaks not installed — run: brew install gitleaks"; exit 1; }
+	gitleaks git --redact --no-banner --verbose .
+
+# Pre-commit hook that blocks commits containing secrets
+hooks:
+	git config core.hooksPath .githooks
+	@echo "Hooks enabled from .githooks/"
+
+SHELL_SCRIPTS := $(wildcard scripts/*.sh) $(wildcard .githooks/*)
+shellcheck:
+	@command -v shellcheck >/dev/null || { echo "shellcheck not installed — run: brew install shellcheck"; exit 1; }
+	shellcheck --severity=warning $(SHELL_SCRIPTS)
+
+# Workflow syntax, expressions, and the shell in `run:` steps
+actionlint:
+	@command -v actionlint >/dev/null || { echo "actionlint not installed — run: brew install actionlint"; exit 1; }
+	actionlint
 
 # Reinstall — clear widget caches and reinstall the app (preserves token and data)
 reinstall: uninstall

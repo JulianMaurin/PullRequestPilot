@@ -1,0 +1,66 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+# An explicit bash runs steps with pipefail, so a failing xcodebuild fails the
+# step even when piped into xcbeautify.
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      security-events: write # upload the analysis to code scanning
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: swift
+            runner: macos-26
+            build-mode: manual
+          - language: actions
+            runner: ubuntu-24.04
+            build-mode: none
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+      # CodeQL traces the compiler, so the build is a clean, unsigned one; the
+      # generated project is committed, so it needs neither XcodeGen nor SwiftLint.
+      - name: Build
+        if: ${{ matrix.language == 'swift' }}
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+        run: >-
+          xcodebuild build
+          -scheme PullRequestPilot
+          -project PullRequestPilot.xcodeproj
+          -destination 'generic/platform=macOS'
+          -configuration Debug
+          CODE_SIGNING_ALLOWED=NO
+          | xcbeautify --renderer github-actions
+      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          category: /language:${{ matrix.language }}

@@ -1,0 +1,56 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Weekly, so new gitleaks rules and zizmor audits also cover unchanged code.
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  gitleaks:
+    name: Secrets (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Scan every commit, not only the tip.
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: scripts/install-tools.sh gitleaks >> "$GITHUB_PATH"
+      - name: Scan the history
+        run: make secrets-scan
+
+  zizmor:
+    name: Workflows (zizmor)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Findings fail the job and annotate the workflow files, rather than
+      # going to code scanning, which fork pull requests can't write to.
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          advanced-security: false
+          annotations: true
+          persona: pedantic

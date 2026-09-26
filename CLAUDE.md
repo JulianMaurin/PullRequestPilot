@@ -10,14 +10,27 @@ make test             # lint + unit tests
 make debug            # Debug build + run; sources .env (GITHUB_TOKEN=…)
 make install          # build + copy to /Applications
 make metadata-lint    # App Store subtitle/keywords/version/privacy checks
-make release-check    # lint + test + metadata + build + codesign (app and widget)
+make bundle-check     # signature, hardened runtime, sandbox, widget ⊆ app entitlements
+make release-check    # lint + test + metadata + build + bundle-check
 make clean-deep       # wipe DerivedData + Xcode caches + NotificationCenter
+make shellcheck       # scripts/ and .githooks/
+make actionlint       # .github/workflows/
+make secrets-scan     # gitleaks over the git history
+make hooks            # pre-commit hook: gitleaks on staged changes
 ```
 
 - A change is done when `make build` and `make test` pass. Lint runs first (`brew install swiftlint`); warnings are errors.
 - `project.yml` (XcodeGen) is the source of truth. The generated `.xcodeproj` is committed: regenerate, never hand-edit. `make` regenerates when Swift files are added or removed.
 - Trust `make build`, not Xcode's editor errors (SourceKit shows phantom errors around `@Observable`, `Shared/` and regeneration). When they diverge, `make clean-deep`.
 - `IdentityActor.readStoredToken(from:)` prefers `GITHUB_TOKEN` over the Keychain in DEBUG builds.
+
+## CI
+
+- `.github/workflows/` calls the same make targets on `macos-26`: `ci.yml` (lint, Release build + `bundle-check`, tests, project drift), `security.yml` (gitleaks, zizmor), `codeql.yml` (Swift, Actions), `scorecard.yml`. Keep new checks runnable locally through a make target.
+- CI has no signing identity: the Release build is ad-hoc signed (`CODE_SIGN_IDENTITY=-`), so `bundle-check` still sees the entitlements; tests run unsigned (`CODE_SIGNING_ALLOWED=NO`), outside the sandbox.
+- Xcode is pinned through `DEVELOPER_DIR` in `ci.yml` and `codeql.yml`; move it with the local Xcode.
+- Actions are pinned by commit SHA with a version comment (Dependabot bumps them); tools by version and checksum in `scripts/install-tools.sh`. Every job declares least-privilege `permissions` and checks out with `persist-credentials: false`; zizmor (pedantic) fails on anything less.
+- The Scorecard workflow can only contain approved actions, no `run` steps, env or defaults, or its results aren't published.
 
 ## Layout
 
@@ -45,7 +58,8 @@ docs/               public website (GitHub Pages serves main:/docs); everything 
 
 - **SwiftLint** (`.swiftlint.yml`): the layering above; no `fatalError`/`preconditionFailure` in production; no `!` or `try!` anywhere, tests included; no `Dictionary(uniqueKeysWithValues:)`; no `@unchecked Sendable` in production; no `catch {}` or `catch { return nil/[]/false }`; no `UserDefaults.standard` outside `AppState`; no hard-coded `is:pr` (the app supports issue queries); no subprocesses or sandbox-unsafe paths; no TODO/FIXME; no audit finding IDs in source.
 - **metadata-lint**: no brand terms (Mac, macOS, iOS, GitHub, Apple, …) in subtitle or keywords — two rejections so far; subtitle ≤ 30 chars; `MARKETING_VERSION` above the last tag; build number not below the last tag's; privacy manifests declare no tracking or collected data and a reason for every required-reason API their target calls.
-- **release-check**: sandbox and hardened runtime on app and widget; widget entitlements ⊆ app entitlements.
+- **bundle-check** (in release-check and CI): sandbox and hardened runtime on app and widget; widget entitlements ⊆ app entitlements.
+- **gitleaks** (pre-commit hook, CI) and GitHub push protection: no secrets in commits.
 
 ## Rules tooling can't check
 
@@ -79,6 +93,7 @@ docs/               public website (GitHub Pages serves main:/docs); everything 
 - Swift Testing. `try #require`, not `!`. Mocks are actors. New behaviour comes with tests.
 - Isolate state: `UserDefaults(suiteName:)`; Keychain services from `KeychainService.forTesting(service:)` in suites with `.keychainCleanup`; temporary backup directories and widget destinations; `MockUserNotificationCenter` — never the real app container, notifications or widgets.
 - Wait for state (`TestWait.until`), not for time. A new test must fail when its fix is reverted.
+- Tests pass unsandboxed too (CI): the temporary directory is then under `/var`, a symlink, so compare file URLs after `resolvingSymlinksInPath()`.
 
 ## App Store
 

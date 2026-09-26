@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # The app has no package dependencies; the workflows' actions are pinned by
+  # commit SHA, and Dependabot moves the SHA and its version comment together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "Update: CI —"

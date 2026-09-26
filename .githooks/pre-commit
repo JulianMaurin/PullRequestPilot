@@ -1,0 +1,10 @@
+#!/bin/bash
+# Blocks a commit whose staged changes contain a secret. Enabled by `make hooks`.
+
+set -euo pipefail
+
+if ! command -v gitleaks >/dev/null; then
+  echo "pre-commit: gitleaks not installed — run: brew install gitleaks" >&2
+  exit 1
+fi
+exec gitleaks git --pre-commit --staged --redact --no-banner --verbose
