@@ -17,6 +17,7 @@
   <a href="https://github.com/JulianMaurin/PullRequestPilot/actions/workflows/ci.yml"><img src="https://github.com/JulianMaurin/PullRequestPilot/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://github.com/JulianMaurin/PullRequestPilot/actions/workflows/codeql.yml"><img src="https://github.com/JulianMaurin/PullRequestPilot/actions/workflows/codeql.yml/badge.svg?branch=main" alt="CodeQL"></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/JulianMaurin/PullRequestPilot"><img src="https://api.scorecard.dev/projects/github.com/JulianMaurin/PullRequestPilot/badge" alt="OpenSSF Scorecard"></a>
+  <a href="https://www.bestpractices.dev/projects/14962"><img src="https://www.bestpractices.dev/projects/14962/badge" alt="OpenSSF Best Practices"></a>
   <br>
   <a href="https://apps.apple.com/app/pull-request-pilot/id6760570544"><img src="https://img.shields.io/itunes/v/6760570544?label=App%20Store&color=blue" alt="App Store version"></a>
   <a href="https://developer.apple.com/swift/"><img src="https://img.shields.io/badge/Swift-6-orange.svg" alt="Swift 6"></a>
