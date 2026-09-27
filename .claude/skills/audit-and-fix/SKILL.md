@@ -1,226 +1,149 @@
 ---
 name: audit-and-fix
-description: Use when the user asks for a whole-codebase audit, types "ultrathink" as a ritual on this repo, says "fix all findings" or "don't follow recommendation, fix everything", or requests parallel sub-agent analysis. Not for single-file reviews (use superpowers:requesting-code-review). Not for release audits (use /release-review).
+description: Use when the user asks for a whole-codebase audit of this repo, such as "ultrathink" used as a ritual, "analyze the whole code", "audit the repo", "fix all the findings", or parallel sub-agent analysis. Not for one file or one change (use /code-review), nor for the pre-release sweep (use /release-review).
 ---
 
 # audit-and-fix
 
-Whole-codebase audit with autonomous fix. Formalises the weekly "ultrathink audit" ritual on Pull Request Pilot. Dispatches one sub-agent per lane in parallel, collects findings into a structured ledger, fixes in place, runs build/test/lint, and shapes commits by root cause.
+Whole-codebase audit of Pull Request Pilot. One agent per lane finds, one independent verifier per finding tries to refute it, and every surviving finding is fixed or put to the user. The report in `todo/audits/` accounts for every finding.
 
-## Core principle
+**No finding silently drops.** Each finding a lane returns ends in the ledger with an outcome: fixed, rejected (refuted, with the evidence), reverted, deferred (waiting on a user decision) or closed by a user decision. A prose summary that acts on "the important ones" is the failure this skill exists to prevent.
 
-**No finding silently drops.** The bug this skill prevents is the one the user hit repeatedly: Claude returning a prose audit, selectively acting on findings, and moving on. The JSON contract + TodoWrite ledger make omissions impossible.
+Fix mode is the default. Stop after the report only when the user asks for an assessment.
 
-## When to use
+## 1. Scope and baseline
 
-Triggers:
-- "ultrathink" used as an imperative on the whole repo
-- "analyze the whole code of the application"
-- "fix all the findings" / "don't follow recommendation, fix all"
-- "audit the repo" / "full codebase audit"
-- User invokes `/audit-and-fix` explicitly
+Default: all eleven lanes in `references/lane-definitions.md` (domain, features, infrastructure, appshell, tests, concurrency, appstore, performance, ux, architecture, macos-platform). The user can name a subset: `lanes=tests,concurrency`.
 
-Do not use:
-- Single-file or single-PR review → `superpowers:requesting-code-review`
-- Pre-release compliance sweep → `/release-review`
-- Reproducing a specific bug → `superpowers:systematic-debugging`
+Record the baseline on the untouched tree: HEAD, then `make test` and `make build` with their test count. Later failures are then attributable to the fixes.
 
-## Workflow
+## 2. Find and verify
 
-```dot
-digraph audit_flow {
-    "User invokes skill" [shape=doublecircle];
-    "Scope selected?" [shape=diamond];
-    "Ask for lanes" [shape=box];
-    "Dispatch lane sub-agents in parallel" [shape=box];
-    "All lanes returned JSON?" [shape=diamond];
-    "Retry non-conforming lane once" [shape=box];
-    "Synthesize ledger" [shape=box];
-    "TodoWrite one todo per finding" [shape=box];
-    "For each finding, gate by severity+blastRadius" [shape=box];
-    "Apply fix or ask user" [shape=box];
-    "Run make build/test/lint" [shape=box];
-    "All green?" [shape=diamond];
-    "Revert broken fix" [shape=box];
-    "Shape commits per rootCauseCategory" [shape=box];
-    "Write audit report" [shape=box];
-    "Done" [shape=doublecircle];
+Run lanes and verifiers through the Workflow tool; invoking this skill is the opt-in, and an audit exceeds the default workflow size on purpose. Scripts can't read files: inline both schemas from `references/` and each lane's text (preamble + section) into the script. Agents already get CLAUDE.md.
 
-    "User invokes skill" -> "Scope selected?";
-    "Scope selected?" -> "Ask for lanes" [label="no"];
-    "Ask for lanes" -> "Dispatch lane sub-agents in parallel";
-    "Scope selected?" -> "Dispatch lane sub-agents in parallel" [label="yes"];
-    "Dispatch lane sub-agents in parallel" -> "All lanes returned JSON?";
-    "All lanes returned JSON?" -> "Retry non-conforming lane once" [label="no"];
-    "Retry non-conforming lane once" -> "Synthesize ledger";
-    "All lanes returned JSON?" -> "Synthesize ledger" [label="yes"];
-    "Synthesize ledger" -> "TodoWrite one todo per finding";
-    "TodoWrite one todo per finding" -> "For each finding, gate by severity+blastRadius";
-    "For each finding, gate by severity+blastRadius" -> "Apply fix or ask user";
-    "Apply fix or ask user" -> "Run make build/test/lint";
-    "Run make build/test/lint" -> "All green?";
-    "All green?" -> "Revert broken fix" [label="no"];
-    "Revert broken fix" -> "Shape commits per rootCauseCategory";
-    "All green?" -> "Shape commits per rootCauseCategory" [label="yes"];
-    "Shape commits per rootCauseCategory" -> "Write audit report";
-    "Write audit report" -> "Done";
+```js
+export const meta = {
+  name: 'audit',
+  description: 'Whole-codebase audit: one finder per lane, one refuting verifier per finding',
+  phases: [{ title: 'Find' }, { title: 'Verify' }],
 }
+const FINDINGS = {/* references/finding-schema.json */}
+const VERDICT = {/* references/verdict-schema.json */}
+const LANES = [/* { name: 'domain', prompt: '<preamble>\n\n<domain section>' }, … */]
+const REFUTE = 'Try to refute this audit finding of Pull Request Pilot. Re-read the cited code and its callers. ' +
+  'Check any claim about GitHub or Apple API behaviour against live data (read-only `gh api graphql`) or the documentation. ' +
+  'Confirm it, narrow it (state the correction), or refute it; refute when the evidence does not hold.'
+
+const results = await pipeline(
+  LANES,
+  lane => agent(lane.prompt, { label: `find:${lane.name}`, phase: 'Find', schema: FINDINGS }),
+  (found, lane) => found && parallel(found.findings.map(finding => () =>
+    agent(`${REFUTE}\n\n${JSON.stringify(finding)}`, { label: `verify:${lane.name}`, phase: 'Verify', schema: VERDICT })
+      .then(verdict => ({ ...finding, verdict })),
+  )).then(findings => ({ ...found, lane: lane.name, findings })),
+)
+return results.map((result, index) => result ?? { lane: LANES[index].name, failed: true })
 ```
 
-## Step 1 — Select scope
+A lane that comes back `failed` is re-run once on its own; if it fails again, the report says so. A finding whose verdict is `null` was not verified: verify it yourself before fixing it.
 
-Default scope: all 8 lanes.
+## 3. Ledger
 
-Explicit selector accepted: `lanes=domain,features,concurrency`.
+1. Merge duplicates across lanes: same file, overlapping lines, same root cause. Keep the highest verified severity and list every lane that reported it.
+2. Number the surviving findings (confirmed, narrowed, or verified by you) `FINDING-001`… by verified severity.
+3. Write the report (step 7) now, with every finding in the ledger. The report file is the ledger: update each row's outcome as the work progresses.
 
-Lanes (see `references/lane-definitions.md` for scope / non-scope per lane):
+Refuted findings go to the Rejected section with the verifier's evidence; they are not fixed.
 
-1. **domain** — `PullRequestPilot/Domain/Models/`
-2. **features** — `PullRequestPilot/Features/**`
-3. **infrastructure** — `PullRequestPilot/Infrastructure/**`
-4. **tests** — `PullRequestPilotTests/**`
-5. **concurrency** — cross-cutting: Sendable, actor isolation, cancellation, task lifecycle
-6. **appstore** — sandbox, entitlements, privacy manifest, `metadata/appstore.yml`
-7. **performance** — hot paths, startup, allocation pressure, auto-refresh cost
-8. **ux** — error surfaces, empty states, accessibility labels, keyboard flow
+## 4. Fix
 
-## Step 2 — Dispatch in parallel
+| finding | action |
+|---------|--------|
+| low or medium, small or medium blast | fix |
+| high, small blast | fix |
+| critical; any large or cross-cutting blast; a change of behaviour the user may not want (removing a feature, changing a flow) | summarise, ask, mark `deferred` until answered |
 
-Send all lane sub-agents in a single message with multiple `Agent` tool calls. Use `general-purpose` unless a lane has a better-fitting subagent type.
+Each fix:
+- Comes with a test that fails when the fix is reverted: revert it and watch the test fail. What only a person can observe (views, system behaviour) goes to Manual checks in the report instead.
+- Works within the tooling. When SwiftLint blocks the direct fix, don't work around the rule: defer the finding with the reason.
+- Carries no finding ID in source; lint rejects `FINDING-NNN`.
 
-Each sub-agent receives:
-- Its lane definition (scope + non-scope) from `references/lane-definitions.md`
-- The finding schema location: `references/finding-schema.json`
-- The exact instruction: **return JSON matching the schema, nothing else. Empty array if nothing found.**
-- Relevant CLAUDE.md sections as reminders of "what counts as a bug in this repo" (force-unwraps, `try?` swallows, `@unchecked Sendable`, pagination caps, `UserDefaults.standard` outside AppState, security-scoped bookmarks, forbidden subtitle terms).
+Group the fixes into slices by user-visible area (Identity, GitHub API, Refresh, Widgets, Tests, Release…), in dependency order. These become the commits.
 
-## Step 3 — Validate each sub-agent response
+## 5. Gates and review of the fix wave
 
-For each returned payload:
-- Parse as JSON. If it fails → retry the lane once with the prompt "Your previous response was not valid JSON. Return ONLY a JSON array matching the schema."
-- Validate against `references/finding-schema.json` (required fields present, enums respected).
-- If validation still fails after retry → surface to the user and exclude that lane from the ledger, but **note the failure explicitly in the report**.
+After each slice: `make test` (lint + unit tests) and `make build` (Release, warnings as errors); also `make release-check` when the slice touches `project.yml`, entitlements, privacy manifests or `metadata/`. When a slice fails, find the fix that broke it, revert that fix, and mark it `reverted — <reason>`.
 
-## Step 4 — Synthesize the ledger
+Once every slice is green, review the fix wave itself: run refuting verifiers over the baseline..working-tree diff, slice by slice. Earlier fix waves shipped regressions that only a review of the diff caught. A regression becomes a new finding in the ledger and goes through step 4.
 
-1. Concatenate all lane outputs into one array.
-2. Deduplicate on `(file, lineRange, rootCauseCategory)` — keep the highest-severity entry.
-3. Sort by severity descending (`critical` > `high` > `medium` > `low`), tie-break by `rootCauseCategory`.
-4. Assign a sequential `id` (`FINDING-001`, `FINDING-002`, …).
-5. Emit one `TaskCreate` todo per finding, title = `{id}: {title}` (severity). **Every finding becomes a todo. No exceptions.**
+## 6. Commits
 
-## Step 5 — Fix execution
-
-Walk the ledger in order. For each finding:
-
-| severity | blastRadius | action |
-|----------|-------------|--------|
-| low      | any         | apply fix + mark todo completed |
-| medium   | any         | apply fix + mark todo completed |
-| high     | small       | apply fix + mark todo completed |
-| high     | medium/large/cross-cutting | pause, summarise, ask user |
-| critical | any         | pause, summarise, ask user |
-
-If a user-gated finding is deferred, mark the todo as `deferred` in the report (not completed), so the next audit re-surfaces it.
-
-Never silently skip. "I don't know how to fix this" → ask the user, don't drop it.
-
-## Step 6 — Verification
-
-After all eligible fixes applied, run in order:
-
-1. `make lint` — must pass `--strict` (project Makefile runs strict by default).
-2. `make build` — zero warnings, zero errors.
-3. `make test` — all green.
-
-If any gate fails:
-- Identify which fix caused the regression (git diff per fix; bisect if needed).
-- Revert that specific fix; mark its todo as `reverted — <reason>` in the report.
-- Re-run gates. Loop until green.
-
-Do not commit until all three gates pass.
-
-## Step 7 — Commit shaping
-
-Split the working-tree diff into one commit per `rootCauseCategory`.
-
-Prefixes (mirror existing repo commit style):
-- `Fix: <category> — <short description>`
-- `Refactor: <category> — <short description>`
-- `Add: <category> — <short description>` (new tests, new guards)
-- `Update: <category> — <short description>`
-
-Use `git add -p` at file granularity where each file belongs cleanly to one category. When a single file spans categories, stage with explicit hunk selection; if that becomes ambiguous, fall back to one consolidated commit and flag it in the report.
-
-Each commit message body includes the finding IDs it closes:
+Don't commit. Leave the changes in the working tree, green, and put a commit plan in the report: one commit per slice, each of which builds and passes the tests on its own.
 
 ```
-Fix: Concurrency — rethrow CancellationError in network layer
+Fix: <Area> — <the user-visible change>
 
-Closes FINDING-004, FINDING-007.
+<what changed and why, in a short paragraph>
+
+Audit YYYY-MM-DD: FINDING-012, FINDING-031.
 ```
 
-## Step 8 — Write the report
+The user drives the commits. When they ask you to commit, follow the plan: stage whole files; where one file spans two commits, stage its hunks with `git apply --cached` on a trimmed patch (the agent shell has no interactive `git add -p`). If the hunks can't compile apart, merge those commits and note it in the report.
 
-Path: `todo/audits/AUDIT-YYYY-MM-DD.md` (use today's date).
+## 7. Report
 
-Template:
+`todo/audits/AUDIT-YYYY-MM-DD.md`. `todo/` is excluded from git: never commit or publish a report.
 
 ```markdown
 # Audit — YYYY-MM-DD
 
 ## Summary
 
-- Lanes run: {list}
-- Findings total: N
-- Fixed: M  |  Deferred: K  |  Reverted: R  |  Rejected: X
-- Build: ✅ / ❌   Tests: ✅ / ❌   Lint: ✅ / ❌
+- Lanes: {list}. Raw findings N; after merging duplicates M (critical / high / medium / low).
+- Verification: confirmed C · narrowed P · refuted R · unverified U.
+- Outcome: fixed F · deferred D · reverted V · rejected R · closed by decision X.
+- Baseline (HEAD <sha>): lint · build · tests (count). After: lint · build · tests (count) · release-check if run.
+
+## Verdict
+
+A grade and the few themes behind it: what is strong and mechanically enforced, where the code falls short.
 
 ## Ledger
 
-| id | severity | category | file | title | outcome |
-|----|----------|----------|------|-------|---------|
-| FINDING-001 | high | concurrency | … | … | fixed |
-| … |
+| id | severity | category | file:lines | title | verification | outcome |
+|----|----------|----------|------------|-------|--------------|---------|
 
-## Deferred (needs user decision)
+## Rejected
 
-- FINDING-012 (critical, cross-cutting): <title> — why escalated.
+Each refuted finding and the evidence that refuted it.
 
-## Lane failures (if any)
+## Deferred
 
-- lane=performance returned invalid JSON twice. Re-run manually.
+Each finding waiting on the user, and the decision it needs.
 
-## Commits
+## Manual checks
 
-- `<sha>` Fix: Concurrency — …
-- `<sha>` Refactor: Features — …
+What tests can't reach, one line each, with its finding ID.
+
+## Opportunities
+
+From the macos-platform lane, ranked by value and effort. Not findings.
+
+## Commit plan
+
+The planned commits in order, with their finding IDs; their SHAs once the user has committed.
+
+## Lane failures
+
+Lanes that failed twice, or "None".
 ```
 
-## Rationalisation table — if you think any of this, stop
+## Red flags — stop and re-read this skill
 
 | Thought | Reality |
 |---------|---------|
-| "Only a few findings really matter, I'll skip the rest" | That's the exact bug this skill exists to prevent. Every finding → todo. |
-| "I'll return prose instead of JSON, the schema is overkill" | Prose makes findings droppable. JSON is the contract. |
-| "The user probably wants me to ask about each one" | Default is fix-mode. Only `high + non-small blast` or `critical` escalate. |
-| "I can skip the verification, the fix is obvious" | Every lane had a shipped-bug category. Build/test/lint gate catches regressions. |
-| "One big commit is simpler" | Changelog breaks. One commit per rootCauseCategory, always. |
-| "I'll skip the report file, the todos are enough" | Report is the durable artefact. Write it. |
-| "Dry-run mode is safer" | Fix-mode is the default. Dry-run only if user explicitly requests it. |
-
-## Red flags
-
-If you notice any of these, stop and re-read this skill:
-
-- About to summarise findings in prose instead of a JSON ledger.
-- About to say "the most important ones are…" and skip the others.
-- About to commit with a single `Bugfixes` message.
-- About to claim the audit passed without running `make test`.
-- About to skip writing the report file because "the user saw the todos".
-
-## Out of scope
-
-- Auto-writing tests for uncovered code (separate concern).
-- Running on a cron (manual invocation only).
-- Single-file reviews.
+| "The lanes agree, no need to verify" | Two lanes once reported the same high finding from the same wrong assumption about the GitHub API. Verify each one. |
+| "Only a few findings really matter" | Every finding gets a ledger row and an outcome. |
+| "The fix is obvious, no test needed" | A fix without a test that fails on revert can regress unnoticed. |
+| "The gates passed, the fix wave is done" | The gates don't catch behaviour regressions; the review of the diff does. |
+| "I'll commit as I go" | The user drives commits. Leave a green tree and a commit plan. |

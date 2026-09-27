@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pullrequestpilot.local/skills/audit-and-fix/verdict-schema.json",
+  "title": "Verdict",
+  "description": "What one verifier returns for one finding.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "severity", "evidence"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["confirmed", "narrowed", "refuted"],
+      "description": "narrowed = real, but smaller or different than claimed; state the correction."
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low"],
+      "description": "The verifier's own rating, which may differ from the lane's."
+    },
+    "correction": {
+      "type": "string",
+      "description": "For narrowed: the corrected claim or scope."
+    },
+    "evidence": {
+      "type": "string",
+      "minLength": 8,
+      "description": "What the verifier read or ran: file:line, test output, live API response, documentation."
+    }
+  }
+}
