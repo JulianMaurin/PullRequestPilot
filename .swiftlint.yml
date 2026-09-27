@@ -12,7 +12,6 @@ included:
 excluded:
   - .build
   - PullRequestPilot.xcodeproj
-  - GitHubDashboard.xcodeproj
   - PullRequestPilot/Resources
 
 # Only enable the rules we explicitly want. Built-in style rules (line length,
