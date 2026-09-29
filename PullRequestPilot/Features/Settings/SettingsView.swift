@@ -141,6 +141,8 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
                         .foregroundStyle(.red)
                 }
 
+                Toggle("Show in Menu Bar", isOn: $viewModel.showsMenuBarIcon)
+
                 Picker("Pull request refresh", selection: $viewModel.prRefreshInterval) {
                     ForEach(SettingsViewModel.refreshIntervalOptions, id: \.value) { option in
                         Text(option.label).tag(option.value)
@@ -154,6 +156,12 @@ struct SettingsView<Dashboard: DashboardActionsProtocol>: View {
                 }
             } header: {
                 Text("General")
+            } footer: {
+                if !viewModel.showsMenuBarIcon {
+                    Text("Open Pull Request Pilot from the Dock while the menu bar icon is hidden.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section {

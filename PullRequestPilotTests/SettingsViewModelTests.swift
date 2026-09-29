@@ -359,6 +359,27 @@ struct SettingsViewModelTests {
         #expect(stored == 600)
     }
 
+    @Test("the menu bar icon shows by default; hiding it persists and notifies once")
+    func showsMenuBarIconPersistsAndNotifies() throws {
+        let (vm, _, identity, gitDirStore, defaults) = try makeViewModel(suiteName: "MenuBarIcon")
+        #expect(vm.showsMenuBarIcon)
+
+        var changes: [Bool] = []
+        vm.onShowsMenuBarIconChanged = { changes.append($0) }
+        vm.showsMenuBarIcon = false
+        vm.showsMenuBarIcon = false
+        #expect(changes == [false])
+        #expect(defaults.object(forKey: Constants.UserDefaultsKeys.showsMenuBarIcon) as? Bool == false)
+
+        let relaunched = SettingsViewModel(
+            identity: identity,
+            gitDirectoriesStore: gitDirStore,
+            localRepositoryService: localRepoService,
+            defaults: defaults
+        )
+        #expect(!relaunched.showsMenuBarIcon)
+    }
+
     // MARK: - save with generic (non-GitHubClientError) error
 
     @Test("save sets invalid state for unexpected errors")
