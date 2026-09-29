@@ -42,6 +42,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         updateStatusBarBadge(appState?.dashboardViewModel.badgeCount ?? 0)
 
+        statusItem?.isVisible = appState?.settingsViewModel.showsMenuBarIcon ?? true
+        appState?.settingsViewModel.onShowsMenuBarIconChanged = { [weak self] shows in
+            self?.statusItem?.isVisible = shows
+        }
+
         // The launch event is only readable while it's being handled.
         hidesWindowAtLaunch = Self.wasLaunchedAsLoginItem()
         if let window = mainWindow {

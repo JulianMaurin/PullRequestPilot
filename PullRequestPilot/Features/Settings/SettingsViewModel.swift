@@ -79,6 +79,7 @@ final class SettingsViewModel {
         let repoInterval = defaults.double(forKey: Constants.UserDefaultsKeys.repoScanInterval)
         self.repoScanInterval = repoInterval > 0 ? repoInterval : Constants.App.defaultRepoScanInterval
         self.launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+        self.showsMenuBarIcon = defaults.object(forKey: Constants.UserDefaultsKeys.showsMenuBarIcon) as? Bool ?? true
 
         let invalidations = identity.invalidations
         let observation = Task { [weak self] in
@@ -236,6 +237,19 @@ final class SettingsViewModel {
     /// System Settings → Login Items while Settings was open.
     func refreshLaunchAtLoginStatus() {
         launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+    }
+
+    // MARK: - Menu Bar Icon
+
+    /// Called with the new value when the user toggles the menu bar icon.
+    var onShowsMenuBarIconChanged: (@MainActor (Bool) -> Void)?
+
+    var showsMenuBarIcon: Bool {
+        didSet {
+            guard showsMenuBarIcon != oldValue else { return }
+            defaults.set(showsMenuBarIcon, forKey: Constants.UserDefaultsKeys.showsMenuBarIcon)
+            onShowsMenuBarIconChanged?(showsMenuBarIcon)
+        }
     }
 
     // MARK: - Refresh Intervals

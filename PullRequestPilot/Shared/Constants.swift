@@ -23,6 +23,7 @@ enum Constants {
         static let badgeViewIDs = "badgeViewIDs"
         static let detailPanelWidth = "detailPanelWidth"
         static let detailPanelHeight = "detailPanelHeight"
+        static let showsMenuBarIcon = "showsMenuBarIcon"
     }
 
     enum URLs {
